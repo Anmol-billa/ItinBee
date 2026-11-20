@@ -1,0 +1,33 @@
+# Dependencies & Build Outputs
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+frontend/.next/
+frontend/out/
+backend/dist/
+*.tsbuildinfo
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+frontend/.env*
+!frontend/.env.example
+backend/.env*
+!backend/.env.example
+
+# Logs & Local Databases
+*.log
+npm-debug.log*
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+
+# Impeccable local-only overrides (keep PRODUCT.md, DESIGN.md, .impeccable/config.json,
+# .impeccable/surfaces/, .impeccable/design.json, .impeccable/live/config.json,
+# and .impeccable/critique/ignore.md tracked in Git)
+.impeccable/config.local.json
+.impeccable/questions/
+.impeccable/mocks/
+.impeccable/review/

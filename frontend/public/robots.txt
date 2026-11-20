@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+Allow: /t/
+Allow: /llms.txt
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://itinbee.com/sitemap.xml

@@ -1,0 +1,190 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Public Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/public-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Public Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/public-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --font-public-sans: "Public Sans";
+  --font-jetbrains-mono: "JetBrains Mono";
+  --font-devanagari: "Kohinoor Devanagari", "Noto Sans Devanagari", "Devanagari Sangam MN";
+  --target-size: 24px;
+  color-scheme: light;
+}
+
+@media (pointer: coarse) {
+  :root {
+    --target-size: 44px;
+  }
+}
+
+html {
+  background-color: #FCFCFA;
+  color: #18181B;
+  caret-color: #B45309;
+  scroll-padding-top: 3.5rem;
+  scroll-padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+body {
+  background-color: #FCFCFA;
+  color: #18181B;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Browser surface theming */
+::selection {
+  background-color: #FEF3C7;
+  color: #18181B;
+}
+
+a {
+  text-underline-offset: 3px;
+}
+
+:where(a, code) {
+  overflow-wrap: anywhere;
+}
+
+:focus-visible {
+  outline: 2px solid #B45309;
+  outline-offset: 2px;
+}
+
+/* Custom subtle scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #F5F5F2;
+}
+::-webkit-scrollbar-thumb {
+  background: #D6D3CD;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A8A29E;
+}
+
+/* Heading balance & body text wrapping */
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+p, li {
+  text-wrap: pretty;
+}
+
+/* Coarse-pointer accessible hit target sizing */
+:where(button, select, textarea, input:not([type="checkbox"], [type="radio"]), [role="button"], nav a) {
+  min-block-size: var(--target-size);
+  min-inline-size: var(--target-size);
+}
+
+:where(button) {
+  white-space: nowrap;
+}
+
+.icon-hit {
+  position: relative;
+}
+.icon-hit::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+/* Named CSS Container Query for timeline stop rows */
+.container-timeline {
+  container: timeline / inline-size;
+}
+
+.stop-row-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+@container timeline (inline-size > 27rem) {
+  .stop-row-grid {
+    grid-template-columns: 5.25rem minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.875rem;
+  }
+}
+
+/* Safe-area bottom bar padding */
+.mobile-bottom-bar {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+/* Native <dialog> modal scroll containment & backdrop */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  background-color: rgba(24, 24, 27, 0.36);
+  backdrop-filter: blur(2px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+/* Below-the-fold deferred rendering */
+.deferred-below-fold {
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 260px;
+}
+
+/* Authored exponential ease-out View Transition & reduced-motion respect */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

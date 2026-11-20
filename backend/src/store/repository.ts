@@ -1,0 +1,346 @@
+import type {
+  BookingProvider,
+  BookingRedactedView,
+  BookingStatus,
+  BookingSummaryPublic,
+  BookingVaultView,
+  CurrencyCode,
+  ExpenseEntryType,
+  ExpenseView,
+  GuestShareResponse,
+  ItineraryItem,
+  ItemKind,
+  KittyPoolView,
+  MemberRole,
+  OutboundChecklistItem,
+  PacingLevel,
+  PollView,
+  SplitMode,
+  SyncClientMutation,
+  SyncServerDelta,
+  TripDay,
+  TripMeta,
+  TripWorkspaceResponse,
+  UpiSettlementInstruction,
+  UserPublic,
+} from '../types/domain.js';
+import type { RawPassengerMeta } from '../security/aadhaar-redactor.js';
+
+export interface CreateUserInput {
+  phone?: string;
+  email?: string;
+  googleSub?: string;
+  displayName: string;
+  preferredLang?: string;
+  upiVpa?: string;
+  tier?: 'free' | 'trip_pass' | 'pro';
+}
+
+export interface CreateTripInput {
+  ownerId: string;
+  title: string;
+  destinationSummary?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  homeCurrency?: CurrencyCode;
+  elderModeEnabled?: boolean;
+  isPublicTemplate?: boolean;
+  daysCount?: number;
+}
+
+export interface SandboxClaimInput {
+  ownerId: string;
+  title: string;
+  destinationSummary?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  homeCurrency?: CurrencyCode;
+  elderModeEnabled?: boolean;
+  days: Array<{
+    id?: string;
+    dayNumber: number;
+    date?: string | null;
+    themeTitle?: string;
+    pacingLevel?: PacingLevel;
+  }>;
+  items: Array<{
+    id?: string;
+    dayNumber?: number | null;
+    dayId?: string | null;
+    kind: ItemKind;
+    title: string;
+    notes?: string;
+    lat?: number | null;
+    lng?: number | null;
+    placeRefId?: string | null;
+    addressLocalScript?: string | null;
+    sortKey?: string;
+    startTime?: string | null;
+    durationMins?: number | null;
+    dietaryFlags?: string[];
+    accessibilityNotes?: string;
+    elderSummaryI18n?: { en?: string; hi?: string };
+    isShortlist?: boolean;
+  }>;
+}
+
+export interface CreateBookingInput {
+  tripId: string;
+  itemId?: string | null;
+  provider: BookingProvider;
+  pnr?: string | null;
+  passengers?: RawPassengerMeta[];
+  summary: BookingSummaryPublic;
+  lowConfidenceFields?: string[];
+  status?: BookingStatus;
+  rawDocS3Key?: string | null;
+  docSizeBytes?: number;
+  parserConfidence?: number;
+  coTravellerConsent?: boolean;
+}
+
+export interface CreatePollInput {
+  tripId: string;
+  createdBy?: string | null;
+  question: string;
+  options: Array<{ id?: string; label: string; subtitle?: string }>;
+  closesAt?: string | null;
+}
+
+export interface CastPollVoteInput {
+  shortId: string;
+  pollId: string;
+  optionId: string;
+  voterId?: string | null;
+  guestSessionHash?: string | null;
+  guestDisplayName: string;
+}
+
+export interface CreateKittyPoolInput {
+  tripId: string;
+  title: string;
+  custodianId: string;
+  currency?: CurrencyCode;
+  memberContributionsMinor: Record<string, number>;
+}
+
+export interface CreateExpenseInput {
+  tripId: string;
+  clientOpId: string;
+  entryType?: ExpenseEntryType;
+  reversesExpenseId?: string | null;
+  title: string;
+  category?: string;
+  paidBy: string;
+  kittyPoolId?: string | null;
+  amountMinor?: number;
+  currency?: CurrencyCode;
+  fxRateOverride?: number;
+  splitMode?: SplitMode;
+  participantIds?: string[];
+  excludedTags?: string[];
+  exactSplitsInrMinor?: Record<string, number>;
+  shareWeights?: Record<string, number>;
+  upiTxnRef?: string | null;
+}
+
+export interface TripStore {
+  readonly backendKind: 'postgres' | 'local-memory';
+  checkHealth(): Promise<{ ok: boolean; detail: string }>;
+
+  // Auth & Users
+  upsertUserByPhone(phone: string, displayName?: string, upiVpa?: string): Promise<UserPublic>;
+  upsertUserByGoogle(params: {
+    googleSub: string;
+    email: string;
+    displayName: string;
+    upiVpa?: string;
+  }): Promise<UserPublic>;
+  getUserById(userId: string): Promise<UserPublic | null>;
+  deleteUser(userId: string): Promise<boolean>;
+
+  // Trips & Membership
+  listSampleAndUserTrips(userId?: string | null): Promise<TripMeta[]>;
+  createTrip(input: CreateTripInput): Promise<TripWorkspaceResponse>;
+  addTripMember(params: {
+    tripId: string;
+    userId: string;
+    role: MemberRole;
+    vaultAccess?: boolean;
+    dietaryTags?: string[];
+  }): Promise<void>;
+  claimSandboxTrip(input: SandboxClaimInput): Promise<TripWorkspaceResponse>;
+  getTripWorkspace(
+    tripId: string,
+    requesterUserId?: string | null
+  ): Promise<TripWorkspaceResponse | null>;
+  getGuestShareByShortId(
+    shortId: string,
+    requesterUserId?: string | null
+  ): Promise<GuestShareResponse | BookingUnlockedShareResult | null>;
+  getOfflineBundle(
+    tripId: string,
+    requesterUserId?: string | null
+  ): Promise<{
+    generatedAt: string;
+    pmtilesRegionHint: string;
+    mapAttribution: string;
+    workspace: TripWorkspaceResponse;
+  } | null>;
+
+  // Delta-Sync
+  syncTripMutations(params: {
+    tripId: string;
+    lastSeenSeq: number;
+    mutations: SyncClientMutation[];
+  }): Promise<{
+    latestSeq: number;
+    appliedOps: SyncServerDelta[];
+    pulledDeltas: SyncServerDelta[];
+    activeDays: TripDay[];
+    activeItems: ItineraryItem[];
+    shortlistItems: ItineraryItem[];
+  }>;
+
+  // Bookings & Vault
+  createBooking(input: CreateBookingInput): Promise<BookingVaultView>;
+  createShortlistItem(params: {
+    tripId: string;
+    kind: ItemKind;
+    title: string;
+    notes?: string;
+    lat?: number | null;
+    lng?: number | null;
+    placeRefId?: string | null;
+    addressLocalScript?: string | null;
+    dietaryFlags?: string[];
+    accessibilityNotes?: string;
+  }): Promise<ItineraryItem>;
+  getBookingById(
+    tripId: string,
+    bookingId: string
+  ): Promise<BookingRedactedView | null>;
+
+  // Polls, Kitty & Expenses
+  createPoll(input: CreatePollInput): Promise<PollView>;
+  castPollVote(input: CastPollVoteInput): Promise<PollView>;
+  createKittyPool(input: CreateKittyPoolInput): Promise<KittyPoolView>;
+  appendExpense(input: CreateExpenseInput): Promise<ExpenseView>;
+  getSettlements(tripId: string): Promise<{
+    tripId: string;
+    shortId: string;
+    netBalancesInrMinor: Record<string, number>;
+    settlements: UpiSettlementInstruction[];
+    kittyPools: KittyPoolView[];
+    expenseCount: number;
+  }>;
+
+  close(): Promise<void>;
+}
+
+export interface BookingUnlockedShareResult extends GuestShareResponse {}
+
+export function buildOutboundChecklist(destinationText: string): OutboundChecklistItem[] {
+  const lower = destinationText.toLowerCase();
+  if (lower.includes('vietnam') || lower.includes('hanoi') || lower.includes('da nang') || lower.includes('hoi an')) {
+    return [
+      {
+        id: 'vn-evisa',
+        corridor: 'Vietnam',
+        title: 'Vietnam Official e-Visa PDF (90-day single/multi entry)',
+        detail: 'Apply at evisa.gov.vn at least 7 working days prior; keep printed copy + offline PDF in Vault.',
+        category: 'visa',
+      },
+      {
+        id: 'vn-passport',
+        corridor: 'Vietnam',
+        title: 'Passport 6-Month Validity & 2 Blank Pages',
+        detail: 'Verify expiry extends >= 6 months past return flight to India.',
+        category: 'passport',
+      },
+      {
+        id: 'vn-forex',
+        corridor: 'Vietnam',
+        title: 'Zero-Markup INR Forex Card + Clean USD/VND Cash',
+        detail: 'Carry crisp $100 bills or zero-forex Visa/Mastercard for BIDV/TPBank ATM withdrawals.',
+        category: 'forex',
+      },
+      {
+        id: 'vn-esim',
+        corridor: 'Vietnam',
+        title: 'Viettel Tourist eSIM Activation',
+        detail: 'Best hill/bay coverage across Ha Long & Ninh Binh; pre-install QR before boarding.',
+        category: 'esim',
+      },
+    ];
+  }
+  if (lower.includes('thailand') || lower.includes('bangkok') || lower.includes('phuket')) {
+    return [
+      {
+        id: 'th-tdac',
+        corridor: 'Thailand',
+        title: 'Thailand Digital Arrival Card & Visa-Exempt Entry Check',
+        detail: 'Keep return flight PNR and confirmed stay voucher accessible offline.',
+        category: 'visa',
+      },
+      {
+        id: 'th-forex',
+        corridor: 'Thailand',
+        title: 'Zero-Markup Forex + THB Cash Reserve',
+        detail: 'Immigration may spot-check 10,000 THB/person or 20,000 THB/family equivalent.',
+        category: 'forex',
+      },
+    ];
+  }
+  if (lower.includes('dubai') || lower.includes('uae') || lower.includes('abu dhabi')) {
+    return [
+      {
+        id: 'ae-visa',
+        corridor: 'UAE',
+        title: 'UAE Tourist e-Visa / Visa-on-Arrival (Valid US/UK/Schengen)',
+        detail: 'Attach e-Visa PDF + mandatory travel health insurance in Vault.',
+        category: 'visa',
+      },
+    ];
+  }
+  return [];
+}
+
+export function buildWhatsappDigestText(params: {
+  title: string;
+  shortId: string;
+  days: TripDay[];
+  items: ItineraryItem[];
+}): string {
+  const lines: string[] = [
+    `*${params.title}* (Itinbee Plan)`,
+    `Live Map, Elder Card & Polls: https://itinbee.com/t/${params.shortId}`,
+    '',
+  ];
+
+  const activeDays = params.days
+    .filter((d) => !d.deletedAt)
+    .sort((a, b) => a.dayNumber - b.dayNumber);
+
+  for (const day of activeDays) {
+    const dateSuffix = day.date ? ` (${day.date})` : '';
+    const themeSuffix = day.themeTitle ? ` — ${day.themeTitle}` : '';
+    lines.push(`*Day ${day.dayNumber}${dateSuffix}${themeSuffix}*`);
+
+    const dayItems = params.items.filter(
+      (it) => it.dayId === day.id && !it.deletedAt && !it.isShortlist
+    );
+    if (dayItems.length === 0) {
+      lines.push('  • Open buffer / flexible exploration');
+    } else {
+      for (const it of dayItems) {
+        const timePrefix = it.startTime ? `${it.startTime} · ` : '';
+        const vegBadge = it.dietaryFlags.includes('pure_veg') ? ' [Pure Veg]' : '';
+        lines.push(`  • ${timePrefix}${it.title}${vegBadge}`);
+      }
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n').trim();
+}

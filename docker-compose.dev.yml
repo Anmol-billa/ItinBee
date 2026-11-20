@@ -1,0 +1,29 @@
+services:
+  itinbee-db:
+    image: postgis/postgis:16-3.4
+    container_name: itinbee-dev-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: itinbee_dev
+      POSTGRES_USER: itinbee
+      POSTGRES_PASSWORD: itinbee_dev_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U itinbee -d itinbee_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  itinbee-kv:
+    image: valkey/valkey:7.2-alpine
+    container_name: itinbee-dev-kv
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["valkey-server", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

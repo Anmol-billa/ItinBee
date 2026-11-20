@@ -1,0 +1,17 @@
+# Itinbee (https://itinbee.com)
+
+> OTA-agnostic, WhatsApp-native, offline-first collaborative itinerary and UPI expense-splitting web workspace built for Indian domestic, multi-generational, and outbound travellers.
+
+## Core Capabilities
+- Instant Zero-Signup Sandbox: Build multi-modal Indian trips (IRCTC trains, IndiGo/Air India flights, redBus, homestays) locally in IndexedDB before creating an account.
+- Scout Ingestion: Parse IRCTC PNRs/coach/berth, airline boarding passes, bus tickets, and Instagram Reel / YouTube links with mandatory Aadhaar redaction.
+- WhatsApp Guest Links & Elder Card: `<150KB` server-rendered guest itineraries (`/t/<shortId>`) with zero-OTP Turnstile group polls, bilingual English/Hindi Elder Card mode, and live-QR printable PDFs.
+- Unlimited Inline UPI Ledger: Equal, unequal veg/alcohol tag exclusions, car fuel/FASTag splits, upfront trip kitties, multi-currency FX to INR, and NPCI-aware `upi://pay` settlement.
+
+## Key Public Routes
+- `/`: Interactive Zero-Signup Sandbox Workbench & Sample Indian Corridors
+- `/t/rishi-lnd-4d`: Sample Itinerary — Rishikesh & Landour Ridge (4 Days)
+- `/t/goa-south-5d`: Sample Itinerary — South Goa Monsoon Crew (5 Days)
+- `/t/kashi-snr-3d`: Sample Itinerary — Varanasi & Sarnath Senior Yatra (3 Days)
+- `/t/vietnam-7d`: Sample Itinerary — Vietnam North-to-Central from Bengaluru (7 Days)
+- `/sitemap.xml`: Public corridor template index

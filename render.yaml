@@ -1,0 +1,77 @@
+version: "1"
+
+databases:
+  - name: itinbee-db
+    databaseName: itinbee_prod
+    user: itinbee_app
+    plan: basic-256mb
+    region: singapore
+    # Migration 001 executes: CREATE EXTENSION IF NOT EXISTS postgis;
+
+services:
+  # 1. Standalone Fastify API + WebSocket + Inline MVP BullMQ Worker
+  - type: web
+    name: itinbee-backend
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: backend
+    buildFilter:
+      paths:
+        - backend/**
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: RUN_INLINE_WORKER
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: itinbee-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: itinbee-kv
+          property: connectionString
+      - key: AWS_S3_VAULT_REGION
+        value: ap-south-1
+      - key: GCP_VERTEX_LOCATION
+        value: asia-south1
+
+  # 2. Standalone Next.js App Router SSR + Offline PWA Frontend
+  - type: web
+    name: itinbee-frontend
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: frontend
+    buildFilter:
+      paths:
+        - frontend/**
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: INTERNAL_API_URL
+        fromService:
+          type: web
+          name: itinbee-backend
+          property: hostport
+      - key: NEXT_PUBLIC_API_URL
+        value: https://api.itinbee.com
+
+  # 3. Managed Redis-Compatible Key Value (WS Pub/Sub, Turnstile Rate Limits, Quotas)
+  - type: keyvalue
+    name: itinbee-kv
+    region: singapore
+    plan: starter
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
