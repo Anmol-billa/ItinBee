@@ -95,7 +95,10 @@ export async function buildApp(
   app.setSerializerCompiler(serializerCompiler);
 
   await app.register(cors, {
-    origin: config.corsOriginList.length > 0 ? config.corsOriginList : true,
+    origin:
+      config.corsOriginList.length > 0
+        ? [...config.corsOriginList, /^https:\/\/[a-z0-9-]+\.onrender\.com$/i]
+        : true,
     credentials: true,
   });
 

@@ -43,6 +43,7 @@ import {
   type SandboxClaimInput,
   type TripStore,
 } from './repository.js';
+import { buildPreSeededSampleDataset } from './seed-data.js';
 import type {
   BookingProvider,
   BookingRedactedView,
@@ -81,11 +82,23 @@ function generateShortId(title: string): string {
   return `${slug || 'trip'}-${rand}`.slice(0, 12);
 }
 
+function buildPgPoolConfig(connectionString: string): pg.PoolConfig {
+  const needsSsl =
+    connectionString.includes('.render.com') ||
+    connectionString.includes('sslmode=require');
+  return {
+    connectionString,
+    max: 15,
+    idleTimeoutMillis: 30_000,
+    ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+  };
+}
+
 export async function runSqlMigrations(
   connectionString: string,
   migrationsDir: string
 ): Promise<string[]> {
-  const pool = new Pool({ connectionString });
+  const pool = new Pool(buildPgPoolConfig(connectionString));
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -132,17 +145,185 @@ export async function runSqlMigrations(
   }
 }
 
+export async function ensureSeedDataInPostgres(
+  connectionString: string,
+  kms: KmsEnvelopeService = defaultKmsEnvelope
+): Promise<void> {
+  const pool = new Pool(buildPgPoolConfig(connectionString));
+  try {
+    const seed = buildPreSeededSampleDataset();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      for (const u of seed.users) {
+        const phoneHash = hashIdentifier(u.phone);
+        const phoneEnc = await kms.encryptString(u.phone, `user:${u.id}:phone`);
+        const upiEnc = await kms.encryptString(u.upiVpa, `user:${u.id}:upi`);
+        await client.query(
+          `INSERT INTO users (id, phone_hash, phone_enc, display_name, preferred_lang, upi_vpa_enc, tier)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (id) DO NOTHING`,
+          [u.id, phoneHash, phoneEnc, u.displayName, u.preferredLang, upiEnc, u.tier]
+        );
+      }
+
+      for (const t of seed.trips) {
+        const existingTrip = await client.query(
+          'SELECT 1 FROM trips WHERE id = $1 LIMIT 1',
+          [t.id]
+        );
+        if (existingTrip.rowCount && existingTrip.rowCount > 0) {
+          continue;
+        }
+
+        let seq = 1;
+        await client.query(
+          `INSERT INTO trips (id, short_id, title, destination_summary, start_date, end_date, home_currency, is_public_template, is_sample, elder_mode_enabled, latest_seq)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, TRUE, $8, 1)
+           ON CONFLICT (id) DO NOTHING`,
+          [
+            t.id,
+            t.shortId,
+            t.title,
+            t.destinationSummary,
+            t.startDate,
+            t.endDate,
+            t.homeCurrency,
+            t.elderModeEnabled,
+          ]
+        );
+
+        for (const m of t.members) {
+          await client.query(
+            `INSERT INTO trip_members (trip_id, user_id, role, vault_access, dietary_tags)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (trip_id, user_id) DO NOTHING`,
+            [t.id, m.userId, m.role, m.vaultAccess, m.dietaryTags]
+          );
+        }
+
+        for (const d of t.days) {
+          const dayHlc = formatHlc({ wallMs: 1763596800000 + seq, logical: 0, nodeId: 'seed' });
+          await client.query(
+            `INSERT INTO trip_days (id, trip_id, day_number, date, theme_title, pacing_level, server_seq, hlc_timestamp)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (id) DO NOTHING`,
+            [d.id, t.id, d.dayNumber, d.date, d.themeTitle, d.pacingLevel, seq++, dayHlc]
+          );
+
+          const sortKeys = generateInitialSortKeys(d.items.length);
+          for (let i = 0; i < d.items.length; i++) {
+            const item = d.items[i]!;
+            const itemHlc = formatHlc({ wallMs: 1763596800000 + seq, logical: 0, nodeId: 'seed' });
+            await client.query(
+              `INSERT INTO itinerary_items (
+                 id, trip_id, day_id, kind, title, notes, location, lat, lng,
+                 place_ref_id, address_local_script, sort_key, start_time, duration_mins,
+                 dietary_flags, accessibility_notes, elder_summary_i18n, is_shortlist, server_seq, hlc_timestamp
+               )
+               VALUES (
+                 $1, $2, $3, $4, $5, $6,
+                 ST_SetSRID(ST_MakePoint($8, $7), 4326)::geography,
+                 $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, FALSE, $17, $18
+               )
+               ON CONFLICT (id) DO NOTHING`,
+              [
+                item.id,
+                t.id,
+                d.id,
+                item.kind,
+                item.title,
+                item.notes,
+                item.lat,
+                item.lng,
+                item.placeRefId,
+                item.addressLocalScript,
+                sortKeys[i]!,
+                item.startTime,
+                item.durationMins,
+                item.dietaryFlags,
+                item.accessibilityNotes,
+                JSON.stringify(item.elderSummaryI18n),
+                seq++,
+                itemHlc,
+              ]
+            );
+          }
+        }
+
+        for (const b of t.bookings) {
+          const pnrEnc = await kms.encryptString(
+            b.pnrPlain,
+            `booking:${t.id}:${b.id}:pnr`
+          );
+          const pnrLast3 = extractPnrLast3(b.pnrPlain);
+          const sanitizedPax = sanitizePassengerMeta(b.passengers, true);
+          const paxEnc = await kms.encryptString(
+            JSON.stringify(sanitizedPax),
+            `booking:${t.id}:${b.id}:pax`
+          );
+          const summaryPublic: BookingSummaryPublic = {
+            headline: b.summaryHeadline,
+            routeLabel: b.routeLabel,
+            vehicleNumber: b.vehicleNumber,
+            coach: b.coach,
+            seatOrBerth: b.seatOrBerth,
+          };
+          await client.query(
+            `INSERT INTO bookings (
+               id, trip_id, item_id, provider, pnr_enc, pnr_last3, passenger_meta_enc,
+               summary_public, status, raw_doc_s3_key, parser_confidence
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
+             ON CONFLICT (id) DO NOTHING`,
+            [
+              b.id,
+              t.id,
+              b.itemId,
+              b.provider,
+              pnrEnc,
+              pnrLast3,
+              paxEnc,
+              JSON.stringify(summaryPublic),
+              b.status,
+              b.rawDocS3Key,
+              b.parserConfidence,
+            ]
+          );
+        }
+
+        for (const p of t.polls) {
+          await client.query(
+            `INSERT INTO polls (id, trip_id, question, options, created_by)
+             VALUES ($1, $2, $3, $4::jsonb, $5)
+             ON CONFLICT (id) DO NOTHING`,
+            [p.id, t.id, p.question, JSON.stringify(p.options), t.members[0]?.userId ?? null]
+          );
+        }
+
+        await client.query('UPDATE trips SET latest_seq = $2 WHERE id = $1', [t.id, seq]);
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } finally {
+    await pool.end();
+  }
+}
+
 export class PostgresTripStore implements TripStore {
   public readonly backendKind = 'postgres' as const;
   private readonly pool: pg.Pool;
   private readonly kms: KmsEnvelopeService;
 
   constructor(connectionString: string, kms: KmsEnvelopeService = defaultKmsEnvelope) {
-    this.pool = new Pool({
-      connectionString,
-      max: 15,
-      idleTimeoutMillis: 30_000,
-    });
+    this.pool = new Pool(buildPgPoolConfig(connectionString));
     this.kms = kms;
   }
 

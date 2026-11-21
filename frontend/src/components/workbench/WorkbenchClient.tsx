@@ -39,9 +39,9 @@ import {
 import {
   castGuestPollVote,
   claimSandboxToCloud,
-  getWsBaseUrl,
   ingestTicketOrReelText,
   pushSyncMutations,
+  resolveWsBaseUrl,
   searchOpenPlaces,
 } from '@/lib/api-client';
 import {
@@ -213,16 +213,23 @@ export function WorkbenchClient({ initialWorkspace, mode }: WorkbenchClientProps
   // Live WebSocket room connection when viewing a cloud trip
   useEffect(() => {
     if (mode !== 'cloud-trip' || typeof window === 'undefined') return;
+    let cancelled = false;
     let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(`${getWsBaseUrl()}/v1/trips/${workspace.trip.id}/live`);
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => setWsConnected(false);
-      ws.onerror = () => setWsConnected(false);
-    } catch {
-      setWsConnected(false);
-    }
+    resolveWsBaseUrl()
+      .then((wsBase) => {
+        if (cancelled) return;
+        try {
+          ws = new WebSocket(`${wsBase}/v1/trips/${workspace.trip.id}/live`);
+          ws.onopen = () => setWsConnected(true);
+          ws.onclose = () => setWsConnected(false);
+          ws.onerror = () => setWsConnected(false);
+        } catch {
+          setWsConnected(false);
+        }
+      })
+      .catch(() => setWsConnected(false));
     return () => {
+      cancelled = true;
       ws?.close();
     };
   }, [mode, workspace.trip.id]);

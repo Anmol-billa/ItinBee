@@ -1,8 +1,36 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { env } from './config/env.js';
 import { buildApp } from './app.js';
+import {
+  ensureSeedDataInPostgres,
+  runSqlMigrations,
+} from './store/pg-store.js';
 
 async function main(): Promise<void> {
-  const { app, store, bus } = await buildApp();
+  let forceLocalStore = false;
+
+  if (env.DATABASE_URL) {
+    try {
+      const currentDir = path.dirname(fileURLToPath(import.meta.url));
+      const migrationsDir = path.resolve(currentDir, '../migrations');
+      const applied = await runSqlMigrations(env.DATABASE_URL, migrationsDir);
+      if (applied.length > 0) {
+        console.log(
+          `Applied ${applied.length} SQL migration(s): ${applied.join(', ')}`
+        );
+      }
+      await ensureSeedDataInPostgres(env.DATABASE_URL);
+    } catch (err) {
+      console.warn(
+        'PostgreSQL migration/seed unavailable; falling back to LocalDevStore:',
+        err instanceof Error ? err.message : err
+      );
+      forceLocalStore = true;
+    }
+  }
+
+  const { app, store, bus } = await buildApp({ forceLocalStore });
   const port = env.resolvedPort;
   const host = '0.0.0.0';
 

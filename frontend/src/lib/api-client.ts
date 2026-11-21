@@ -18,15 +18,51 @@ export interface SyncClientMutationInput {
 
 function getBaseUrl(): string {
   if (typeof window === 'undefined') {
-    const internal = process.env.INTERNAL_API_URL || '127.0.0.1:4000';
-    return internal.startsWith('http') ? internal : `http://${internal}`;
+    const internal =
+      process.env.INTERNAL_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      '127.0.0.1:4000';
+    const normalized = internal.startsWith('http')
+      ? internal
+      : `http://${internal}`;
+    return normalized.replace(/\/+$/, '');
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '');
+  }
+  if (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  ) {
+    return 'http://localhost:4000';
+  }
+  return '/api/proxy';
 }
 
-export function getWsBaseUrl(): string {
-  const httpBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-  return httpBase.replace(/^http/, 'ws');
+export async function resolveWsBaseUrl(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '').replace(
+      /^http/,
+      'ws'
+    );
+  }
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1')
+  ) {
+    return 'ws://localhost:4000';
+  }
+  try {
+    const res = await fetch('/api/proxy/_ws', { cache: 'no-store' });
+    if (res.ok) {
+      const data = (await res.json()) as { wsBaseUrl?: string };
+      if (data.wsBaseUrl) return data.wsBaseUrl;
+    }
+  } catch {
+    // Fall back below
+  }
+  return 'ws://localhost:4000';
 }
 
 export async function fetchGuestShareSSR(shortId: string): Promise<GuestShareProjection | null> {

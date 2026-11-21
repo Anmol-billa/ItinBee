@@ -1,12 +1,10 @@
-version: "1"
-
 databases:
   - name: itinbee-db
     databaseName: itinbee_prod
     user: itinbee_app
-    plan: basic-256mb
+    plan: free
     region: singapore
-    # Migration 001 executes: CREATE EXTENSION IF NOT EXISTS postgis;
+    # Backend auto-runs migrations 001–005 (including PostGIS) and sample seed on startup
 
 services:
   # 1. Standalone Fastify API + WebSocket + Inline MVP BullMQ Worker
@@ -14,12 +12,12 @@ services:
     name: itinbee-backend
     runtime: node
     region: singapore
-    plan: starter
+    plan: free
     rootDir: backend
     buildFilter:
       paths:
         - backend/**
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start
     healthCheckPath: /health
     envVars:
@@ -27,6 +25,8 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: JWT_SECRET
+        generateValue: true
       - key: RUN_INLINE_WORKER
         value: "true"
       - key: DATABASE_URL
@@ -48,12 +48,12 @@ services:
     name: itinbee-frontend
     runtime: node
     region: singapore
-    plan: starter
+    plan: free
     rootDir: frontend
     buildFilter:
       paths:
         - frontend/**
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
@@ -64,14 +64,12 @@ services:
         fromService:
           type: web
           name: itinbee-backend
-          property: hostport
-      - key: NEXT_PUBLIC_API_URL
-        value: https://api.itinbee.com
+          envVarKey: RENDER_EXTERNAL_URL
 
   # 3. Managed Redis-Compatible Key Value (WS Pub/Sub, Turnstile Rate Limits, Quotas)
   - type: keyvalue
     name: itinbee-kv
     region: singapore
-    plan: starter
+    plan: free
     maxmemoryPolicy: noeviction
     ipAllowList: []
