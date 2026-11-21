@@ -85,17 +85,20 @@ export function getStoredTokens(): { authToken: string | null; guestToken: strin
 }
 
 export function getActiveBearerToken(): string | null {
-  const { authToken, guestToken } = getStoredTokens();
-  return authToken || guestToken;
+  const { authToken } = getStoredTokens();
+  return authToken;
 }
 
 function persistSession(token: string, user: AuthUser): void {
-  syncImportAuthToken(token);
   if (typeof window === 'undefined') return;
   try {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, token);
-    if (!user.guest) {
+    if (user.guest) {
+      window.sessionStorage.setItem(GUEST_TOKEN_KEY, token);
+      syncImportAuthToken(null);
+    } else {
+      window.sessionStorage.removeItem(GUEST_TOKEN_KEY);
       window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+      syncImportAuthToken(token);
     }
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(user));
   } catch {
@@ -136,13 +139,29 @@ function normalizeUser(raw: Record<string, unknown>, fallbackGuest = false): Aut
       : typeof raw.isGuest === 'boolean'
         ? raw.isGuest
         : fallbackGuest;
+  const id = String(raw.id ?? 'guest');
+  const cached = readCachedUser();
+  let resolvedUpiVpa: string | null = null;
+  if (typeof raw.upiVpa === 'string') {
+    resolvedUpiVpa = raw.upiVpa.trim() || null;
+  } else if (raw.upiVpa === null) {
+    resolvedUpiVpa = null;
+  } else if (raw.upiVpa === undefined && raw.hasUpiVpa === true && cached?.id === id && cached.upiVpa) {
+    resolvedUpiVpa = cached.upiVpa;
+  }
+
   return {
-    id: String(raw.id ?? 'guest'),
-    email: typeof raw.email === 'string' ? raw.email : null,
-    displayName: typeof raw.displayName === 'string' && raw.displayName.trim() ? raw.displayName : guest ? 'Guest traveller' : 'Traveller',
+    id,
+    email: typeof raw.email === 'string' ? raw.email : cached?.id === id ? (cached.email ?? null) : null,
+    displayName:
+      typeof raw.displayName === 'string' && raw.displayName.trim()
+        ? raw.displayName
+        : guest
+          ? 'Guest traveller'
+          : 'Traveller',
     preferredLang: lang,
-    upiVpa: typeof raw.upiVpa === 'string' ? raw.upiVpa : null,
-    hasUpiVpa: typeof raw.hasUpiVpa === 'boolean' ? raw.hasUpiVpa : Boolean(raw.upiVpa),
+    upiVpa: resolvedUpiVpa,
+    hasUpiVpa: typeof raw.hasUpiVpa === 'boolean' ? raw.hasUpiVpa : Boolean(resolvedUpiVpa),
     tier:
       raw.tier === 'trip_pass' || raw.tier === 'pro' || raw.tier === 'free'
         ? raw.tier
@@ -248,6 +267,15 @@ export async function fetchCurrentSession(): Promise<AuthSessionState> {
   }
 }
 
+/** Convenience helper returning the signed-in (non-guest) user or null. */
+export async function fetchCurrentUser(): Promise<AuthUser | null> {
+  const session = await fetchCurrentSession();
+  if (session.user && !session.guest) {
+    return session.user;
+  }
+  return null;
+}
+
 /** POST /v1/auth/guest */
 export async function startGuestSession(): Promise<{ token: string; user: AuthUser }> {
   const res = await authFetch<{ token: string; user?: Record<string, unknown>; guest?: boolean }>('/v1/auth/guest', {
@@ -260,7 +288,10 @@ export async function startGuestSession(): Promise<{ token: string; user: AuthUs
 }
 
 /** POST /v1/auth/magic/request */
-export async function requestMagicCode(email: string): Promise<MagicLinkRequestResult> {
+export async function requestMagicCode(
+  email: string,
+  turnstileToken?: string
+): Promise<MagicLinkRequestResult> {
   const cleanEmail = email.trim().toLowerCase();
   const res = await authFetch<{
     sent?: boolean;
@@ -271,7 +302,10 @@ export async function requestMagicCode(email: string): Promise<MagicLinkRequestR
     code?: string;
   }>('/v1/auth/magic/request', {
     method: 'POST',
-    body: JSON.stringify({ email: cleanEmail }),
+    body: JSON.stringify({
+      email: cleanEmail,
+      ...(turnstileToken ? { turnstileToken } : {}),
+    }),
   });
   return {
     sent: res.sent ?? res.ok ?? true,
@@ -385,7 +419,9 @@ export async function updateAccountProfile(patch: {
       {
         ...readCachedUser(),
         ...rawUser,
-        ...(patch.upiVpa !== undefined ? { upiVpa: patch.upiVpa, hasUpiVpa: Boolean(patch.upiVpa) } : {}),
+        ...(rawUser.upiVpa === undefined && patch.upiVpa !== undefined
+          ? { upiVpa: patch.upiVpa, hasUpiVpa: Boolean(patch.upiVpa) }
+          : {}),
       },
       false
     );

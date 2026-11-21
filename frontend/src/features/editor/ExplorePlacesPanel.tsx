@@ -12,6 +12,7 @@ import {
   Search,
   Sparkles,
 } from 'lucide-react';
+import { formatDietaryTag, isNonEmptyImageUrl } from '@/lib/formatters';
 import type { ItineraryItem, TripDay, TripMeta } from '@/lib/types';
 import {
   computeCentroid,
@@ -128,6 +129,7 @@ export function ExplorePlacesPanel({
     '© OpenStreetMap contributors · Wikivoyage · Wikidata · Wikimedia Commons'
   );
   const [openCreditId, setOpenCreditId] = useState<string | null>(null);
+  const [brokenImageIds, setBrokenImageIds] = useState<Record<string, boolean>>({});
   const pollCountRef = useRef(0);
 
   // Switch scope to 'bbox' automatically whenever user clicks "Search this area" on TripMap
@@ -661,18 +663,21 @@ export function ExplorePlacesPanel({
                   className="rounded-xl border border-navy/20 bg-[#FFFDF8] p-3.5 shadow-panel transition-colors hover:border-navy/45"
                 >
                   <div className="flex items-start gap-3">
-                    {/* Thumbnail with license info button */}
+                    {/* Thumbnail with license info button & broken URL fallback */}
                     <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-navy/15 bg-paper">
-                      {place.image?.url ? (
+                      {isNonEmptyImageUrl(place.image?.url) && !brokenImageIds[place.id] ? (
                         <>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={place.image.url}
+                            src={place.image!.url.trim()}
                             alt={place.name}
                             loading="lazy"
+                            onError={() =>
+                              setBrokenImageIds((prev) => ({ ...prev, [place.id]: true }))
+                            }
                             className="h-full w-full object-cover"
                           />
-                          {(place.image.author || place.image.license) && (
+                          {(place.image?.author || place.image?.license) && (
                             <button
                               type="button"
                               onClick={() =>
@@ -762,7 +767,7 @@ export function ExplorePlacesPanel({
                           key={hint}
                           className="rounded bg-jade-wash px-1.5 py-0.5 text-[11px] font-semibold text-jade"
                         >
-                          {hint.replace(/_/g, '-')}
+                          {formatDietaryTag(hint)}
                         </span>
                       ))}
                     </div>

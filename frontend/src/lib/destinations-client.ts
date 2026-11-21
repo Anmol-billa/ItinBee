@@ -946,7 +946,7 @@ export async function fetchDestinationsHub(): Promise<DestinationHubData> {
   try {
     const res = await fetch(`${apiBase()}/v1/destinations?tree=true`, {
       next: { revalidate: 120 },
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {
       const data = (await res.json()) as {
@@ -993,7 +993,7 @@ export async function fetchDestinationDetail(slug: string): Promise<DestinationD
   try {
     const res = await fetch(`${apiBase()}/v1/destinations/${encodeURIComponent(cleanSlug)}`, {
       next: { revalidate: 120 },
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {
       const data = (await res.json()) as Omit<DestinationDetailData, 'fallback'>;
@@ -1075,7 +1075,7 @@ export async function fetchDestinationPlaces(
       `${apiBase()}/v1/destinations/${encodeURIComponent(cleanSlug)}/places?${sp.toString()}`,
       {
         next: { revalidate: 60 },
-        signal: AbortSignal.timeout(2500),
+        signal: AbortSignal.timeout(8000),
       }
     );
     if (res.ok) {

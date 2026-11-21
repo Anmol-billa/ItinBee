@@ -14,12 +14,19 @@ export async function generateMetadata({
   const { shortId } = await params;
   const share = await fetchGuestShareSSR(shortId);
   if (!share) {
-    return { title: 'Itinerary Not Found' };
+    return {
+      title: 'Itinerary Not Found',
+      robots: { index: false, follow: false },
+    };
   }
   const stopCount = share.items.filter((i) => !i.deletedAt).length;
   return {
     title: `${share.trip.title} (${stopCount} stops)`,
     description: `${share.plannerName} shared "${share.trip.title}" — ${share.trip.destinationSummary}. View schedule, Hindi/English Elder Card, and polls without signing in.`,
+    robots: {
+      index: false,
+      follow: false,
+    },
     openGraph: {
       title: `${share.plannerName} shared: ${share.trip.title}`,
       description: `${share.trip.destinationSummary} · ${stopCount} stops · Zero-login WhatsApp view`,

@@ -6,7 +6,20 @@ import type { RealtimeAndQueueBus } from '../store/pubsub.js';
 export interface HealthPluginOpts {
   store: TripStore;
   bus: RealtimeAndQueueBus;
+  forceLocalStore?: boolean;
 }
+
+const HealthPayloadSchema = z.object({
+  status: z.enum(['ok', 'degraded']),
+  service: z.literal('itinbee-backend'),
+  storeBackend: z.enum(['postgres', 'local-memory']),
+  pubsubMode: z.enum(['redis', 'memory']),
+  checks: z.object({
+    database: z.object({ ok: z.boolean(), detail: z.string() }),
+    pubsub: z.object({ ok: z.boolean(), detail: z.string() }),
+  }),
+  timestamp: z.string(),
+});
 
 export const healthRoutes: FastifyPluginAsyncZod<HealthPluginOpts> = async (
   app,
@@ -19,28 +32,19 @@ export const healthRoutes: FastifyPluginAsyncZod<HealthPluginOpts> = async (
         tags: ['System'],
         summary: 'Render singapore health check for store & pubsub readiness',
         response: {
-          200: z.object({
-            status: z.enum(['ok', 'degraded']),
-            service: z.literal('itinbee-backend'),
-            storeBackend: z.enum(['postgres', 'local-memory']),
-            pubsubMode: z.enum(['redis', 'memory']),
-            checks: z.object({
-              database: z.object({ ok: z.boolean(), detail: z.string() }),
-              pubsub: z.object({ ok: z.boolean(), detail: z.string() }),
-            }),
-            timestamp: z.string(),
-          }),
+          200: HealthPayloadSchema,
+          503: HealthPayloadSchema,
         },
       },
     },
-    async () => {
+    async (_req, reply) => {
       const [dbHealth, busHealth] = await Promise.all([
         opts.store.checkHealth(),
         opts.bus.checkHealth(),
       ]);
       const ok = dbHealth.ok && busHealth.ok;
 
-      return {
+      const payload = {
         status: ok ? ('ok' as const) : ('degraded' as const),
         service: 'itinbee-backend' as const,
         storeBackend: opts.store.backendKind,
@@ -51,6 +55,12 @@ export const healthRoutes: FastifyPluginAsyncZod<HealthPluginOpts> = async (
         },
         timestamp: new Date().toISOString(),
       };
+
+      if (!dbHealth.ok && !opts.forceLocalStore) {
+        return reply.code(503).send(payload);
+      }
+
+      return payload;
     }
   );
 

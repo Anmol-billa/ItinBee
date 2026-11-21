@@ -82,17 +82,20 @@ export function setLocalPreviewEnabled(enabled: boolean): void {
 }
 
 function readToken(): string | null {
-  if (memoryToken) return memoryToken;
-  if (typeof window === 'undefined') return null;
-  try {
-    const authToken = window.localStorage.getItem(AUTH_TOKEN_KEY);
-    if (authToken) {
-      memoryToken = authToken;
-      return memoryToken;
+  if (typeof window !== 'undefined') {
+    try {
+      const authToken = window.localStorage.getItem(AUTH_TOKEN_KEY);
+      if (authToken) {
+        memoryToken = authToken;
+        return authToken;
+      }
+      if (IMPORT_MOCK) {
+        return window.sessionStorage.getItem(GUEST_TOKEN_KEY);
+      }
+    } catch {
+      /* storage blocked */
     }
-    memoryToken = window.sessionStorage.getItem(GUEST_TOKEN_KEY);
-  } catch {
-    /* storage blocked */
+    return null;
   }
   return memoryToken;
 }
@@ -380,13 +383,21 @@ async function persistPreviewWorkspace(intent: TripIntent, generatedDays: Array<
 export function createGuestSession(): Promise<void> {
   if (isLocalPreviewEnabled()) return Promise.resolve();
   if (readToken()) return Promise.resolve();
+  if (typeof window !== 'undefined') {
+    try {
+      if (window.sessionStorage.getItem(GUEST_TOKEN_KEY)) return Promise.resolve();
+    } catch {
+      /* ignore */
+    }
+  }
   if (!guestPromise) {
     guestPromise = request<{ token?: string }>('/v1/auth/guest', { method: 'POST', body: '{}' })
       .then((r) => {
         if (r.token) {
-          memoryToken = r.token;
           try {
-            window.sessionStorage.setItem(GUEST_TOKEN_KEY, r.token);
+            if (!window.localStorage.getItem(AUTH_TOKEN_KEY)) {
+              window.sessionStorage.setItem(GUEST_TOKEN_KEY, r.token);
+            }
           } catch {
             /* storage blocked */
           }

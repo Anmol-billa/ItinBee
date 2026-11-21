@@ -8,6 +8,7 @@ import type {
   ExpenseEntryType,
   ExpenseView,
   GuestShareResponse,
+  InviteRole,
   ItineraryItem,
   ItemKind,
   KittyPoolView,
@@ -20,10 +21,12 @@ import type {
   SyncServerDelta,
   TransitMeta,
   TripDay,
+  TripMemberPublic,
   TripMeta,
   TripWorkspaceResponse,
   UpiSettlementInstruction,
   UserPublic,
+  UserSelf,
 } from '../types/domain.js';
 import type { RawPassengerMeta } from '../security/aadhaar-redactor.js';
 
@@ -47,6 +50,15 @@ export interface CreateTripInput {
   elderModeEnabled?: boolean;
   isPublicTemplate?: boolean;
   daysCount?: number;
+}
+
+export interface UpdateTripMetaInput {
+  title?: string;
+  destinationSummary?: string;
+  elderModeEnabled?: boolean;
+  startDate?: string | null;
+  endDate?: string | null;
+  homeCurrency?: CurrencyCode;
 }
 
 export interface SandboxClaimInput {
@@ -97,6 +109,8 @@ export interface CreateBookingInput {
   status?: BookingStatus;
   rawDocS3Key?: string | null;
   docSizeBytes?: number;
+  docFileName?: string | null;
+  docMimeType?: string | null;
   parserConfidence?: number;
   coTravellerConsent?: boolean;
 }
@@ -146,6 +160,37 @@ export interface CreateExpenseInput {
   upiTxnRef?: string | null;
 }
 
+export interface VaultBlobRecord {
+  s3Key: string;
+  tripId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  encryptedPayload: Buffer;
+}
+
+export interface TripInviteStored {
+  token: string;
+  tripId: string;
+  tripTitle: string;
+  destinationSummary: string;
+  role: InviteRole;
+  vaultAccess: boolean;
+  inviterName?: string;
+  inviteeEmail: string | null;
+  expiresAt: string;
+  acceptedCount: number;
+}
+
+export interface BookingVaultMeta {
+  id: string;
+  tripId: string;
+  rawDocS3Key: string | null;
+  docSizeBytes: number;
+  docFileName: string | null;
+  docMimeType: string | null;
+}
+
 export interface TripStore {
   readonly backendKind: 'postgres' | 'local-memory';
   checkHealth(): Promise<{ ok: boolean; detail: string }>;
@@ -168,15 +213,21 @@ export interface TripStore {
   updateUserProfile(
     userId: string,
     patch: { displayName?: string; preferredLang?: string; upiVpa?: string | null }
-  ): Promise<UserPublic | null>;
+  ): Promise<UserSelf | null>;
   mergeGuestIntoUser(guestUserId: string, targetUserId: string): Promise<number>;
   getUserById(userId: string): Promise<UserPublic | null>;
+  getUserSelfById(userId: string): Promise<UserSelf | null>;
   deleteUser(userId: string): Promise<boolean>;
 
-  // Trips & Membership
+  // Trips, Access, Members & Invites
   listSampleAndUserTrips(userId?: string | null): Promise<TripMeta[]>;
   listUserTrips(userId: string): Promise<TripMeta[]>;
   createTrip(input: CreateTripInput): Promise<TripWorkspaceResponse>;
+  updateTripMeta(tripId: string, patch: UpdateTripMetaInput): Promise<TripMeta | null>;
+  getTripAccessInfo(
+    tripId: string,
+    userId?: string | null
+  ): Promise<{ trip: TripMeta; member: TripMemberPublic | null } | null>;
   addTripMember(params: {
     tripId: string;
     userId: string;
@@ -184,6 +235,44 @@ export interface TripStore {
     vaultAccess?: boolean;
     dietaryTags?: string[];
   }): Promise<void>;
+  upsertTripMemberWithDetails(params: {
+    tripId: string;
+    userId?: string;
+    displayName?: string;
+    role: MemberRole;
+    vaultAccess?: boolean;
+    dietaryTags?: string[];
+    upiVpa?: string | null;
+    callerUserId?: string;
+  }): Promise<TripMemberPublic>;
+  updateTripMemberDetails(params: {
+    tripId: string;
+    memberUserId: string;
+    callerUserId: string;
+    role?: MemberRole;
+    vaultAccess?: boolean;
+    dietaryTags?: string[];
+    displayName?: string;
+    upiVpa?: string | null;
+  }): Promise<TripMemberPublic | 'last_owner' | null>;
+  removeTripMember(
+    tripId: string,
+    memberUserId: string
+  ): Promise<'removed' | 'not_found' | 'last_owner'>;
+  createTripInvite(params: {
+    tripId: string;
+    createdBy: string;
+    role: InviteRole;
+    vaultAccess: boolean;
+    inviteeEmail?: string | null;
+    ttlSeconds?: number;
+  }): Promise<TripInviteStored>;
+  getTripInvite(token: string): Promise<TripInviteStored | null>;
+  acceptTripInvite(
+    token: string,
+    userId: string
+  ): Promise<{ tripId: string; role: MemberRole } | 'not_found' | 'expired'>;
+
   claimSandboxTrip(input: SandboxClaimInput): Promise<TripWorkspaceResponse>;
   getTripWorkspace(
     tripId: string,
@@ -217,7 +306,7 @@ export interface TripStore {
     shortlistItems: ItineraryItem[];
   }>;
 
-  // Bookings & Vault
+  // Bookings & Encrypted Vault Fallback
   createBooking(input: CreateBookingInput): Promise<BookingVaultView>;
   createShortlistItem(params: {
     tripId: string;
@@ -235,12 +324,24 @@ export interface TripStore {
     tripId: string,
     bookingId: string
   ): Promise<BookingRedactedView | null>;
+  getBookingVaultMeta(
+    tripId: string,
+    bookingId: string
+  ): Promise<BookingVaultMeta | null>;
+  deleteBooking(
+    tripId: string,
+    bookingId: string
+  ): Promise<{ rawDocS3Key: string | null } | null>;
+  putVaultBlob(blob: VaultBlobRecord): Promise<void>;
+  getVaultBlob(s3Key: string): Promise<VaultBlobRecord | null>;
+  deleteVaultBlob(s3Key: string): Promise<void>;
 
   // Polls, Kitty & Expenses
   createPoll(input: CreatePollInput): Promise<PollView>;
   castPollVote(input: CastPollVoteInput): Promise<PollView>;
   createKittyPool(input: CreateKittyPoolInput): Promise<KittyPoolView>;
   appendExpense(input: CreateExpenseInput): Promise<ExpenseView>;
+  deleteExpense(tripId: string, expenseId: string): Promise<boolean>;
   getSettlements(tripId: string): Promise<{
     tripId: string;
     shortId: string;
@@ -254,6 +355,18 @@ export interface TripStore {
 }
 
 export interface BookingUnlockedShareResult extends GuestShareResponse {}
+
+/**
+ * Keeps any `(ND)` duration suffix in `destinationSummary` (e.g. `"Munnar (3D)"` -> `"Munnar (4D)"`)
+ * synchronized whenever active trip days are added or deleted.
+ */
+export function syncDurationSummarySuffix(
+  summary: string,
+  activeDaysCount: number
+): string {
+  if (activeDaysCount < 1 || !summary) return summary;
+  return summary.replace(/\(\d+D\)(?=\s*$)/i, `(${activeDaysCount}D)`);
+}
 
 export function buildOutboundChecklist(destinationText: string): OutboundChecklistItem[] {
   const lower = destinationText.toLowerCase();

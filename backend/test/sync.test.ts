@@ -4,6 +4,12 @@ import WebSocket from 'ws';
 import { buildApp, type BuiltAppBundle } from '../src/app.js';
 import { formatHlc } from '../src/modules/sync/hlc.js';
 
+function extractCookieHeader(setCookie: string | string[] | undefined): string {
+  const first = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+  if (!first) throw new Error('Expected set-cookie header on guest trip creation');
+  return first.split(';')[0]!;
+}
+
 describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () => {
   let bundle: BuiltAppBundle | null = null;
 
@@ -28,6 +34,7 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
       },
     });
     expect(createRes.statusCode).toBe(201);
+    const sessionCookie = extractCookieHeader(createRes.headers['set-cookie']);
     const created = createRes.json();
     const tripId = created.trip.id as string;
     const day1Id = created.days[0].id as string;
@@ -40,6 +47,7 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
     const sync1 = await app.inject({
       method: 'POST',
       url: `/v1/trips/${tripId}/sync`,
+      headers: { cookie: sessionCookie },
       payload: {
         lastSeenSeq: 0,
         mutations: [
@@ -87,6 +95,7 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
     const syncReplay = await app.inject({
       method: 'POST',
       url: `/v1/trips/${tripId}/sync`,
+      headers: { cookie: sessionCookie },
       payload: {
         lastSeenSeq: 0,
         mutations: [
@@ -125,6 +134,7 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
         daysCount: 3,
       },
     });
+    const sessionCookie = extractCookieHeader(createRes.headers['set-cookie']);
     const ws = createRes.json();
     const tripId = ws.trip.id as string;
     const day2Id = ws.days[1].id as string;
@@ -135,6 +145,7 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
     await app.inject({
       method: 'POST',
       url: `/v1/trips/${tripId}/sync`,
+      headers: { cookie: sessionCookie },
       payload: {
         lastSeenSeq: 0,
         mutations: [
@@ -160,6 +171,7 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
     const delRes = await app.inject({
       method: 'POST',
       url: `/v1/trips/${tripId}/sync`,
+      headers: { cookie: sessionCookie },
       payload: {
         lastSeenSeq: 0,
         mutations: [
@@ -197,6 +209,7 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
     const latePush = await app.inject({
       method: 'POST',
       url: `/v1/trips/${tripId}/sync`,
+      headers: { cookie: sessionCookie },
       payload: {
         lastSeenSeq: 3,
         mutations: [
@@ -244,12 +257,23 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
       url: '/v1/trips',
       payload: { title: '25-Client Crew Fuzz Sync', daysCount: 2 },
     });
+    const sessionCookie = extractCookieHeader(createRes.headers['set-cookie']);
     const tripId = createRes.json().trip.id as string;
     const day1Id = createRes.json().days[0].id as string;
 
-    // Connect a live WebSocket listener on WSS /v1/trips/:id/live
+    const ticketRes = await app.inject({
+      method: 'GET',
+      url: `/v1/trips/${tripId}/ws-ticket`,
+      headers: { cookie: sessionCookie },
+    });
+    expect(ticketRes.statusCode).toBe(200);
+    const { ticket } = ticketRes.json() as { ticket: string };
+
+    // Connect a live WebSocket listener on WSS /v1/trips/:id/live using signed WS ticket
     const receivedEvents: Array<{ type: string }> = [];
-    const wsClient = new WebSocket(`ws://127.0.0.1:${port}/v1/trips/${tripId}/live`);
+    const wsClient = new WebSocket(
+      `ws://127.0.0.1:${port}/v1/trips/${tripId}/live?ticket=${encodeURIComponent(ticket)}`
+    );
     await new Promise<void>((resolve, reject) => {
       wsClient.on('message', (data) => {
         const parsed = JSON.parse(data.toString()) as { type: string };
@@ -265,6 +289,7 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
       return app.inject({
         method: 'POST',
         url: `/v1/trips/${tripId}/sync`,
+        headers: { cookie: sessionCookie },
         payload: {
           lastSeenSeq: 0,
           mutations: [
@@ -300,6 +325,7 @@ describe('HLC + Fractional-Index Delta-Sync Engine & Live WebSocket Rooms', () =
     const finalWs = await app.inject({
       method: 'GET',
       url: `/v1/trips/${tripId}`,
+      headers: { cookie: sessionCookie },
     });
     const items = finalWs.json().items as Array<{ id: string; sortKey: string }>;
     expect(items).toHaveLength(25);

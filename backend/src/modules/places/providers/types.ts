@@ -143,6 +143,7 @@ export interface RouteResult {
   coordinates: Array<[number, number]>;
   source: 'openrouteservice' | 'estimate';
   cached: boolean;
+  advisory?: string;
 }
 
 export interface RoutingProvider {

@@ -171,7 +171,76 @@ const KNOWN_DESTINATIONS: Record<
   rome: { slug: 'rome', name: 'Rome', lat: 41.9028, lng: 12.4964 },
   london: { slug: 'london', name: 'London', lat: 51.5072, lng: -0.1276 },
   istanbul: { slug: 'istanbul', name: 'Istanbul', lat: 41.0082, lng: 28.9784 },
+  coorg: { slug: 'coorg', name: 'Coorg', lat: 12.4244, lng: 75.7382 },
+  madikeri: { slug: 'coorg', name: 'Coorg', lat: 12.4244, lng: 75.7382 },
+  gokarna: { slug: 'gokarna', name: 'Gokarna', lat: 14.5479, lng: 74.3188 },
+  ooty: { slug: 'ooty', name: 'Ooty', lat: 11.4102, lng: 76.695 },
+  kodaikanal: { slug: 'kodaikanal', name: 'Kodaikanal', lat: 10.2381, lng: 77.4892 },
+  varkala: { slug: 'varkala', name: 'Varkala', lat: 8.7379, lng: 76.7163 },
+  wayanad: { slug: 'wayanad', name: 'Wayanad', lat: 11.6854, lng: 76.132 },
+  mysore: { slug: 'mysuru', name: 'Mysuru', lat: 12.2958, lng: 76.6394 },
+  mysuru: { slug: 'mysuru', name: 'Mysuru', lat: 12.2958, lng: 76.6394 },
+  kasol: { slug: 'kasol', name: 'Kasol', lat: 32.0099, lng: 77.3149 },
+  srinagar: { slug: 'srinagar', name: 'Srinagar', lat: 34.0837, lng: 74.7973 },
+  kashmir: { slug: 'srinagar', name: 'Srinagar', lat: 34.0837, lng: 74.7973 },
+  andaman: { slug: 'andaman', name: 'Andaman', lat: 11.6234, lng: 92.7265 },
+  meghalaya: { slug: 'shillong', name: 'Shillong', lat: 25.5788, lng: 91.8933 },
+  kaziranga: { slug: 'kaziranga', name: 'Kaziranga', lat: 26.5775, lng: 93.1711 },
+  rann: { slug: 'kutch', name: 'Rann of Kutch', lat: 23.7337, lng: 69.8597 },
+  kutch: { slug: 'kutch', name: 'Rann of Kutch', lat: 23.7337, lng: 69.8597 },
+  osaka: { slug: 'osaka', name: 'Osaka', lat: 34.6937, lng: 135.5023 },
+  thailand: { slug: 'bangkok', name: 'Bangkok', lat: 13.7563, lng: 100.5018 },
+  sri_lanka: { slug: 'colombo', name: 'Colombo', lat: 6.9271, lng: 79.8612 },
+  'sri lanka': { slug: 'colombo', name: 'Colombo', lat: 6.9271, lng: 79.8612 },
+  nepal: { slug: 'kathmandu', name: 'Kathmandu', lat: 27.7172, lng: 85.324 },
+  kathmandu: { slug: 'kathmandu', name: 'Kathmandu', lat: 27.7172, lng: 85.324 },
+  bhutan: { slug: 'paro', name: 'Paro', lat: 27.4287, lng: 89.4164 },
 };
+
+/**
+ * Resolves initial destination coordinates synchronously from `trip.destinationSummary`,
+ * `trip.title`, or geo-located items so newly created trips (e.g. Munnar, Kyoto) never
+ * mount centered on Rishikesh.
+ */
+export function resolveInitialTripCenter(
+  trip: Pick<TripMeta, 'title' | 'destinationSummary'> | null | undefined,
+  items: ReadonlyArray<ItineraryItem> = []
+): { lat: number; lng: number } | null {
+  for (const item of items) {
+    if (
+      !item.deletedAt &&
+      typeof item.lat === 'number' &&
+      typeof item.lng === 'number' &&
+      isValidCoordinate(item.lat, item.lng)
+    ) {
+      return { lat: item.lat, lng: item.lng };
+    }
+  }
+  if (!trip) return null;
+
+  const combinedText = `${trip.destinationSummary || ''} · ${trip.title || ''}`
+    .replace(/\(\d+D\)/gi, ' ')
+    .replace(/local sandbox draft/gi, ' ')
+    .replace(/saved in browser/gi, ' ');
+
+  const rawTokens = combinedText
+    .split(/[·,–—/|&]+|\bto\b|\band\b/i)
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t.length >= 2);
+
+  for (const lower of rawTokens) {
+    if (KNOWN_DESTINATIONS[lower]) {
+      return { lat: KNOWN_DESTINATIONS[lower]!.lat, lng: KNOWN_DESTINATIONS[lower]!.lng };
+    }
+    for (const [alias, target] of Object.entries(KNOWN_DESTINATIONS)) {
+      if (alias.length >= 3 && lower.includes(alias)) {
+        return { lat: target.lat, lng: target.lng };
+      }
+    }
+  }
+
+  return null;
+}
 
 /**
  * Infers ordered destination options from a trip's summary, title, and geo-located stops.

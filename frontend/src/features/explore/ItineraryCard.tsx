@@ -3,6 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Layers } from 'lucide-react';
 import type { ExploreCard } from '@/lib/explore-client';
+import { isNonEmptyImageUrl } from '@/lib/formatters';
 
 export function CoverImage({
   card,
@@ -13,7 +14,7 @@ export function CoverImage({
   sizes?: string;
   priority?: boolean;
 }) {
-  if (!card.coverImage) {
+  if (!card.coverImage || !isNonEmptyImageUrl(card.coverImage.url)) {
     return (
       <div className="trunk-ground-flat grid h-full w-full place-items-center" aria-hidden="true">
         <span className="display text-[40px] text-saffron/70">itinbee</span>
@@ -22,7 +23,7 @@ export function CoverImage({
   }
   return (
     <Image
-      src={card.coverImage.url}
+      src={card.coverImage.url.trim()}
       alt={`${card.title}. Photo by ${card.coverImage.author}, ${card.coverImage.license}`}
       fill
       sizes={sizes}

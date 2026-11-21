@@ -11,8 +11,10 @@ import {
 } from '../modules/import/assist.js';
 import { TripIntentSchema, type TripIntent } from '../modules/import/intent.js';
 import {
+  ImportForbiddenError,
   ImportNotFoundError,
   ImportQuotaError,
+  ImportUnauthorizedError,
   ImportValidationError,
   type ImportJobService,
   type JobEvent,
@@ -53,6 +55,12 @@ const JobStateResponseSchema = z.object({
   updatedAt: z.string(),
 });
 
+const CodedErrorSchema = z.object({
+  code: z.string(),
+  error: z.string(),
+  message: z.string(),
+});
+
 /** Normalizes minor client-side edits to `intent.bookings` before validating against `TripIntentSchema`. */
 function coerceIncomingConfirmIntent(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return raw;
@@ -88,6 +96,45 @@ function formatSseFrame(event: JobEvent): string {
   return `event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`;
 }
 
+function normalizeOrigin(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim().replace(/\/+$/, '').toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function isAllowedSseOrigin(
+  originHeader: string | undefined,
+  cfg: AppEnv
+): boolean {
+  const candidate = normalizeOrigin(originHeader);
+  if (!candidate) return false;
+
+  const allowed = new Set<string>();
+  for (const item of cfg.corsOriginList) {
+    const norm = normalizeOrigin(item);
+    if (norm) allowed.add(norm);
+  }
+  const pubUrl = normalizeOrigin(cfg.APP_PUBLIC_URL);
+  if (pubUrl) allowed.add(pubUrl);
+
+  if (process.env.FRONTEND_HOST) {
+    const host = process.env.FRONTEND_HOST.trim()
+      .replace(/^https?:\/\//i, '')
+      .replace(/\/+$/, '')
+      .toLowerCase();
+    if (host) allowed.add(`https://${host}`);
+  }
+
+  if (cfg.NODE_ENV !== 'production') {
+    allowed.add('http://localhost:3000');
+    allowed.add('http://127.0.0.1:3000');
+  }
+
+  return allowed.has(candidate);
+}
+
+const extractOptionalClaims = extractAuthClaims;
+
 export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
   app,
   opts
@@ -100,7 +147,7 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
     req: FastifyRequest,
     reply: FastifyReply
   ): Promise<{ ownerId: string; isGuest: boolean }> {
-    const claims = extractAuthClaims(req);
+    const claims = extractOptionalClaims(req);
     if (claims) {
       const existing = await opts.store.getUserById(claims.sub);
       if (existing) {
@@ -156,11 +203,7 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
             status: z.literal('queued'),
             eventsUrl: z.string(),
           }),
-          400: z.object({
-            code: z.string(),
-            error: z.string(),
-            message: z.string(),
-          }),
+          400: CodedErrorSchema,
           429: z.object({
             code: z.literal('quota_exceeded'),
             error: z.literal('quota_exceeded'),
@@ -172,7 +215,6 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
     },
     async (req, reply) => {
       try {
-        // Validate input before creating guest user / consuming quota
         opts.jobs.validateImportInput(req.body);
 
         const { ownerId, isGuest } = await ensureCallerSession(req, reply);
@@ -218,20 +260,44 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
         }),
         response: {
           200: JobStateResponseSchema,
-          404: z.object({ code: z.string(), error: z.string(), message: z.string() }),
+          401: CodedErrorSchema,
+          403: CodedErrorSchema,
+          404: CodedErrorSchema,
         },
       },
     },
     async (req, reply) => {
-      const state = await opts.jobs.getJobState(req.params.id);
-      if (!state) {
-        return reply.code(404).send({
-          code: 'not_found',
-          error: 'not_found',
-          message: 'Import job not found',
-        });
+      const claims = extractOptionalClaims(req);
+      try {
+        const state = await opts.jobs.getJobState(
+          req.params.id,
+          claims?.sub ?? null
+        );
+        if (!state) {
+          return reply.code(404).send({
+            code: 'not_found',
+            error: 'not_found',
+            message: 'Import job not found',
+          });
+        }
+        return state;
+      } catch (err) {
+        if (err instanceof ImportUnauthorizedError) {
+          return reply.code(401).send({
+            code: err.code,
+            error: err.code,
+            message: err.message,
+          });
+        }
+        if (err instanceof ImportForbiddenError) {
+          return reply.code(403).send({
+            code: err.code,
+            error: err.code,
+            message: err.message,
+          });
+        }
+        throw err;
       }
-      return state;
     }
   );
 
@@ -249,9 +315,12 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
       },
     },
     async (req, reply) => {
+      const claims = extractOptionalClaims(req);
       let closed = false;
       const bufferedLive: JobEvent[] = [];
       let flushingHistory = true;
+      let heartbeatTimer: NodeJS.Timeout | undefined;
+      let sub: Awaited<ReturnType<ImportJobService['subscribeEvents']>> = null;
 
       const writeFrame = (chunk: string): void => {
         if (closed || reply.raw.writableEnded) return;
@@ -261,7 +330,7 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
       const finishStream = (): void => {
         if (closed) return;
         closed = true;
-        clearInterval(heartbeatTimer);
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
         sub?.unsubscribe();
         if (!reply.raw.writableEnded) {
           reply.raw.end();
@@ -271,17 +340,39 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
       const isTerminalEvent = (e: JobEvent): boolean =>
         e.type === 'done' || e.type === 'error';
 
-      const sub = await opts.jobs.subscribeEvents(req.params.id, (liveEvt) => {
-        if (closed) return;
-        if (flushingHistory) {
-          bufferedLive.push(liveEvt);
-          return;
+      try {
+        sub = await opts.jobs.subscribeEvents(
+          req.params.id,
+          (liveEvt) => {
+            if (closed) return;
+            if (flushingHistory) {
+              bufferedLive.push(liveEvt);
+              return;
+            }
+            writeFrame(formatSseFrame(liveEvt));
+            if (isTerminalEvent(liveEvt)) {
+              finishStream();
+            }
+          },
+          claims?.sub ?? null
+        );
+      } catch (err) {
+        if (err instanceof ImportUnauthorizedError) {
+          return reply.code(401).send({
+            code: err.code,
+            error: err.code,
+            message: err.message,
+          });
         }
-        writeFrame(formatSseFrame(liveEvt));
-        if (isTerminalEvent(liveEvt)) {
-          finishStream();
+        if (err instanceof ImportForbiddenError) {
+          return reply.code(403).send({
+            code: err.code,
+            error: err.code,
+            message: err.message,
+          });
         }
-      });
+        throw err;
+      }
 
       if (!sub) {
         return reply.code(404).send({
@@ -293,13 +384,14 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
 
       reply.hijack();
       const originHeader = req.headers.origin;
-      const corsHeaders: Record<string, string> = originHeader
-        ? {
-            'Access-Control-Allow-Origin': originHeader,
-            'Access-Control-Allow-Credentials': 'true',
-            Vary: 'Origin',
-          }
-        : {};
+      const corsHeaders: Record<string, string> =
+        originHeader && isAllowedSseOrigin(originHeader, cfg)
+          ? {
+              'Access-Control-Allow-Origin': originHeader,
+              'Access-Control-Allow-Credentials': 'true',
+              Vary: 'Origin',
+            }
+          : { Vary: 'Origin' };
 
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
@@ -309,7 +401,7 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
         ...corsHeaders,
       });
 
-      const heartbeatTimer = setInterval(() => {
+      heartbeatTimer = setInterval(() => {
         writeFrame(': heartbeat\n\n');
       }, heartbeatMs);
       heartbeatTimer.unref?.();
@@ -358,25 +450,37 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
           202: z.object({
             status: z.literal('building'),
           }),
-          404: z.object({
-            code: z.string(),
-            error: z.string(),
-            message: z.string(),
-          }),
+          401: CodedErrorSchema,
+          403: CodedErrorSchema,
+          404: CodedErrorSchema,
         },
       },
     },
     async (req, reply) => {
+      const claims = extractOptionalClaims(req);
       try {
-        const { ownerId } = await ensureCallerSession(req, reply);
         const res = await opts.jobs.confirmJob({
           jobId: req.params.id,
           intent: req.body.intent as TripIntent,
           answers: req.body.answers,
-          callerOwnerId: ownerId,
+          callerOwnerId: claims?.sub ?? null,
         });
         return reply.code(202).send(res);
       } catch (err) {
+        if (err instanceof ImportUnauthorizedError) {
+          return reply.code(401).send({
+            code: err.code,
+            error: err.code,
+            message: err.message,
+          });
+        }
+        if (err instanceof ImportForbiddenError) {
+          return reply.code(403).send({
+            code: err.code,
+            error: err.code,
+            message: err.message,
+          });
+        }
         if (err instanceof ImportNotFoundError) {
           return reply.code(404).send({
             code: 'not_found',
@@ -400,15 +504,23 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
         params: z.object({
           id: z.string().uuid(),
         }),
-        body: z.object({
-          instruction: z.string().trim().min(2).max(600),
-          dayId: z.string().uuid().optional(),
-        }),
+        body: z
+          .object({
+            instruction: z.string().trim().min(2).max(600).optional(),
+            prompt: z.string().trim().min(2).max(600).optional(),
+            dayId: z.string().uuid().optional(),
+            dayNumber: z.coerce.number().int().min(1).max(60).optional(),
+          })
+          .refine((b) => Boolean(b.instruction || b.prompt), {
+            message: 'Either instruction or prompt is required',
+          }),
         response: {
           200: z.object({
             mode: z.enum(['ai', 'basic']),
             proposal: AssistProposalSchema,
           }),
+          401: z.object({ error: z.string() }),
+          403: z.object({ error: z.string() }),
           404: z.object({ error: z.string() }),
           429: z.object({
             code: z.literal('quota_exceeded'),
@@ -420,19 +532,26 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
       },
     },
     async (req, reply) => {
-      const claims = extractAuthClaims(req);
-      const ws = await opts.store.getTripWorkspace(
-        req.params.id,
-        claims?.sub ?? null
-      );
+      const claims = extractOptionalClaims(req);
+      if (!claims?.sub) {
+        return reply.code(401).send({ error: 'Authentication required' });
+      }
+
+      const ws = await opts.store.getTripWorkspace(req.params.id, claims.sub);
       if (!ws) {
         return reply.code(404).send({ error: 'Trip not found' });
       }
 
+      const isMember = ws.members.some((m) => m.userId === claims.sub);
+      const allowSamplePreview = ws.trip.isSample && !isProd;
+      if (!isMember && !allowSamplePreview) {
+        return reply
+          .code(403)
+          .send({ error: 'Only trip members can use Ask Itinbee on this trip' });
+      }
+
       try {
-        const quotaSubject =
-          claims?.sub ?? hashIdentifier(`ip:${req.ip || '127.0.0.1'}`);
-        await opts.jobs.consumeAssistQuota(quotaSubject);
+        await opts.jobs.consumeAssistQuota(claims.sub);
       } catch (err) {
         if (err instanceof ImportQuotaError) {
           return reply.code(429).send({
@@ -445,10 +564,23 @@ export const importRoutes: FastifyPluginAsyncZod<ImportRoutesOpts> = async (
         throw err;
       }
 
+      const resolvedInstruction = (
+        req.body.instruction ??
+        req.body.prompt ??
+        ''
+      ).trim();
+      const resolvedDayId =
+        req.body.dayId ??
+        (req.body.dayNumber !== undefined
+          ? ws.days.find(
+              (d) => !d.deletedAt && d.dayNumber === req.body.dayNumber
+            )?.id
+          : undefined);
+
       const result = await proposeTripAssist({
         ws,
-        instruction: req.body.instruction,
-        dayId: req.body.dayId,
+        instruction: resolvedInstruction,
+        dayId: resolvedDayId,
         llm: opts.llm,
         places: opts.places,
       });

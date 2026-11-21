@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Search, X } from 'lucide-react';
-import { SHOWCASE } from '@/data/showcase';
+import { MONTH_NAMES, SHOWCASE } from '@/data/showcase';
 import { browserApiBase } from '@/lib/api-base';
 import {
   BUDGETS,
@@ -12,7 +12,6 @@ import {
   queryToSearchParams,
   type ExploreQuery,
 } from '@/lib/explore-client';
-import { MONTH_NAMES } from '@/data/showcase';
 
 interface Suggestion {
   slug: string;
@@ -35,9 +34,12 @@ const LOCAL_REGIONS: Suggestion[] = [
   { slug: 'uttarakhand', name: 'Uttarakhand', secondary: 'State · India' },
   { slug: 'kerala', name: 'Kerala', secondary: 'State · India' },
   { slug: 'uttar-pradesh', name: 'Uttar Pradesh', secondary: 'State · India' },
+  { slug: 'karnataka', name: 'Karnataka', secondary: 'State · India' },
   { slug: 'vietnam', name: 'Vietnam', secondary: 'Country · Southeast Asia' },
   { slug: 'thailand', name: 'Thailand', secondary: 'Country · Southeast Asia' },
+  { slug: 'indonesia', name: 'Indonesia', secondary: 'Country · Southeast Asia' },
   { slug: 'japan', name: 'Japan', secondary: 'Country · East Asia' },
+  { slug: 'portugal', name: 'Portugal', secondary: 'Country · Europe' },
 ];
 
 function localSuggestions(q: string): Suggestion[] {
@@ -64,7 +66,10 @@ function localSuggestions(q: string): Suggestion[] {
     .slice(0, 7);
 }
 
-/** URL-driven filters: every control writes to the query string so results are shareable. */
+/**
+ * URL-driven filters: consolidates rapid updates via `latestQueryRef` into a single
+ * `startTransition` URLSearchParams navigation to prevent race conditions.
+ */
 export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -75,18 +80,29 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
   const [active, setActive] = useState(-1);
   const listId = useId();
   const abortRef = useRef<AbortController | null>(null);
+  const latestQueryRef = useRef<ExploreQuery>(query);
+
+  useEffect(() => {
+    latestQueryRef.current = query;
+  }, [query]);
 
   useEffect(() => setDestText(destLabel ?? ''), [destLabel]);
 
   const push = useCallback(
     (patch: Partial<ExploreQuery>) => {
-      const next: ExploreQuery = { ...query, ...patch, cursor: undefined };
+      const next: ExploreQuery = {
+        ...latestQueryRef.current,
+        ...patch,
+        cursor: undefined,
+      };
+      latestQueryRef.current = next;
       const sp = queryToSearchParams(next);
+      const nextUrl = sp.toString() ? `${pathname}?${sp.toString()}` : pathname;
       startTransition(() => {
-        router.replace(sp.toString() ? `${pathname}?${sp.toString()}` : pathname, { scroll: false });
+        router.replace(nextUrl, { scroll: false });
       });
     },
-    [query, pathname, router]
+    [pathname, router]
   );
 
   // Debounced typeahead: instant local matches, then the destinations API.
@@ -102,10 +118,13 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       try {
-        const res = await fetch(`${browserApiBase()}/v1/geo/autocomplete?q=${encodeURIComponent(text)}&limit=8`, {
-          signal: ctrl.signal,
-          credentials: 'include',
-        });
+        const res = await fetch(
+          `${browserApiBase()}/v1/geo/autocomplete?q=${encodeURIComponent(text)}&limit=8`,
+          {
+            signal: ctrl.signal,
+            credentials: 'include',
+          }
+        );
         if (!res.ok) return;
         const data = (await res.json()) as {
           results: Array<{ slug: string | null; name: string; secondary: string }>;
@@ -132,7 +151,10 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
   const anyFilter = !!(query.dest || query.days || query.type || query.budget || query.month || query.q);
 
   return (
-    <div className="on-paper sticky top-0 z-30 border-b-2 border-navy bg-paper text-navy shadow-[0_8px_16px_-8px_rgba(3,18,14,0.5)]" aria-busy={pending}>
+    <div
+      className="on-paper sticky top-0 z-30 border-b-2 border-navy bg-paper text-navy shadow-[0_8px_16px_-8px_rgba(3,18,14,0.5)]"
+      aria-busy={pending}
+    >
       <div className="mx-auto max-w-[1280px] px-5 py-4 md:px-8">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           {/* Destination */}
@@ -140,7 +162,12 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
             <label htmlFor={`${listId}-dest`} className="sr-only">
               Destination or region
             </label>
-            <Search size={18} strokeWidth={2.25} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-paper-ink" aria-hidden="true" />
+            <Search
+              size={18}
+              strokeWidth={2.25}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-paper-ink"
+              aria-hidden="true"
+            />
             <input
               id={`${listId}-dest`}
               role="combobox"
@@ -154,7 +181,10 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
               onChange={(e) => {
                 setDestText(e.target.value);
                 setOpen(true);
-                if (!e.target.value && query.dest) push({ dest: undefined });
+                setActive(-1);
+                if (!e.target.value && latestQueryRef.current.dest) {
+                  push({ dest: undefined });
+                }
               }}
               onFocus={() => setOpen(true)}
               onBlur={() => setTimeout(() => setOpen(false), 120)}
@@ -165,9 +195,18 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
                 } else if (e.key === 'ArrowUp') {
                   e.preventDefault();
                   setActive((a) => Math.max(a - 1, 0));
-                } else if (e.key === 'Enter' && active >= 0 && suggestions[active]) {
-                  e.preventDefault();
-                  choose(suggestions[active]!);
+                } else if (e.key === 'Enter') {
+                  const candidate =
+                    (active >= 0 ? suggestions[active] : suggestions[0]) ??
+                    localSuggestions(destText)[0];
+                  if (candidate) {
+                    e.preventDefault();
+                    choose(candidate);
+                  } else if (destText.trim()) {
+                    e.preventDefault();
+                    setOpen(false);
+                    push({ q: destText.trim(), dest: undefined });
+                  }
                 } else if (e.key === 'Escape') {
                   setOpen(false);
                 }
@@ -181,7 +220,7 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
                 className="absolute right-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-md text-paper-ink hover:text-navy"
                 onClick={() => {
                   setDestText('');
-                  push({ dest: undefined });
+                  push({ dest: undefined, q: undefined });
                 }}
               >
                 <X size={18} strokeWidth={2.25} aria-hidden="true" />
@@ -203,7 +242,9 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
                       e.preventDefault();
                       choose(s);
                     }}
-                    className={`flex cursor-pointer items-baseline justify-between gap-3 px-3 py-2.5 ${i === active ? 'bg-saffron/40' : 'hover:bg-saffron/25'}`}
+                    className={`flex cursor-pointer items-baseline justify-between gap-3 px-3 py-2.5 ${
+                      i === active ? 'bg-saffron/40' : 'hover:bg-saffron/25'
+                    }`}
                   >
                     <span className="font-bold">{s.name}</span>
                     <span className="truncate text-[13px] text-paper-ink">{s.secondary}</span>
@@ -250,6 +291,7 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
                 className="font-bold text-vermilion-deep underline underline-offset-2"
                 onClick={() => {
                   setDestText('');
+                  latestQueryRef.current = {};
                   startTransition(() => router.replace(pathname, { scroll: false }));
                 }}
               >
@@ -261,7 +303,12 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
 
         <details className="mt-3 group" open={!!(query.type || query.budget || query.month)}>
           <summary className="inline-flex min-h-[40px] cursor-pointer list-none items-center gap-2 text-[14px] font-bold text-navy [&::-webkit-details-marker]:hidden">
-            <span className="grid h-6 w-6 place-items-center rounded-full border-2 border-navy text-[16px] leading-none transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+            <span
+              className="grid h-6 w-6 place-items-center rounded-full border-2 border-navy text-[16px] leading-none motion-safe:transition-transform group-open:rotate-45"
+              aria-hidden="true"
+            >
+              +
+            </span>
             More filters
           </summary>
           <div className="mt-2 grid gap-4 pb-1 md:grid-cols-[1.4fr_1fr_auto_auto] md:items-end">
@@ -328,7 +375,11 @@ export function FilterBar({ query, destLabel, total, facets }: FilterBarProps) {
               <select
                 id={`${listId}-sort`}
                 value={query.sort ?? 'popular'}
-                onChange={(e) => push({ sort: e.target.value === 'popular' ? undefined : (e.target.value as ExploreQuery['sort']) })}
+                onChange={(e) =>
+                  push({
+                    sort: e.target.value === 'popular' ? undefined : (e.target.value as ExploreQuery['sort']),
+                  })
+                }
                 className="h-10 rounded-lg border-2 border-navy bg-[#fffdf8] px-2.5 text-[15px] font-semibold"
               >
                 <option value="popular">Popular</option>

@@ -34,16 +34,18 @@ export function Faq() {
         <div className="divide-y-2 divide-dashed divide-navy/25 border-y-2 border-dashed border-navy/25">
           {FAQ.map((f) => (
             <details key={f.q} className="group py-5">
-              <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-6 text-[20px] font-bold [&::-webkit-details-marker]:hidden">
-                {f.q}
+              <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-6 text-[20px] font-bold marker:content-none [&::-webkit-details-marker]:hidden">
+                <span>{f.q}</span>
                 <span
                   aria-hidden="true"
-                  className="display grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-navy text-[22px] leading-none transition-transform duration-200 group-open:rotate-45"
+                  className="display grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-navy text-[22px] leading-none motion-safe:transition-transform motion-safe:duration-200 group-open:rotate-45"
                 >
                   +
                 </span>
               </summary>
-              <p className="mt-2 max-w-[60ch] text-[18px] text-paper-ink">{f.a}</p>
+              <div className="mt-2.5 max-w-[60ch] text-[18px] leading-relaxed text-paper-ink">
+                <p>{f.a}</p>
+              </div>
             </details>
           ))}
         </div>

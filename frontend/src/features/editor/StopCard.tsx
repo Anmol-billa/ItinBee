@@ -1,19 +1,23 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
   Bed,
+  Check,
   Clock,
   ExternalLink,
   FileText,
   GripVertical,
   MapPin,
+  Pencil,
   Train,
   Trash2,
   Utensils,
+  X,
 } from 'lucide-react';
+import { formatDietaryTag } from '@/lib/formatters';
 import type { BookingView, ItemKind, ItineraryItem, TripDay } from '@/lib/types';
 import { getDayColor } from '@/features/map/day-palette';
 
@@ -31,7 +35,17 @@ interface StopCardProps {
   onMoveToDay: (stopId: string, targetDayId: string) => void;
   onUpdateStop: (
     stopId: string,
-    patch: Partial<Pick<ItineraryItem, 'startTime' | 'durationMins' | 'title' | 'notes'>>
+    patch: Partial<
+      Pick<
+        ItineraryItem,
+        | 'startTime'
+        | 'durationMins'
+        | 'title'
+        | 'notes'
+        | 'accessibilityNotes'
+        | 'dietaryFlags'
+      >
+    >
   ) => void;
   onRemoveStop: (stopId: string) => void;
   onDragStartIndex: (index: number) => void;
@@ -80,6 +94,17 @@ export function StopCard({
   onDragEnd,
 }: StopCardProps) {
   const [dragArmed, setDragArmed] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(stop.title);
+  const [draftNotes, setDraftNotes] = useState(stop.notes);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftTitle(stop.title);
+      setDraftNotes(stop.notes);
+    }
+  }, [stop.title, stop.notes, isEditing]);
+
   const pinColor = getDayColor(dayNumber);
   const kindMeta = KIND_LABELS[stop.kind] ?? KIND_LABELS.activity;
   const KindIcon = kindMeta.Icon;
@@ -94,9 +119,22 @@ export function StopCard({
       ? 'CNF'
       : booking?.status?.toUpperCase() ?? '';
 
+  const commitInlineEdit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const cleanedTitle = draftTitle.trim() || stop.title;
+    const cleanedNotes = draftNotes.trim();
+    if (cleanedTitle !== stop.title || cleanedNotes !== stop.notes) {
+      onUpdateStop(stop.id, {
+        title: cleanedTitle,
+        notes: cleanedNotes,
+      });
+    }
+    setIsEditing(false);
+  };
+
   return (
     <article
-      draggable={dragArmed}
+      draggable={dragArmed && !isEditing}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', String(index));
@@ -149,30 +187,86 @@ export function StopCard({
           </span>
 
           <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h3 className="text-[15px] font-bold leading-snug text-navy">
-                {stop.title}
-              </h3>
+            {isEditing ? (
+              <form
+                onSubmit={commitInlineEdit}
+                onClick={(e) => e.stopPropagation()}
+                className="space-y-2"
+              >
+                <label htmlFor={`stop-title-${stop.id}`} className="sr-only">
+                  Stop title
+                </label>
+                <input
+                  id={`stop-title-${stop.id}`}
+                  data-stop-id={stop.id}
+                  type="text"
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  autoFocus
+                  className="min-h-[36px] w-full rounded-md border border-navy/50 bg-[#FFFDF8] px-2.5 py-1 text-[14.5px] font-bold text-navy"
+                />
+                <label htmlFor={`stop-notes-${stop.id}`} className="sr-only">
+                  Stop notes
+                </label>
+                <textarea
+                  id={`stop-notes-${stop.id}`}
+                  data-stop-id={stop.id}
+                  rows={2}
+                  value={draftNotes}
+                  onChange={(e) => setDraftNotes(e.target.value)}
+                  placeholder="Add timing notes, entry tips, or reminders…"
+                  className="w-full resize-y rounded-md border border-navy/40 bg-[#FFFDF8] px-2.5 py-1.5 text-[13.5px] text-navy"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="submit"
+                    className="inline-flex min-h-[32px] items-center gap-1 rounded-md border border-navy bg-navy px-2.5 py-1 text-[12px] font-bold text-[#FFFDF8]"
+                  >
+                    <Check className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                    <span>Save</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftTitle(stop.title);
+                      setDraftNotes(stop.notes);
+                      setIsEditing(false);
+                    }}
+                    className="inline-flex min-h-[32px] items-center gap-1 rounded-md border border-navy/30 bg-paper px-2.5 py-1 text-[12px] font-semibold text-navy"
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+                    <span>Cancel</span>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <h3 className="text-[15px] font-bold leading-snug text-navy">
+                    {stop.title}
+                  </h3>
 
-              <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[11px] font-semibold text-navy">
-                <KindIcon className="h-3 w-3" strokeWidth={1.8} aria-hidden="true" />
-                {kindMeta.label}
-              </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[11px] font-semibold text-navy">
+                    <KindIcon className="h-3 w-3" strokeWidth={1.8} aria-hidden="true" />
+                    {kindMeta.label}
+                  </span>
 
-              {booking && (
-                <span
-                  className={`rounded-full border px-2 py-0.5 font-mono text-[11px] font-bold tabular-nums ${statusTone}`}
-                >
-                  {statusLabel}
-                  {booking.pnrMasked ? ` · ${booking.pnrMasked}` : ''}
-                </span>
-              )}
-            </div>
+                  {booking && (
+                    <span
+                      className={`rounded-full border px-2 py-0.5 font-mono text-[11px] font-bold tabular-nums ${statusTone}`}
+                    >
+                      {statusLabel}
+                      {booking.pnrMasked ? ` · ${booking.pnrMasked}` : ''}
+                    </span>
+                  )}
+                </div>
 
-            {stop.notes && (
-              <p className="text-[13.5px] leading-relaxed text-paper-ink">
-                {stop.notes}
-              </p>
+                {stop.notes && (
+                  <p className="text-[13.5px] leading-relaxed text-paper-ink">
+                    {stop.notes}
+                  </p>
+                )}
+              </>
             )}
 
             {(stop.dietaryFlags.length > 0 || stop.accessibilityNotes) && (
@@ -182,7 +276,7 @@ export function StopCard({
                     key={flag}
                     className="rounded bg-jade-wash px-1.5 py-0.5 text-[11px] font-semibold text-jade"
                   >
-                    {flag}
+                    {formatDietaryTag(flag)}
                   </span>
                 ))}
                 {stop.accessibilityNotes && (
@@ -195,8 +289,21 @@ export function StopCard({
           </div>
         </div>
 
-        {/* Right: Keyboard-accessible Reorder & Remove Actions */}
+        {/* Right: Edit, Reorder & Remove Actions */}
         <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            aria-expanded={isEditing}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsEditing((v) => !v);
+            }}
+            aria-label={`Edit ${stop.title} title and notes`}
+            className="icon-hit inline-grid h-8 w-8 place-items-center rounded-md text-navy hover:bg-paper"
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+          </button>
+
           <button
             type="button"
             disabled={index === 0}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { redactAadhaarNumbers } from '../src/security/aadhaar-redactor.js';
 import { runHybridTextIngestion } from '../src/modules/ingest/pipeline.js';
 import { extractStopsFromSocialLink } from '../src/modules/ingest/parsers/social.js';
+import { runVertexMumbaiFallback } from '../src/modules/ingest/vertex-fallback.js';
 
 interface TicketFixture {
   name: string;
@@ -305,5 +306,66 @@ describe('Stage 1 & Stage 2 Deterministic Indian Parsers + Social Reel Extractio
     // Preserves 10-digit IRCTC PNR and +91 mobile number
     expect(redactedText).toContain('2451987842');
     expect(redactedText).toContain('+919810011101');
+  });
+
+  it('calls generativelanguage.googleapis.com when GEMINI_API_KEY is provided in Stage-3 fallback and redacts Aadhaar', async () => {
+    let capturedUrl = '';
+    let capturedApiKey = '';
+    const fakeFetch: typeof fetch = async (input, init) => {
+      capturedUrl = String(input);
+      const headers = new Headers(init?.headers);
+      capturedApiKey = headers.get('x-goog-api-key') ?? '';
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      provider: 'homestay',
+                      itemKind: 'stay',
+                      pnr: null,
+                      status: 'confirmed',
+                      suggestedTitle: 'Pahadi Orchard Homestay Mukteshwar',
+                      suggestedDate: '2026-12-19',
+                      suggestedStartTime: '14:00',
+                      suggestedDurationMins: 60,
+                      parserConfidence: 0.9,
+                      lowConfidenceFields: ['pnr'],
+                      summary: {
+                        headline: 'Pahadi Orchard Homestay (ID 4589 2310 7741)',
+                        propertyName: 'Pahadi Orchard Homestay',
+                        checkInIso: '2026-12-19',
+                      },
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    const cand = await runVertexMumbaiFallback(
+      'Mukteshwar orchard homestay confirmed for 19 Dec advance paid',
+      {
+        fetchImpl: fakeFetch,
+        geminiApiKey: 'test-gemini-key',
+        geminiModel: 'gemini-2.5-flash',
+      }
+    );
+
+    expect(capturedUrl).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+    );
+    expect(capturedApiKey).toBe('test-gemini-key');
+    expect(cand.suggestedTitle).toBe('Pahadi Orchard Homestay Mukteshwar');
+    expect(cand.summary.headline).toContain('XXXX-XXXX-7741');
+    expect(cand.summary.headline).not.toContain('4589 2310');
+    expect(cand.parserConfidence).toBeLessThan(0.85);
+    expect(cand.lowConfidenceFields).toContain('pnr');
   });
 });

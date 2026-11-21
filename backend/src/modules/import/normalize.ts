@@ -1,5 +1,10 @@
 import { redactAadhaarNumbers } from '../../security/aadhaar-redactor.js';
-import { classifyAndSanitizeInput, extractTextFromBuffer, type DetectedSourceKind } from '../ingest/classifier.js';
+import {
+  classifyAndExtractDocument,
+  classifyAndSanitizeInput,
+  stripHtmlAndEmailNoise,
+  type DetectedSourceKind,
+} from '../ingest/classifier.js';
 import { parseIrctcTicket, type ParsedBookingCandidate } from '../ingest/parsers/irctc.js';
 import { parseFlightTicket } from '../ingest/parsers/flight.js';
 import { parseBusTicket } from '../ingest/parsers/bus.js';
@@ -86,7 +91,8 @@ const WA_SYSTEM =
 
 export function looksLikeWhatsAppChat(text: string): boolean {
   let hits = 0;
-  for (const line of text.split('\n', 400)) {
+  for (const raw of text.split('\n', 400)) {
+    const line = raw.replace(/[\u200e\u200f\u202f\ufeff]/g, ' ');
     if (WA_LINE.test(line)) hits += 1;
     if (hits >= 3) return true;
   }
@@ -102,7 +108,7 @@ export function preprocessWhatsApp(text: string): string {
   const phone = /\+?\d[\d\s().-]{8,}\d/g;
   let last: string | null = null;
   for (const raw of text.split('\n')) {
-    const line = raw.replace(/\u200e|\u200f|\u202f/g, ' ').trimEnd();
+    const line = raw.replace(/[\u200e\u200f\u202f\ufeff]/g, ' ').trimEnd();
     if (!line.trim()) continue;
     const m = WA_LINE.exec(line);
     if (m) {
@@ -122,6 +128,160 @@ export function preprocessWhatsApp(text: string): string {
     }
   }
   return out.join('\n');
+}
+
+// ---------------------------------------------------------------- RFC822 (.eml)
+
+function decodeQuotedPrintable(input: string): string {
+  const unfolded = input.replace(/=\r?\n/g, '');
+  const bytes: number[] = [];
+  for (let i = 0; i < unfolded.length; i += 1) {
+    if (
+      unfolded[i] === '=' &&
+      i + 2 < unfolded.length &&
+      /^[0-9A-Fa-f]{2}$/.test(unfolded.slice(i + 1, i + 3))
+    ) {
+      bytes.push(parseInt(unfolded.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else {
+      bytes.push(...Buffer.from(unfolded[i]!, 'utf8'));
+    }
+  }
+  return Buffer.from(bytes).toString('utf8');
+}
+
+function decodeMimeWord(headerVal: string): string {
+  return headerVal.replace(
+    /=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g,
+    (_m, _charset: string, enc: string, payload: string) => {
+      try {
+        if (enc.toUpperCase() === 'B') {
+          return Buffer.from(payload, 'base64').toString('utf8');
+        }
+        return decodeQuotedPrintable(payload.replace(/_/g, ' '));
+      } catch {
+        return payload;
+      }
+    }
+  );
+}
+
+/**
+ * Extracts readable text from a forwarded RFC 822 `.eml` booking email, decoding MIME parts
+ * (`quoted-printable` / `base64`) and stripping HTML/CSS cleanly.
+ */
+export function extractEmlText(rawEml: string): string {
+  const splitIdx = rawEml.search(/\r?\n\r?\n/);
+  if (splitIdx < 0) {
+    return stripHtmlAndEmailNoise(rawEml);
+  }
+  const rawHeaders = rawEml.slice(0, splitIdx).replace(/\r?\n[ \t]+/g, ' ');
+  const rawBody = rawEml.slice(splitIdx).replace(/^\r?\n\r?\n/, '');
+
+  const headerMap = new Map<string, string>();
+  for (const line of rawHeaders.split(/\r?\n/)) {
+    const colon = line.indexOf(':');
+    if (colon > 0) {
+      headerMap.set(
+        line.slice(0, colon).trim().toLowerCase(),
+        line.slice(colon + 1).trim()
+      );
+    }
+  }
+
+  const subjectRaw = headerMap.get('subject');
+  const subject = subjectRaw ? decodeMimeWord(subjectRaw).trim() : '';
+  const contentType = headerMap.get('content-type') ?? 'text/plain';
+  const transferEnc = (headerMap.get('content-transfer-encoding') ?? '').toLowerCase();
+
+  const decodePartBody = (partBody: string, partCt: string, partEnc: string): string | null => {
+    const ctLower = partCt.toLowerCase();
+    if (
+      ctLower.startsWith('image/') ||
+      ctLower.startsWith('application/pdf') ||
+      ctLower.startsWith('application/octet-stream')
+    ) {
+      return null;
+    }
+
+    let decoded = partBody;
+    if (partEnc.includes('base64')) {
+      try {
+        decoded = Buffer.from(partBody.replace(/\s+/g, ''), 'base64').toString('utf8');
+      } catch {
+        decoded = partBody;
+      }
+    } else if (
+      partEnc.includes('quoted-printable') ||
+      decoded.includes('=3D') ||
+      /=\r?\n/.test(decoded)
+    ) {
+      decoded = decodeQuotedPrintable(decoded);
+    }
+
+    if (ctLower.includes('text/html') || /<(?:html|body|table|div|p)\b/i.test(decoded)) {
+      const stripped = stripHtmlAndEmailNoise(decoded);
+      if (stripped.length >= 20) return stripped;
+      return extractReadableText(decoded, IMPORT_LIMITS.textChars).text;
+    }
+    return decoded.trim();
+  };
+
+  const boundaryMatch = /boundary\s*=\s*(?:"([^"]+)"|([^;\s]+))/i.exec(contentType);
+  const textParts: string[] = [];
+  if (subject) {
+    textParts.push(`Subject: ${subject}`);
+  }
+
+  if (boundaryMatch) {
+    const boundary = boundaryMatch[1] ?? boundaryMatch[2]!;
+    const rawParts = rawBody.split(`--${boundary}`);
+    const plainChunks: string[] = [];
+    const htmlChunks: string[] = [];
+
+    for (const part of rawParts.slice(1)) {
+      if (part.startsWith('--')) break;
+      const pSplit = part.search(/\r?\n\r?\n/);
+      if (pSplit < 0) continue;
+      const pHeadersRaw = part.slice(0, pSplit).replace(/\r?\n[ \t]+/g, ' ');
+      const pBody = part.slice(pSplit).replace(/^\r?\n\r?\n/, '');
+      let pCt = 'text/plain';
+      let pEnc = '';
+      let pDisp = '';
+      for (const hl of pHeadersRaw.split(/\r?\n/)) {
+        const c = hl.indexOf(':');
+        if (c > 0) {
+          const k = hl.slice(0, c).trim().toLowerCase();
+          const v = hl.slice(c + 1).trim();
+          if (k === 'content-type') pCt = v;
+          if (k === 'content-transfer-encoding') pEnc = v.toLowerCase();
+          if (k === 'content-disposition') pDisp = v.toLowerCase();
+        }
+      }
+      if (pDisp.startsWith('attachment')) continue;
+      // Handle nested multipart/alternative recursively
+      if (/multipart\//i.test(pCt)) {
+        const nested = extractEmlText(`${pHeadersRaw}\r\n\r\n${pBody}`);
+        if (nested) plainChunks.push(nested);
+        continue;
+      }
+      const extracted = decodePartBody(pBody, pCt, pEnc);
+      if (!extracted) continue;
+      if (/text\/html/i.test(pCt)) htmlChunks.push(extracted);
+      else plainChunks.push(extracted);
+    }
+
+    if (plainChunks.length > 0) {
+      textParts.push(...plainChunks);
+    } else if (htmlChunks.length > 0) {
+      textParts.push(...htmlChunks);
+    }
+  } else {
+    const single = decodePartBody(rawBody, contentType, transferEnc);
+    if (single) textParts.push(single);
+  }
+
+  return textParts.filter(Boolean).join('\n\n').trim();
 }
 
 // ---------------------------------------------------------------- bookings
@@ -145,7 +305,12 @@ export function parseBookingsFromText(text: string): ParsedBookingCandidate | nu
       candidate = parseStayConfirmation(stage1.cleanedText);
       break;
     default:
-      return null;
+      candidate =
+        parseIrctcTicket(stage1.cleanedText) ??
+        parseFlightTicket(stage1.cleanedText) ??
+        parseBusTicket(stage1.cleanedText) ??
+        parseStayConfirmation(stage1.cleanedText);
+      break;
   }
   return candidate && candidate.parserConfidence >= 0.7 ? candidate : null;
 }
@@ -165,12 +330,30 @@ export function candidateToAnchor(c: ParsedBookingCandidate): BookingAnchor {
 
 // ---------------------------------------------------------------- files
 
-function sniff(buf: Buffer): 'pdf' | 'png' | 'jpeg' | 'webp' | 'heic' | null {
+const HEIC_FTYP_BRANDS = new Set(['heic', 'heix', 'hevc', 'mif1', 'msf1']);
+
+export function sniffFileMagic(
+  buf: Buffer
+): 'pdf' | 'png' | 'jpeg' | 'webp' | 'heic' | 'unsupported_ftyp' | null {
   if (buf.length >= 5 && buf.subarray(0, 5).toString('latin1') === '%PDF-') return 'pdf';
-  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (
+    buf.length >= 8 &&
+    buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
+    return 'png';
+  }
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
-  if (buf.length >= 12 && buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'webp';
-  if (buf.length >= 12 && buf.subarray(4, 8).toString('latin1') === 'ftyp') return 'heic';
+  if (
+    buf.length >= 12 &&
+    buf.subarray(0, 4).toString('latin1') === 'RIFF' &&
+    buf.subarray(8, 12).toString('latin1') === 'WEBP'
+  ) {
+    return 'webp';
+  }
+  if (buf.length >= 12 && buf.subarray(4, 8).toString('latin1') === 'ftyp') {
+    const majorBrand = buf.subarray(8, 12).toString('latin1');
+    return HEIC_FTYP_BRANDS.has(majorBrand) ? 'heic' : 'unsupported_ftyp';
+  }
   return null;
 }
 
@@ -238,7 +421,7 @@ export async function normalizeInputs(input: ImportInput, deps: NormalizeDeps): 
   };
 
   const addTextSegment = (rawText: string, label: string, hint?: SegmentKind): void => {
-    const trimmed = rawText.trim();
+    const trimmed = rawText.replace(/^\ufeff/, '').trim();
     if (!trimmed) return;
     const { redactedText, redactionCount } = redactAadhaarNumbers(trimmed);
     out.redactions += redactionCount;
@@ -249,10 +432,13 @@ export async function normalizeInputs(input: ImportInput, deps: NormalizeDeps): 
       text = preprocessWhatsApp(redactedText);
       out.hasChat = true;
     }
-    const classified = classifyAndSanitizeInput(trimmed).detectedKind;
+    const classified = classifyAndSanitizeInput(redactedText).detectedKind;
     if (TICKET_KINDS.includes(classified)) {
-      addBooking(trimmed, label);
-      if (kind === 'notes') kind = 'ticket';
+      addBooking(redactedText, label);
+      if (kind === 'notes' || kind === 'file') kind = 'ticket';
+    } else {
+      // Check if an embedded ticket confirmation exists inside a forwarded email / PDF / note
+      addBooking(redactedText, label);
     }
     out.segments.push({ id: nextId(), kind, label, text: truncate(text, IMPORT_LIMITS.textChars) });
   };
@@ -274,21 +460,25 @@ export async function normalizeInputs(input: ImportInput, deps: NormalizeDeps): 
       out.notes.push(`Skipped "${file.name}": files exceed the 8 MB limit.`);
       continue;
     }
-    const sniffed = sniff(buf);
+    const sniffed = sniffFileMagic(buf);
     const safeName = file.name.replace(/[^\w.\- ]/g, '_').slice(0, 80);
-    if (sniffed === 'pdf') {
-      const text = extractTextFromBuffer(buf, 'application/pdf');
-      const meaningful = (text.match(/\p{L}/gu) ?? []).length;
-      let redactedHere = 0;
-      if (meaningful >= 40) {
-        const before = out.redactions;
-        addTextSegment(text, `PDF ${safeName}`, 'pdf');
-        redactedHere = out.redactions - before;
+    const isEml =
+      /^message\/rfc822/i.test(file.mimeType) || /\.eml$/i.test(file.name);
+
+    if (sniffed === 'unsupported_ftyp') {
+      out.notes.push(
+        `Couldn't read "${safeName}" (unsupported video/container format). Supported: text, .eml, PDF, PNG, JPEG, WebP, HEIC.`
+      );
+    } else if (sniffed === 'pdf') {
+      const pdfDoc = await classifyAndExtractDocument(buf, 'application/pdf');
+      out.redactions += pdfDoc.aadhaarRedactions;
+      if (!pdfDoc.isScannedOrImage && pdfDoc.cleanedText.trim().length > 0) {
+        addTextSegment(pdfDoc.cleanedText, `PDF ${safeName}`, 'pdf');
       }
       // Forward the raw PDF only when no Aadhaar number was found in its text layer (we cannot redact inside a PDF).
-      if (deps.multimodal && redactedHere === 0) {
+      if (deps.multimodal && pdfDoc.aadhaarRedactions === 0) {
         out.media.push({ name: safeName, mimeType: MIME_BY_SNIFF.pdf, dataBase64: file.dataBase64 });
-      } else if (meaningful < 40 && !deps.multimodal) {
+      } else if (pdfDoc.isScannedOrImage && !deps.multimodal) {
         out.notes.push(`"${safeName}" looks like a scanned PDF and needs AI reading, which is unavailable right now.`);
       }
     } else if (sniffed) {
@@ -297,10 +487,23 @@ export async function normalizeInputs(input: ImportInput, deps: NormalizeDeps): 
       } else {
         out.notes.push(`"${safeName}" is an image and needs AI reading, which is unavailable right now. Paste the text instead.`);
       }
-    } else if (!looksBinary(buf) && (/^text\//i.test(file.mimeType) || /\.(txt|md|csv|json|rtf)$/i.test(file.name) || file.mimeType === 'application/json')) {
+    } else if (isEml && !looksBinary(buf)) {
+      const emlText = extractEmlText(buf.toString('utf8'));
+      if (emlText) {
+        addTextSegment(emlText, `email ${safeName}`, 'notes');
+      } else {
+        out.notes.push(`Couldn't find readable text inside "${safeName}".`);
+      }
+    } else if (
+      !looksBinary(buf) &&
+      (/^text\//i.test(file.mimeType) ||
+        /\.(txt|md|csv|json|rtf|log)$/i.test(file.name) ||
+        file.mimeType === 'application/json' ||
+        file.mimeType === 'application/octet-stream')
+    ) {
       addTextSegment(buf.toString('utf8'), `file ${safeName}`, 'file');
     } else {
-      out.notes.push(`Couldn't read "${safeName}" (unsupported file type). Supported: text, PDF, PNG, JPEG, WebP.`);
+      out.notes.push(`Couldn't read "${safeName}" (unsupported file type). Supported: text, .eml, PDF, PNG, JPEG, WebP, HEIC.`);
     }
   }
 

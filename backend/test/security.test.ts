@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp, type BuiltAppBundle } from '../src/app.js';
 import { KmsEnvelopeService } from '../src/security/kms-envelope.js';
-import { signAuthToken } from '../src/security/auth-tokens.js';
+import { signAccessToken, signAuthToken } from '../src/security/auth-tokens.js';
 import { SEED_IDS } from '../src/store/seed-data.js';
 
 describe('DPDPA 2023 PII Redaction, Vault Access Boundaries & KMS Envelope Encryption', () => {
@@ -146,9 +146,16 @@ describe('DPDPA 2023 PII Redaction, Vault Access Boundaries & KMS Envelope Encry
       (1. ANANYA SHARMA  29  F  CNF/C2/18) Tj
     `;
 
+    const ownerToken = signAccessToken({
+      sub: SEED_IDS.users.ananya,
+      displayName: 'Ananya Sharma',
+      tier: 'free',
+    });
+
     const uploadRes = await app.inject({
       method: 'POST',
       url: '/v1/ingest/file',
+      headers: { authorization: `Bearer ${ownerToken}` },
       payload: {
         tripId: SEED_IDS.trips.rishikeshLandour,
         fileName: 'irctc-ticket.pdf',

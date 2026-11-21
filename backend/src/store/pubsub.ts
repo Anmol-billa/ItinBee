@@ -6,9 +6,13 @@ import type { PackJobPayload } from '../modules/places/pack-service.js';
 export interface LiveTripEvent {
   type:
     | 'sync_delta'
+    | 'trip_updated'
+    | 'member_updated'
     | 'poll_updated'
     | 'expense_added'
+    | 'expense_deleted'
     | 'booking_ingested'
+    | 'booking_deleted'
     | 'cursor_presence';
   tripId: string;
   timestamp: string;
@@ -21,6 +25,11 @@ export interface IngestJobPayload {
   rawText: string;
 }
 
+interface MemoryOtpEntry {
+  code: string;
+  expiresAt: number;
+}
+
 /**
  * Dual Realtime Pub/Sub, Quota Store & Ingestion Queue (`itinbee-kv` Redis + BullMQ in Render `singapore`,
  * or seamless in-memory EventEmitter + inline worker execution when `REDIS_URL` is unset).
@@ -29,7 +38,8 @@ export class RealtimeAndQueueBus {
   public readonly mode: 'redis' | 'memory';
   private readonly emitter = new EventEmitter();
   private readonly memoryCounters = new Map<string, number>();
-  private readonly memoryOtps = new Map<string, string>();
+  private readonly memoryOtps = new Map<string, MemoryOtpEntry>();
+  private readonly memorySlidingWindows = new Map<string, number[]>();
 
   private redisPub: Redis | null = null;
   private redisSub: Redis | null = null;
@@ -118,8 +128,7 @@ export class RealtimeAndQueueBus {
       async (job: Job<PackJobPayload>) => {
         if (this.packHandler) await this.packHandler(job.data);
       },
-      // one pack at a time keeps us polite to Wikimedia/Overpass
-      { connection: { url: redisUrl }, concurrency: 1 }
+      { connection: { url: redisUrl }, concurrency: 3 }
     );
   }
 
@@ -225,23 +234,26 @@ export class RealtimeAndQueueBus {
   }
 
   public async storeOtpCode(
-    phone: string,
+    identifier: string,
     code: string,
     ttlSeconds = 300
   ): Promise<void> {
-    const key = `otp:${phone.trim()}`;
+    const key = `otp:${identifier.trim()}`;
     if (this.redisPub) {
       await this.redisPub.set(key, code, 'EX', ttlSeconds);
     } else {
-      this.memoryOtps.set(key, code);
+      this.memoryOtps.set(key, {
+        code,
+        expiresAt: Date.now() + Math.max(1, ttlSeconds) * 1000,
+      });
     }
   }
 
   public async verifyAndConsumeOtpCode(
-    phone: string,
+    identifier: string,
     code: string
   ): Promise<boolean> {
-    const key = `otp:${phone.trim()}`;
+    const key = `otp:${identifier.trim()}`;
     if (this.redisPub) {
       const stored = await this.redisPub.get(key);
       if (stored && stored === code) {
@@ -251,12 +263,69 @@ export class RealtimeAndQueueBus {
       return false;
     }
 
-    const stored = this.memoryOtps.get(key);
-    if (stored && stored === code) {
+    const entry = this.memoryOtps.get(key);
+    if (!entry) return false;
+    if (Date.now() > entry.expiresAt) {
+      this.memoryOtps.delete(key);
+      return false;
+    }
+    if (entry.code === code) {
       this.memoryOtps.delete(key);
       return true;
     }
     return false;
+  }
+
+  public async deleteOtpCode(identifier: string): Promise<void> {
+    const key = `otp:${identifier.trim()}`;
+    if (this.redisPub) {
+      await this.redisPub.del(key);
+    } else {
+      this.memoryOtps.delete(key);
+    }
+  }
+
+  /**
+   * Sliding-window rate limit check backed by Redis sorted sets or in-memory timestamps.
+   */
+  public async consumeSlidingWindow(
+    bucketKey: string,
+    maxRequests: number,
+    windowMs: number
+  ): Promise<{ allowed: boolean; count: number; retryAfterSeconds: number }> {
+    const now = Date.now();
+    const cutoff = now - windowMs;
+    const key = `rl:${bucketKey}`;
+
+    if (this.redisPub) {
+      const member = `${now}:${Math.random().toString(36).slice(2, 8)}`;
+      await this.redisPub
+        .multi()
+        .zremrangebyscore(key, 0, cutoff)
+        .zadd(key, now, member)
+        .zcard(key)
+        .pexpire(key, windowMs)
+        .exec();
+      const count = await this.redisPub.zcard(key);
+      const allowed = count <= maxRequests;
+      return {
+        allowed,
+        count,
+        retryAfterSeconds: allowed ? 0 : Math.ceil(windowMs / 1000),
+      };
+    }
+
+    const existing = this.memorySlidingWindows.get(key) ?? [];
+    const filtered = existing.filter((ts) => ts > cutoff);
+    filtered.push(now);
+    this.memorySlidingWindows.set(key, filtered);
+    const count = filtered.length;
+    const allowed = count <= maxRequests;
+    return {
+      allowed,
+      count,
+      retryAfterSeconds: allowed ? 0 : Math.ceil(windowMs / 1000),
+    };
   }
 
   /**

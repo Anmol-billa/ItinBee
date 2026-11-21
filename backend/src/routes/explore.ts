@@ -155,6 +155,7 @@ export const exploreRoutes: FastifyPluginAsyncZod<ExploreRoutesOpts> = async (
         response: {
           200: ExploreCardSchema,
           400: z.object({ error: z.string() }),
+          401: z.object({ error: z.string() }),
           403: z.object({ error: z.string() }),
           404: z.object({ error: z.string() }),
         },
@@ -162,10 +163,15 @@ export const exploreRoutes: FastifyPluginAsyncZod<ExploreRoutesOpts> = async (
     },
     async (req, reply) => {
       const claims = extractAuthClaims(req);
+      if (!claims?.sub) {
+        return reply
+          .code(401)
+          .send({ error: 'Authentication required to publish an itinerary' });
+      }
       try {
         const card = await opts.explore.publishTrip({
           tripId: req.params.id,
-          requesterUserId: claims?.sub ?? null,
+          requesterUserId: claims.sub,
           slug: req.body.slug,
           summary: req.body.summary,
           tripTypes: req.body.tripTypes,

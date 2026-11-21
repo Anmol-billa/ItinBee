@@ -1,6 +1,11 @@
-import pg from 'pg';
-import { estimateIndiaTransit } from '../geo/transit-estimator.js';
+import type pg from 'pg';
+import { redactAadhaarNumbers } from '../../security/aadhaar-redactor.js';
+import {
+  getSharedPgPool,
+  releaseSharedPgPool,
+} from '../../store/shared-pool.js';
 import type { PlacesServices } from '../places/places-module.js';
+import { estimateLegTransit } from '../places/providers/openrouteservice.js';
 import { haversineMeters } from '../places/util/geo.js';
 import type { TripStore } from '../../store/repository.js';
 import {
@@ -17,8 +22,6 @@ import type {
   ExploreQueryInput,
   ImageCredit,
 } from './types.js';
-
-const { Pool } = pg;
 
 const DEST_SLUG_ALIASES: Record<string, string> = {
   'ha-noi': 'hanoi',
@@ -40,6 +43,10 @@ const DEST_SLUG_ALIASES: Record<string, string> = {
   uk: 'united-kingdom',
   sohra: 'cherrapunji',
   mcleodganj: 'dharamshala',
+  mysore: 'mysuru',
+  madikeri: 'coorg',
+  kodagu: 'coorg',
+  udhagamandalam: 'ooty',
 };
 
 const DURATION_BUCKETS: ReadonlyArray<{ id: string; min: number; max: number }> = [
@@ -48,6 +55,93 @@ const DURATION_BUCKETS: ReadonlyArray<{ id: string; min: number; max: number }> 
   { id: '7-10', min: 7, max: 10 },
   { id: '11-', min: 11, max: Number.POSITIVE_INFINITY },
 ];
+
+/**
+ * Strips/redacts personal booking identifiers (Aadhaar, raw PNR digits, Coach/Chair Car/Bogie,
+ * and Berth/Seat assignments in both English and Devanagari Hindi) from public Explore previews
+ * and cloned templates.
+ */
+export function sanitizeExplorePublicText(raw: string | undefined | null): string {
+  if (!raw) return '';
+  let out = redactAadhaarNumbers(raw).redactedText;
+
+  // 1. Explicit PNR / Booking Ref / पीएनआर tokens
+  out = out.replace(
+    /(?:\b(?:pnr|booking\s*(?:id|ref|reference)|confirmation\s*code|tin)\b|पीएनआर)\s*(?:no\.?|number|संख्या|नं\.?|#|:|-)?\s*[A-Za-z0-9\u0966-\u096F-]{5,16}/giu,
+    ''
+  );
+
+  // 2. Bare 10-digit IRCTC PNRs (ASCII or Devanagari digits)
+  out = out.replace(/(?<![\d+])\d{10}(?!\d)/g, '');
+  out = out.replace(/[\u0966-\u096F]{10}/gu, '');
+
+  // 3. Parenthetical coach/seat groups e.g. "(Chair Car C4)", "(कोच B4, बर्थ 32)"
+  out = out.replace(
+    /\(\s*(?:coach|chair\s*car|bogie|कोच|बोगी|सीट|बर्थ)[^)]*\)/giu,
+    ''
+  );
+
+  // 4. Inline English Coach / Chair Car / Bogie tokens
+  out = out.replace(
+    /\b(?:coach|chair\s*car|bogie)\s*(?:no\.?|#|:)?\s*[A-Z]{1,3}[-\s]?\d{1,2}\b[,.;]?/gi,
+    ''
+  );
+
+  // 5. Inline Hindi कोच / बोगी tokens
+  out = out.replace(
+    /(?:कोच|बोगी)\s*(?:संख्या|नं\.?|:|-)?\s*[A-Za-z0-9\u0966-\u096F-]{1,6}[,.;।]?/gu,
+    ''
+  );
+
+  // 6. Inline English Berth / Seat tokens ("Seats 21–22", "Berth 32 Lower", "Seat 12A")
+  out = out.replace(
+    /\b(?:berths?|seats?)\s*(?:no\.?|number|#|:)?\s*[A-Z]?\d{1,3}[A-Z]?(?:\s*[–\-/,&]\s*[A-Z]?\d{1,3}[A-Z]?)*(?:\s*(?:lower|upper|middle|side\s+lower|side\s+upper|window|aisle))?\b[,.;]?/gi,
+    ''
+  );
+
+  // 7. Inline Hindi सीट / बर्थ tokens
+  out = out.replace(
+    /(?:सीटें?|सीट|बर्थ)\s*(?:संख्या|नं\.?|:|-)?\s*[A-Za-z0-9\u0966-\u096F–\-,/]{1,12}(?:\s*(?:लोअर|अपर|मिडिल|साइड\s*लोअर|साइड\s*अपर))?[,.;।]?/gu,
+    ''
+  );
+
+  // Clean up leftover empty brackets, leading punctuation, and extra spaces
+  out = out
+    .replace(/\(\s*[,;:\-–—]*\s*\)/g, '')
+    .replace(/\s+([,.;।])/g, '$1')
+    .replace(/^[,\s;:\-–—]+/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return out;
+}
+
+export function sanitizeElderSummaryI18n(
+  i18n: { en?: string; hi?: string } | undefined | null
+): { en?: string; hi?: string } | undefined {
+  if (!i18n) return undefined;
+  const en = i18n.en ? sanitizeExplorePublicText(i18n.en) : undefined;
+  const hi = i18n.hi ? sanitizeExplorePublicText(i18n.hi) : undefined;
+  if (!en && !hi) return undefined;
+  return {
+    ...(en ? { en } : {}),
+    ...(hi ? { hi } : {}),
+  };
+}
+
+function sanitizeExploreDays(days: ExploreDay[]): ExploreDay[] {
+  return days.map((d) => ({
+    ...d,
+    items: d.items.map((it) => {
+      const sanitizedElder = sanitizeElderSummaryI18n(it.elderSummaryI18n);
+      return {
+        ...it,
+        notes: sanitizeExplorePublicText(it.notes),
+        ...(sanitizedElder ? { elderSummaryI18n: sanitizedElder } : { elderSummaryI18n: undefined }),
+      };
+    }),
+  }));
+}
 
 export function parseDaysFilter(raw: string | undefined): [number, number] | null {
   if (!raw) return null;
@@ -107,7 +201,7 @@ export interface PublishTripParams {
 
 export class ExplorePublishError extends Error {
   constructor(
-    public readonly statusCode: 403 | 404 | 400,
+    public readonly statusCode: 400 | 401 | 403 | 404,
     message: string
   ) {
     super(message);
@@ -115,12 +209,15 @@ export class ExplorePublishError extends Error {
   }
 }
 
+const PG_HYDRATION_TTL_MS = 5_000;
+
 export class ExploreService {
   private readonly entries = new Map<string, StoredExploreEntry>();
   private readonly aliasToSlug = new Map<string, string>();
   private readonly slugByTripId = new Map<string, string>();
   private pool: pg.Pool | null = null;
-  private pgHydrated = false;
+  private readonly sharedDatabaseUrl: string | null = null;
+  private lastPgHydratedAt = 0;
 
   constructor(
     private readonly deps: {
@@ -130,7 +227,7 @@ export class ExploreService {
       forceLocalStore?: boolean;
     }
   ) {
-    // Seed the 48 curated templates in memory immediately
+    // Seed the curated templates in memory immediately
     for (const tpl of materializeTemplates()) {
       this.entries.set(tpl.card.slug, {
         card: tpl.card,
@@ -142,21 +239,15 @@ export class ExploreService {
     }
 
     if (!deps.forceLocalStore && deps.databaseUrl) {
-      const needsSsl =
-        deps.databaseUrl.includes('.render.com') ||
-        deps.databaseUrl.includes('sslmode=require');
-      this.pool = new Pool({
-        connectionString: deps.databaseUrl,
-        max: 5,
-        idleTimeoutMillis: 30_000,
-        ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-      });
+      this.sharedDatabaseUrl = deps.databaseUrl;
+      this.pool = getSharedPgPool(deps.databaseUrl, 'web');
     }
   }
 
   private async ensureHydrated(): Promise<void> {
-    if (!this.pool || this.pgHydrated) return;
-    this.pgHydrated = true;
+    if (!this.pool) return;
+    if (Date.now() - this.lastPgHydratedAt <= PG_HYDRATION_TTL_MS) return;
+    this.lastPgHydratedAt = Date.now();
     try {
       const res = await this.pool.query(
         'SELECT slug, trip_id, origin, card_payload, days_payload, clone_count, published_at FROM explore_published_entries'
@@ -164,7 +255,9 @@ export class ExploreService {
       for (const row of res.rows) {
         const slug = String(row.slug);
         const card = row.card_payload as ExploreCard;
-        const days = row.days_payload as ExploreDay[];
+        const rawDays = (row.days_payload as ExploreDay[]) ?? [];
+        const days = sanitizeExploreDays(rawDays);
+        card.summary = sanitizeExplorePublicText(card.summary);
         card.cloneCount = Number(row.clone_count ?? card.cloneCount ?? 0);
         card.publishedAt = new Date(String(row.published_at)).toISOString();
         const detail: ExploreDetail = {
@@ -358,6 +451,8 @@ export class ExploreService {
     if (!entry) return null;
     return {
       ...entry.detail,
+      summary: sanitizeExplorePublicText(entry.detail.summary),
+      days: sanitizeExploreDays(entry.detail.days),
       cloneCount: entry.card.cloneCount,
     };
   }
@@ -372,7 +467,8 @@ export class ExploreService {
     if (!entry) return null;
 
     const detail = entry.detail;
-    const daysInput = detail.days.map((d) => ({
+    const sanitizedDays = sanitizeExploreDays(detail.days);
+    const daysInput = sanitizedDays.map((d) => ({
       dayNumber: d.dayNumber,
       themeTitle: d.title,
       pacingLevel: (d.items.length <= 3
@@ -393,28 +489,24 @@ export class ExploreService {
       startTime: string | null;
       durationMins: number | null;
       transitMeta?: Record<string, unknown>;
+      elderSummaryI18n?: { en?: string; hi?: string };
     }> = [];
 
-    for (const day of detail.days) {
+    for (const day of sanitizedDays) {
       let prevCoord: { lat: number; lng: number; title: string } | null = null;
       for (const it of day.items) {
         let transitMeta: Record<string, unknown> = {};
         if (prevCoord && it.lat !== null && it.lng !== null) {
-          const est = estimateIndiaTransit({
+          const est = estimateLegTransit({
             origin: { lat: prevCoord.lat, lng: prevCoord.lng, name: prevCoord.title },
             destination: { lat: it.lat, lng: it.lng, name: it.title },
             departureTimeHHMM: it.startTime ?? undefined,
           });
           transitMeta = {
-            mode:
-              est.profile === 'hill_switchback'
-                ? 'hill_cab'
-                : est.profile === 'walk'
-                  ? 'walk'
-                  : 'metro_cab',
-            distanceKm: est.estimatedRoadKm,
+            mode: est.mode,
+            distanceKm: est.distanceKm,
             estimatedDurationMins: est.estimatedDurationMins,
-            advisory: est.advisories[0],
+            advisory: est.advisory,
             googleMapsUrl: est.googleMapsUrl,
           };
         }
@@ -432,6 +524,7 @@ export class ExploreService {
           startTime: it.startTime,
           durationMins: it.durationMins,
           transitMeta,
+          ...(it.elderSummaryI18n ? { elderSummaryI18n: it.elderSummaryI18n } : {}),
         });
       }
     }
@@ -461,7 +554,7 @@ export class ExploreService {
             entry.sourceTripId ?? null,
             entry.card.origin,
             JSON.stringify(entry.card),
-            JSON.stringify(entry.detail.days),
+            JSON.stringify(sanitizedDays),
             entry.card.cloneCount,
             entry.card.publishedAt,
           ]
@@ -475,6 +568,13 @@ export class ExploreService {
   }
 
   public async publishTrip(params: PublishTripParams): Promise<ExploreCard> {
+    if (!params.requesterUserId) {
+      throw new ExplorePublishError(
+        401,
+        'Authentication required to publish an itinerary'
+      );
+    }
+
     await this.ensureHydrated();
     const ws = await this.deps.store.getTripWorkspace(
       params.tripId,
@@ -484,13 +584,12 @@ export class ExploreService {
       throw new ExplorePublishError(404, 'Trip not found');
     }
 
-    if (
-      params.requesterUserId &&
-      !ws.trip.isSample &&
-      ws.members.length > 0 &&
-      !ws.members.some((m) => m.userId === params.requesterUserId)
-    ) {
-      throw new ExplorePublishError(403, 'Only trip members can publish this itinerary');
+    const member = ws.members.find((m) => m.userId === params.requesterUserId);
+    if (!member || (member.role !== 'owner' && member.role !== 'editor')) {
+      throw new ExplorePublishError(
+        403,
+        'Only trip owners or editors can publish this itinerary'
+      );
     }
 
     const activeDays = ws.days
@@ -518,17 +617,21 @@ export class ExploreService {
             (a.startTime ?? '').localeCompare(b.startTime ?? '') ||
             a.sortKey.localeCompare(b.sortKey)
         )
-        .map((it) => ({
-          id: it.id,
-          kind: it.kind,
-          title: it.title,
-          notes: it.notes,
-          lat: it.lat,
-          lng: it.lng,
-          startTime: it.startTime,
-          durationMins: it.durationMins,
-          placeRefId: it.placeRefId,
-        })),
+        .map((it) => {
+          const sanitizedElder = sanitizeElderSummaryI18n(it.elderSummaryI18n);
+          return {
+            id: it.id,
+            kind: it.kind,
+            title: it.title,
+            notes: sanitizeExplorePublicText(it.notes),
+            lat: it.lat,
+            lng: it.lng,
+            startTime: it.startTime,
+            durationMins: it.durationMins,
+            placeRefId: it.placeRefId,
+            ...(sanitizedElder ? { elderSummaryI18n: sanitizedElder } : {}),
+          };
+        }),
     }));
 
     // Infer destinations from destinationSummary + item coordinates against seeded PlacesRepository
@@ -584,7 +687,7 @@ export class ExploreService {
       coverImage ??= LOCAL_PHOTO_CREDITS.jaipur!;
     }
 
-    const ownerMember = ws.members.find((m) => m.role === 'owner') ?? ws.members[0];
+    const ownerMember = ws.members.find((m) => m.role === 'owner') ?? member;
     const nowIso = new Date().toISOString();
     const stopCount = days.reduce(
       (acc, d) => acc + d.items.filter((i) => i.kind !== 'note').length,
@@ -595,13 +698,15 @@ export class ExploreService {
       ? (this.entries.get(existingSlug)?.card.cloneCount ?? 0)
       : 0;
 
+    const rawSummary =
+      params.summary?.trim() ||
+      ws.trip.destinationSummary ||
+      `${activeDays.length}-day itinerary across ${matchedDests.map((d) => d.name).join(', ')}.`;
+
     const card: ExploreCard = {
       slug,
       title: ws.trip.title,
-      summary:
-        params.summary?.trim() ||
-        ws.trip.destinationSummary ||
-        `${activeDays.length}-day itinerary across ${matchedDests.map((d) => d.name).join(', ')}.`,
+      summary: sanitizeExplorePublicText(rawSummary),
       coverImage,
       durationDays: activeDays.length,
       stopCount,
@@ -626,6 +731,7 @@ export class ExploreService {
 
     this.entries.set(slug, { card, detail, sourceTripId: params.tripId });
     this.slugByTripId.set(params.tripId, slug);
+    this.lastPgHydratedAt = Date.now();
 
     if (this.pool) {
       try {
@@ -655,9 +761,9 @@ export class ExploreService {
   }
 
   public async close(): Promise<void> {
-    if (this.pool) {
-      await this.pool.end();
+    if (this.sharedDatabaseUrl && this.pool) {
       this.pool = null;
+      await releaseSharedPgPool(this.sharedDatabaseUrl, 'web');
     }
   }
 }

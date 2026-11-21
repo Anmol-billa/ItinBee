@@ -1,3 +1,5 @@
+import zlib from 'node:zlib';
+import { extractText, getDocumentProxy } from 'unpdf';
 import { redactAadhaarNumbers } from '../../security/aadhaar-redactor.js';
 
 export type DetectedSourceKind =
@@ -8,10 +10,24 @@ export type DetectedSourceKind =
   | 'social'
   | 'unstructured';
 
+export type DocumentExtractionClass = 'DIGITAL_TEXT' | 'SCANNED_PDF_OR_IMAGE';
+
 export interface Stage1ExtractionResult {
   cleanedText: string;
   aadhaarRedactions: number;
   detectedKind: DetectedSourceKind;
+}
+
+export interface DocumentClassificationResult extends Stage1ExtractionResult {
+  documentClass: DocumentExtractionClass;
+  isScannedOrImage: boolean;
+}
+
+export function redactAadhaarInText(input: string): {
+  redactedText: string;
+  redactionCount: number;
+} {
+  return redactAadhaarNumbers(input);
 }
 
 export function stripHtmlAndEmailNoise(raw: string): string {
@@ -19,7 +35,14 @@ export function stripHtmlAndEmailNoise(raw: string): string {
 
   // Decode common quoted-printable soft line breaks & =3D
   if (text.includes('=3D') || /=\r?\n/.test(text)) {
-    text = text.replace(/=\r?\n/g, '').replace(/=3D/g, '=');
+    text = text
+      .replace(/=\r?\n/g, '')
+      .replace(/=([0-9A-Fa-f]{2})/g, (_m, hex: string) => {
+        const code = parseInt(hex, 16);
+        return code >= 32 || code === 9 || code === 10 || code === 13
+          ? String.fromCharCode(code)
+          : ' ';
+      });
   }
 
   // Strip <style> and <script> blocks
@@ -47,46 +70,137 @@ export function stripHtmlAndEmailNoise(raw: string): string {
   return text;
 }
 
+function unescapePdfString(s: string): string {
+  return s
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, ' ')
+    .replace(/\\t/g, ' ')
+    .replace(/\\\(/g, '(')
+    .replace(/\\\)/g, ')')
+    .replace(/\\\\/g, '\\');
+}
+
+function extractPdfOperatorsFromContentStream(streamContent: string): string[] {
+  const chunks: string[] = [];
+
+  // Match TJ arrays: [(Hello) -20 ( World)] TJ
+  const tjArrayRe = /\[((?:[^[\]]|\([^()\\]*(?:\\.[^()\\]*)*\))*)\]\s*TJ/g;
+  let arrMatch: RegExpExecArray | null;
+  while ((arrMatch = tjArrayRe.exec(streamContent)) !== null) {
+    const inner = arrMatch[1] ?? '';
+    const parts: string[] = [];
+    const strRe = /\(([^()\\]*(?:\\.[^()\\]*)*)\)/g;
+    let sm: RegExpExecArray | null;
+    while ((sm = strRe.exec(inner)) !== null) {
+      if (sm[1]) parts.push(unescapePdfString(sm[1]));
+    }
+    if (parts.length > 0) chunks.push(parts.join(''));
+  }
+
+  // Match simple (...) Tj or (...) '
+  const pdfParenRegex = /\(([^()\\]*(?:\\.[^()\\]*)*)\)\s*(?:T[jJ]|')/g;
+  let m: RegExpExecArray | null;
+  while ((m = pdfParenRegex.exec(streamContent)) !== null) {
+    if (m[1]) {
+      chunks.push(unescapePdfString(m[1]));
+    }
+  }
+
+  return chunks;
+}
+
+function isPdfBuffer(buffer: Buffer, mimeType = 'application/octet-stream'): boolean {
+  return (
+    (buffer.length >= 5 && buffer.subarray(0, 5).toString('latin1') === '%PDF-') ||
+    mimeType.toLowerCase() === 'application/pdf'
+  );
+}
+
 /**
- * Extracts readable UTF-8 / PDF text operators without external native binaries,
- * then immediately applies mandatory DPDPA 2023 Aadhaar first-8-digit redaction.
+ * Synchronous PDF/UTF-8 text extractor kept for backward compatibility with synchronous callers.
+ * Supports uncompressed PDF text operators as well as zlib FlateDecode streams.
  */
 export function extractTextFromBuffer(
   buffer: Buffer,
   mimeType = 'application/octet-stream'
 ): string {
-  const rawUtf8 = buffer.toString('utf8');
+  if (isPdfBuffer(buffer, mimeType)) {
+    const rawLatin1 = buffer.toString('latin1');
+    const collected: string[] = [];
 
-  // If buffer begins with %PDF-, pull literal string operators `(...)` as well as readable lines
-  if (rawUtf8.startsWith('%PDF-') || mimeType === 'application/pdf') {
-    const literalMatches: string[] = [];
-    const pdfParenRegex = /\(([^()\\]*(?:\\.[^()\\]*)*)\)\s*T[jJ]/g;
-    let m: RegExpExecArray | null;
-    while ((m = pdfParenRegex.exec(rawUtf8)) !== null) {
-      if (m[1]) {
-        literalMatches.push(
-          m[1]
-            .replace(/\\n/g, '\n')
-            .replace(/\\r/g, ' ')
-            .replace(/\\\(/g, '(')
-            .replace(/\\\)/g, ')')
-        );
+    // 1. Decompress any FlateDecode stream...endstream blocks
+    const streamRe = /stream(?:\r\n|\n)([\s\S]*?)(?:\r\n|\n)?endstream/g;
+    let sm: RegExpExecArray | null;
+    while ((sm = streamRe.exec(rawLatin1)) !== null) {
+      const bodyLatin1 = sm[1];
+      if (!bodyLatin1) continue;
+      const streamBytes = Buffer.from(bodyLatin1, 'latin1');
+      let decoded: string | null = null;
+      for (const decompress of [zlib.inflateSync, zlib.inflateRawSync]) {
+        try {
+          decoded = decompress(streamBytes).toString('latin1');
+          break;
+        } catch {
+          // Not a valid zlib/deflate stream or uses predictors/other filters
+        }
+      }
+      if (decoded) {
+        collected.push(...extractPdfOperatorsFromContentStream(decoded));
       }
     }
-    if (literalMatches.length > 0) {
-      return literalMatches.join('\n');
+
+    // 2. Also scan uncompressed PDF operators directly
+    const rawUtf8 = buffer.toString('utf8');
+    collected.push(...extractPdfOperatorsFromContentStream(rawUtf8));
+
+    if (collected.length > 0) {
+      return collected.join('\n');
     }
+
     // Fallback: keep printable ASCII + Devanagari UTF-8 runs
     return rawUtf8.replace(/[^\x09\x0A\x0D\x20-\x7E\u0900-\u097F₹]/g, ' ');
   }
 
-  return rawUtf8;
+  return buffer.toString('utf8');
+}
+
+/**
+ * Asynchronous PDF text extractor powered by `unpdf` (PDF.js serverless build) to accurately
+ * decode real-world FlateDecode, ToUnicode CMap, and multi-column digital tickets (IRCTC, IndiGo,
+ * Air India, MakeMyTrip), falling back cleanly to `extractTextFromBuffer` on malformed fixtures.
+ */
+export async function extractTextFromBufferAsync(
+  buffer: Buffer,
+  mimeType = 'application/octet-stream'
+): Promise<string> {
+  if (!isPdfBuffer(buffer, mimeType)) {
+    return buffer.toString('utf8');
+  }
+
+  let doc: Awaited<ReturnType<typeof getDocumentProxy>> | null = null;
+  try {
+    doc = await getDocumentProxy(new Uint8Array(buffer), { verbosity: 0 });
+    const res = await extractText(doc, { mergePages: true });
+    const text = Array.isArray(res.text) ? res.text.join('\n\n') : res.text;
+    if (text && text.trim().length > 0) {
+      return text;
+    }
+  } catch {
+    // Malformed PDF test fixture or unsupported encryption: fall back to legacy operator extractor
+  } finally {
+    const disposable = doc as unknown as { destroy?: () => Promise<void> } | null;
+    if (disposable && typeof disposable.destroy === 'function') {
+      await disposable.destroy().catch(() => undefined);
+    }
+  }
+
+  return extractTextFromBuffer(buffer, mimeType);
 }
 
 export function classifyAndSanitizeInput(rawInput: string): Stage1ExtractionResult {
   const stripped = stripHtmlAndEmailNoise(rawInput);
   // Mandatory Stage-1 Aadhaar redaction BEFORE any downstream parser, log, or LLM call
-  const { redactedText, redactionCount } = redactAadhaarNumbers(stripped);
+  const { redactedText, redactionCount } = redactAadhaarInText(stripped);
 
   const lower = redactedText.toLowerCase();
 
@@ -139,3 +253,37 @@ export function classifyAndSanitizeInput(rawInput: string): Stage1ExtractionResu
     detectedKind,
   };
 }
+
+/**
+ * Extracts text from a document buffer (`unpdf` for `%PDF-` with legacy fallback), immediately
+ * applies mandatory DPDPA 2023 Aadhaar redaction, and classifies whether the document is
+ * born-digital text or a scanned PDF / image requiring multimodal vision.
+ */
+export async function classifyAndExtractDocument(
+  buffer: Buffer,
+  mimeType = 'application/octet-stream'
+): Promise<DocumentClassificationResult> {
+  const isImage = /^image\//i.test(mimeType);
+  if (isImage) {
+    return {
+      cleanedText: '',
+      aadhaarRedactions: 0,
+      detectedKind: 'unstructured',
+      documentClass: 'SCANNED_PDF_OR_IMAGE',
+      isScannedOrImage: true,
+    };
+  }
+
+  const rawText = await extractTextFromBufferAsync(buffer, mimeType);
+  const stage1 = classifyAndSanitizeInput(rawText);
+  const meaningfulLetters = (stage1.cleanedText.match(/\p{L}/gu) ?? []).length;
+  const isScannedOrImage = isPdfBuffer(buffer, mimeType) && meaningfulLetters < 40;
+
+  return {
+    ...stage1,
+    documentClass: isScannedOrImage ? 'SCANNED_PDF_OR_IMAGE' : 'DIGITAL_TEXT',
+    isScannedOrImage,
+  };
+}
+
+export const classifyAndExtractDocumentAsync = classifyAndExtractDocument;

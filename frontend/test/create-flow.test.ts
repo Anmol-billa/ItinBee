@@ -24,7 +24,12 @@ import {
   intentReducer,
   validateIntent,
 } from '@/features/create/intent-reducer';
-import type { GeoSuggestion, JobState, TripIntent } from '@/lib/import-types';
+import {
+  formatBookingSummary,
+  type GeoSuggestion,
+  type JobState,
+  type TripIntent,
+} from '@/lib/import-types';
 import { backoffDelay, createSseParser, runSse, type SseMessage } from '@/lib/sse-stream';
 
 function sampleIntent(): TripIntent {
@@ -163,6 +168,8 @@ describe('compose-utils.ts', () => {
 
     expect(isSupportedFile({ name: 'ticket.pdf', size: 1200, type: 'application/pdf' })).toBe(true);
     expect(isSupportedFile({ name: 'scan.HEIC', size: 1200, type: '' })).toBe(true);
+    expect(isSupportedFile({ name: 'whatsapp-chat.txt', size: 1200, type: 'text/plain' })).toBe(true);
+    expect(isSupportedFile({ name: 'flight-confirm.eml', size: 2400, type: 'message/rfc822' })).toBe(true);
     expect(isSupportedFile({ name: 'archive.zip', size: 1200, type: 'application/zip' })).toBe(false);
 
     const existing: FileLike[] = [
@@ -345,5 +352,18 @@ describe('intent-reducer.ts', () => {
     const finalPayload = finalizeIntent(form);
     expect(finalPayload.intent.title).toBe('Manali & Tosh');
     expect(finalPayload.answers).toEqual({ when: 'Early June' });
+  });
+
+  it('formats both plain string and structured BookingSummaryObject cleanly', () => {
+    expect(formatBookingSummary('IRCTC Shatabdi NDLS -> HW')).toBe('IRCTC Shatabdi NDLS -> HW');
+    expect(
+      formatBookingSummary({
+        headline: 'NDLS → Haridwar Jn',
+        vehicleNumber: '12017',
+        coach: 'C4',
+        seatOrBerth: '21',
+      })
+    ).toBe('NDLS → Haridwar Jn · 12017 · Coach C4 · 21');
+    expect(formatBookingSummary(null)).toBe('');
   });
 });

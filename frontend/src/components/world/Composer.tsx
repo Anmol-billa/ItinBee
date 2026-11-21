@@ -2,7 +2,7 @@
 
 import React, { useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Paperclip } from 'lucide-react';
+import { AlertCircle, Paperclip } from 'lucide-react';
 
 const EXAMPLES = [
   '5 days Kerala backwaters, honeymoon',
@@ -20,8 +20,9 @@ interface ComposerProps {
 }
 
 /**
- * The luggage-tag composer. A plain GET form, so it works before hydration:
- * /create?q=… receives whatever the visitor typed or pasted.
+ * The luggage-tag composer. A progressive-enhancement GET form:
+ * prevents empty submissions client-side with accessible inline validation,
+ * and forwards non-empty trip briefs straight to `/create?q=…`.
  */
 export function Composer({
   action = '/create',
@@ -31,22 +32,43 @@ export function Composer({
   showBrowse = true,
 }: ComposerProps) {
   const [text, setText] = useState('');
+  const [emptyError, setEmptyError] = useState(false);
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const labelId = useId();
+  const errId = `${labelId}-empty-err`;
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    if (!text.trim()) {
+      e.preventDefault();
+      setEmptyError(true);
+      ref.current?.focus();
+    }
+  };
 
   return (
-    <form action={action} method="get" className="on-paper">
+    <form action={action} method="get" onSubmit={handleSubmit} noValidate className="on-paper">
       <label id={labelId} htmlFor={`${labelId}-q`} className="sr-only">
         Describe your trip, paste your notes, or drop a ticket
       </label>
-      <div className="rounded-[10px] border-2 border-navy bg-[#fffdf8] px-4 pb-2.5 pt-3.5 shadow-[inset_0_2px_5px_rgba(20,33,61,0.08)] focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-navy">
+      <div
+        className={`rounded-[10px] border-2 bg-[#fffdf8] px-4 pb-2.5 pt-3.5 shadow-[inset_0_2px_5px_rgba(20,33,61,0.08)] focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-navy ${
+          emptyError ? 'border-[#a82e19]' : 'border-navy'
+        }`}
+      >
         <textarea
           id={`${labelId}-q`}
           ref={ref}
           name="q"
           rows={rows}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          aria-invalid={emptyError ? 'true' : 'false'}
+          aria-describedby={emptyError ? errId : undefined}
+          onChange={(e) => {
+            setText(e.target.value);
+            if (emptyError && e.target.value.trim()) {
+              setEmptyError(false);
+            }
+          }}
           autoFocus={autoFocus}
           placeholder="Describe your trip, paste your notes, or drop a ticket…"
           className="block w-full resize-none border-0 bg-transparent p-0 text-[17px] leading-[1.45] text-navy outline-none placeholder:text-[#566079]"
@@ -64,6 +86,17 @@ export function Composer({
           </span>
         </div>
       </div>
+
+      {emptyError ? (
+        <p
+          id={errId}
+          role="alert"
+          className="mt-2.5 flex items-center gap-1.5 text-[14px] font-bold text-vermilion-ink"
+        >
+          <AlertCircle size={15} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />
+          <span>Type a destination, paste a chat, or pick an example below to start.</span>
+        </p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button type="submit" className="btn-stamp">
@@ -85,6 +118,7 @@ export function Composer({
             className="chip-paper"
             onClick={() => {
               setText(ex);
+              setEmptyError(false);
               ref.current?.focus();
             }}
           >

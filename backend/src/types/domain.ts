@@ -14,6 +14,9 @@ export type CurrencyCode = z.infer<typeof CurrencyCodeSchema>;
 export const MemberRoleSchema = z.enum(['owner', 'editor', 'contributor', 'viewer']);
 export type MemberRole = z.infer<typeof MemberRoleSchema>;
 
+export const InviteRoleSchema = z.enum(['editor', 'contributor', 'viewer']);
+export type InviteRole = z.infer<typeof InviteRoleSchema>;
+
 export const PacingLevelSchema = z.enum(['relaxed', 'moderate', 'packed']);
 export type PacingLevel = z.infer<typeof PacingLevelSchema>;
 
@@ -56,15 +59,33 @@ export const UserPublicSchema = z.object({
 });
 export type UserPublic = z.infer<typeof UserPublicSchema>;
 
+export const UserSelfSchema = UserPublicSchema.extend({
+  upiVpa: z.string().nullable(),
+});
+export type UserSelf = z.infer<typeof UserSelfSchema>;
+
 export const TripMemberPublicSchema = z.object({
   userId: z.string().uuid(),
   displayName: z.string(),
   role: MemberRoleSchema,
   vaultAccess: z.boolean(),
   dietaryTags: z.array(z.string()),
+  hasUpiVpa: z.boolean().optional(),
+  isCompanion: z.boolean().optional(),
   joinedAt: z.string(),
 });
 export type TripMemberPublic = z.infer<typeof TripMemberPublicSchema>;
+
+export const TripInvitePublicSchema = z.object({
+  tripId: z.string().uuid(),
+  tripTitle: z.string(),
+  destinationSummary: z.string(),
+  role: InviteRoleSchema,
+  vaultAccess: z.boolean(),
+  inviterName: z.string().optional(),
+  expiresAt: z.string(),
+});
+export type TripInvitePublic = z.infer<typeof TripInvitePublicSchema>;
 
 export const TripDaySchema = z.object({
   id: z.string().uuid(),

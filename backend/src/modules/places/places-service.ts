@@ -11,7 +11,7 @@ import type {
   PlaceRecord,
 } from './types.js';
 import { haversineMeters } from './util/geo.js';
-import { namesSimilar, normalizeName } from './util/text.js';
+import { namesSimilar, normalizeName, toTitleCasePlaceName } from './util/text.js';
 
 export interface PlaceQueryParams {
   category?: PlaceCategory;
@@ -119,12 +119,17 @@ export class PlacesService {
     const details = await this.providers.wikipedia.pageDetails(titles.slice(0, 100));
     const out: LivePlace[] = [];
     for (const h of hits) {
+      if (dest.wikipediaTitle && h.title === dest.wikipediaTitle) continue;
       const d = details[h.title];
       const cat = categorizeWikipedia(d?.description ?? null, h.title);
       if (!cat) continue;
+      const cleanName = toTitleCasePlaceName(h.title.replace(/\s+\([^)]*\)$/, ''));
+      if (normalizeName(cleanName) === normalizeName(dest.name)) continue;
+      const rawThumb = d?.thumbnailUrl?.trim() ?? '';
+      const imageUrl = /^https?:\/\/\S+/i.test(rawThumb) ? rawThumb : null;
       out.push({
         id: `live:wp:${h.pageId}`,
-        name: h.title.replace(/\s+\([^)]*\)$/, ''),
+        name: cleanName,
         category: cat.category,
         subtype: cat.subtype,
         lat: h.lat,
@@ -132,7 +137,7 @@ export class PlacesService {
         description: d?.description ?? null,
         wikipediaTitle: d?.title ?? h.title,
         wikidataId: d?.wikidataId ?? null,
-        imageUrl: d?.thumbnailUrl ?? null,
+        imageUrl,
         distanceM: Math.round(h.distM),
       });
       if (out.length >= limit) break;
@@ -173,14 +178,12 @@ export class PlacesService {
     const nextCursor = nextOffset < result.total ? encodeCursor(nextOffset) : null;
 
     if (!hasPack) {
-      // no pack yet: stored rows (e.g. curated seeds) + a live Wikipedia geosearch fallback
-      let live = await this.liveNearby(dest).catch(() => [] as LivePlace[]);
-      if (params.category) live = live.filter((l) => l.category === params.category);
-      if (params.q) {
-        const q = params.q.toLowerCase();
-        live = live.filter((l) => l.name.toLowerCase().includes(q));
+      // Pre-seeded curated starter POIs (6-8+) render in 0ms without blocking on cold-start Wikipedia geosearch
+      let live: LivePlace[] = [];
+      if (result.rows.length < 6 && !params.category && !params.q && !params.near && !params.bbox) {
+        live = await this.liveNearby(dest).catch(() => [] as LivePlace[]);
+        live = live.filter((l) => !result.rows.some((r) => namesSimilar(r.place.name, l.name)));
       }
-      live = live.filter((l) => !result.rows.some((r) => namesSimilar(r.place.name, l.name)));
       return {
         destination: dest,
         status,

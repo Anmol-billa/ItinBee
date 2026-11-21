@@ -1,12 +1,30 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Check, Plus, UserPlus, Users, Vote } from 'lucide-react';
-import { castGuestPollVote } from '@/lib/api-client';
+import {
+  Check,
+  Copy,
+  Link2,
+  Plus,
+  UserPlus,
+  Users,
+  Vote,
+} from 'lucide-react';
+import { TurnstileWidget } from '@/components/security/TurnstileWidget';
+import {
+  addCloudTripMember,
+  castGuestPollVote,
+  createCloudPoll,
+  createTripInvite,
+  updateCloudTripMember,
+  updateTripMeta,
+} from '@/lib/api-client';
+import { formatDietaryTag } from '@/lib/formatters';
 import type { PollView, TripMember, TripWorkspace } from '@/lib/types';
 
 interface GroupTabProps {
   workspace: TripWorkspace;
+  isCloudSynced?: boolean;
   onUpdateWorkspace: (updater: (prev: TripWorkspace) => TripWorkspace) => void;
   onNotify: (msg: string) => void;
 }
@@ -15,76 +33,206 @@ const DIETARY_TAG_OPTIONS = ['vegetarian', 'jain', 'non-drinker', 'vegan'] as co
 
 export function GroupTab({
   workspace,
+  isCloudSynced = false,
   onUpdateWorkspace,
   onNotify,
 }: GroupTabProps) {
   // Member form
   const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberVpa, setNewMemberVpa] = useState('');
   const [newMemberTags, setNewMemberTags] = useState<string[]>([]);
+
+  // Invite Co-Editor state
+  const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [copiedInvite, setCopiedInvite] = useState(false);
 
   // Poll form & voting
   const [voterName, setVoterName] = useState(
     workspace.members[0]?.displayName ?? 'Traveller'
   );
+  const [turnstileToken, setTurnstileToken] = useState('');
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptA, setPollOptA] = useState('');
   const [pollOptB, setPollOptB] = useState('');
   const [pollOptC, setPollOptC] = useState('');
 
-  const handleToggleMemberTag = (userId: string, tag: string) => {
+  const handleToggleElderMode = () => {
+    const nextVal = !workspace.trip.elderModeEnabled;
     onUpdateWorkspace((prev) => ({
       ...prev,
-      members: prev.members.map((m) => {
-        if (m.userId !== userId) return m;
-        const has = m.dietaryTags.includes(tag);
-        return {
-          ...m,
-          dietaryTags: has
-            ? m.dietaryTags.filter((t) => t !== tag)
-            : [...m.dietaryTags, tag],
-        };
-      }),
+      trip: {
+        ...prev.trip,
+        elderModeEnabled: nextVal,
+      },
     }));
+    if (isCloudSynced) {
+      void updateTripMeta(workspace.trip.id, { elderModeEnabled: nextVal });
+    }
+    onNotify(
+      nextVal
+        ? 'Enabled Elder comfort pacing (max 4 stops/day).'
+        : 'Switched to standard daily pacing.'
+    );
   };
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleToggleMemberTag = (userId: string, tag: string) => {
+    const target = workspace.members.find((m) => m.userId === userId);
+    if (!target) return;
+    const has = target.dietaryTags.includes(tag);
+    const nextTags = has
+      ? target.dietaryTags.filter((t) => t !== tag)
+      : [...target.dietaryTags, tag];
+
+    onUpdateWorkspace((prev) => ({
+      ...prev,
+      members: prev.members.map((m) =>
+        m.userId === userId ? { ...m, dietaryTags: nextTags } : m
+      ),
+    }));
+
+    if (isCloudSynced) {
+      void updateCloudTripMember(workspace.trip.id, userId, {
+        dietaryTags: nextTags,
+      }).catch(() => {});
+    }
+  };
+
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMemberName.trim()) return;
-    const added: TripMember = {
+    const cleanVpa = newMemberVpa.trim().toLowerCase() || null;
+    const localMember: TripMember = {
       userId: crypto.randomUUID(),
       displayName: newMemberName.trim(),
       role: 'contributor',
       vaultAccess: false,
       dietaryTags: newMemberTags,
+      upiVpa: cleanVpa,
+      hasUpiVpa: Boolean(cleanVpa),
       joinedAt: new Date().toISOString(),
     };
-    onUpdateWorkspace((prev) => ({
-      ...prev,
-      members: [...prev.members, added],
-    }));
+
+    if (isCloudSynced) {
+      try {
+        const saved = await addCloudTripMember(workspace.trip.id, {
+          userId: localMember.userId,
+          displayName: localMember.displayName,
+          dietaryTags: localMember.dietaryTags,
+          upiVpa: cleanVpa,
+        });
+        const finalMember: TripMember = saved
+          ? {
+              ...saved,
+              upiVpa: saved.upiVpa ?? cleanVpa,
+              hasUpiVpa: saved.hasUpiVpa ?? Boolean(cleanVpa),
+            }
+          : localMember;
+        onUpdateWorkspace((prev) => ({
+          ...prev,
+          members: [
+            ...prev.members.filter((m) => m.userId !== finalMember.userId),
+            finalMember,
+          ],
+        }));
+      } catch {
+        onUpdateWorkspace((prev) => ({
+          ...prev,
+          members: [...prev.members, localMember],
+        }));
+      }
+    } else {
+      onUpdateWorkspace((prev) => ({
+        ...prev,
+        members: [...prev.members, localMember],
+      }));
+    }
+
     setNewMemberName('');
+    setNewMemberVpa('');
     setNewMemberTags([]);
-    onNotify(`Added ${added.displayName} to group.`);
+    onNotify(`Added ${localMember.displayName} to group.`);
   };
 
-  const handleCreatePoll = (e: React.FormEvent) => {
+  const handleGenerateInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isCloudSynced) {
+      onNotify('Open Share & Publish to save this local draft to cloud before inviting co-editors.');
+      return;
+    }
+    setInviteBusy(true);
+    try {
+      const res = await createTripInvite(workspace.trip.id, {
+        role: inviteRole,
+        email: inviteEmail.trim() || undefined,
+      });
+      const origin =
+        typeof window !== 'undefined'
+          ? window.location.origin
+          : 'https://itinbee.com';
+      const link = res.token
+        ? `${origin}/invite/${encodeURIComponent(res.token)}`
+        : res.inviteUrl || `${origin}/t/${workspace.trip.shortId}`;
+      setInviteUrl(link);
+      setInviteEmail('');
+      onNotify(`Created ${inviteRole} invite link.`);
+    } catch (err) {
+      onNotify(
+        err instanceof Error ? err.message : 'Could not generate invite link.'
+      );
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
+  const handleCopyInvite = async () => {
+    if (!inviteUrl) return;
+    await navigator.clipboard.writeText(inviteUrl);
+    setCopiedInvite(true);
+    setTimeout(() => setCopiedInvite(false), 2200);
+  };
+
+  const handleCreatePoll = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pollQuestion.trim() || !pollOptA.trim() || !pollOptB.trim()) return;
 
-    const options = [pollOptA.trim(), pollOptB.trim(), pollOptC.trim()]
-      .filter(Boolean)
-      .map((label) => ({
-        id: crypto.randomUUID(),
-        label,
-        voteCount: 0,
-        voterNames: [],
-      }));
+    const optionLabels = [pollOptA.trim(), pollOptB.trim(), pollOptC.trim()].filter(
+      Boolean
+    );
+
+    if (isCloudSynced) {
+      try {
+        const savedPoll = await createCloudPoll(workspace.trip.id, {
+          question: pollQuestion.trim(),
+          options: optionLabels.map((label) => ({ label })),
+        });
+        onUpdateWorkspace((prev) => ({
+          ...prev,
+          polls: [savedPoll, ...prev.polls.filter((p) => p.id !== savedPoll.id)],
+        }));
+        setPollQuestion('');
+        setPollOptA('');
+        setPollOptB('');
+        setPollOptC('');
+        onNotify('Published live group poll.');
+        return;
+      } catch {
+        // Offline fallback below
+      }
+    }
 
     const created: PollView = {
       id: crypto.randomUUID(),
       tripId: workspace.trip.id,
       question: pollQuestion.trim(),
-      options,
+      options: optionLabels.map((label) => ({
+        id: crypto.randomUUID(),
+        label,
+        voteCount: 0,
+        voterNames: [],
+      })),
       closesAt: null,
       totalVotes: 0,
       createdAt: new Date().toISOString(),
@@ -109,6 +257,7 @@ export function GroupTab({
         pollId,
         optionId,
         guestDisplayName: display,
+        turnstileToken: turnstileToken || undefined,
       });
       onUpdateWorkspace((prev) => ({
         ...prev,
@@ -150,15 +299,7 @@ export function GroupTab({
 
         <button
           type="button"
-          onClick={() =>
-            onUpdateWorkspace((prev) => ({
-              ...prev,
-              trip: {
-                ...prev.trip,
-                elderModeEnabled: !prev.trip.elderModeEnabled,
-              },
-            }))
-          }
+          onClick={handleToggleElderMode}
           aria-pressed={workspace.trip.elderModeEnabled}
           className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-full border px-3.5 py-1 text-[13px] font-bold transition-colors ${
             workspace.trip.elderModeEnabled
@@ -172,6 +313,84 @@ export function GroupTab({
           <span>Elder comfort pacing (max 4 stops/day)</span>
         </button>
       </div>
+
+      {/* Invite Co-Editor Section */}
+      <section className="space-y-3 rounded-xl border border-navy/20 bg-[#FFFDF8] p-4 shadow-panel sm:p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="inline-flex items-center gap-2 text-[17px] font-bold text-navy">
+            <Link2 className="h-4 w-4 text-trunk" strokeWidth={1.9} aria-hidden="true" />
+            <span>Invite Co-Editor</span>
+          </h3>
+          <span className="text-[12.5px] text-paper-ink">
+            Real-time timeline, budget &amp; poll collaboration
+          </span>
+        </div>
+
+        <form
+          onSubmit={handleGenerateInvite}
+          className="flex flex-wrap items-center gap-2.5"
+        >
+          <select
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value as 'editor' | 'viewer')}
+            aria-label="Invite permission role"
+            className="min-h-[42px] rounded-lg border-2 border-navy/60 bg-[#FFFDF8] px-3 text-[14px] font-semibold text-navy"
+          >
+            <option value="editor">Co-Editor (can edit plan &amp; expenses)</option>
+            <option value="viewer">Viewer (read-only)</option>
+          </select>
+
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            placeholder="Optional email (e.g. friend@example.com)"
+            aria-label="Optional recipient email"
+            className="field min-w-[200px] flex-1 text-[14px]"
+          />
+
+          <button
+            type="submit"
+            disabled={inviteBusy}
+            className="inline-flex min-h-[42px] items-center gap-1.5 rounded-lg border-2 border-navy bg-trunk px-4 py-1.5 text-[13.5px] font-bold text-[#FFFDF8] hover:bg-trunk-deep disabled:opacity-45"
+          >
+            <UserPlus className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
+            <span>{inviteBusy ? 'Creating…' : 'Create invite link'}</span>
+          </button>
+        </form>
+
+        {inviteUrl && (
+          <div className="space-y-2 border-t border-navy/15 pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="coeditor-invite-link" className="sr-only">
+                Co-editor invite link
+              </label>
+              <input
+                id="coeditor-invite-link"
+                type="text"
+                readOnly
+                value={inviteUrl}
+                className="field min-w-[220px] flex-1 font-mono text-[12.5px]"
+              />
+              <button
+                type="button"
+                onClick={() => void handleCopyInvite()}
+                className="btn-stamp min-h-[42px] px-4 py-1.5 text-[13.5px]"
+              >
+                {copiedInvite ? (
+                  <Check className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                ) : (
+                  <Copy className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+                )}
+                <span>{copiedInvite ? 'Copied' : 'Copy Invite Link'}</span>
+              </button>
+            </div>
+            <div role="status" aria-live="polite" className="min-h-[18px] text-[12.5px] font-semibold text-jade">
+              {copiedInvite ? 'Invite link copied to clipboard — share on WhatsApp or email.' : ''}
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Group Members & Dietary Tags */}
       <section className="space-y-3">
@@ -187,13 +406,18 @@ export function GroupTab({
               className="flex flex-wrap items-center justify-between gap-3 p-4"
             >
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[15px] font-bold text-navy">
                     {member.displayName}
                   </span>
                   <span className="rounded-full bg-paper px-2 py-0.5 text-[11px] font-semibold capitalize text-navy">
                     {member.role}
                   </span>
+                  {member.upiVpa && (
+                    <span className="rounded bg-jade-wash px-2 py-0.5 font-mono text-[11px] font-semibold text-jade">
+                      {member.upiVpa}
+                    </span>
+                  )}
                 </div>
                 <p className="text-[12.5px] text-paper-ink">
                   Used for fair UPI expense splits (veg vs non-veg, alcohol exclusions)
@@ -218,7 +442,7 @@ export function GroupTab({
                       {active && (
                         <Check className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
                       )}
-                      <span>{tag}</span>
+                      <span>{formatDietaryTag(tag)}</span>
                     </button>
                   );
                 })}
@@ -243,7 +467,17 @@ export function GroupTab({
             onChange={(e) => setNewMemberName(e.target.value)}
             placeholder="Co-traveller name (e.g. Vikram, Dadi)"
             aria-label="New co-traveller name"
-            className="field min-w-[180px] flex-1 text-[14px]"
+            className="field min-w-[170px] flex-1 text-[14px]"
+          />
+          <input
+            type="text"
+            spellCheck={false}
+            autoCapitalize="none"
+            value={newMemberVpa}
+            onChange={(e) => setNewMemberVpa(e.target.value)}
+            placeholder="Optional UPI ID (name@okaxis)"
+            aria-label="Optional co-traveller UPI ID"
+            className="field w-52 font-mono text-[13.5px]"
           />
 
           <div className="flex flex-wrap items-center gap-1.5">
@@ -267,7 +501,7 @@ export function GroupTab({
                       : 'border-navy/25 bg-[#FFFDF8] text-paper-ink'
                   }`}
                 >
-                  {tag}
+                  {formatDietaryTag(tag)}
                 </button>
               );
             })}
@@ -302,6 +536,8 @@ export function GroupTab({
             />
           </label>
         </div>
+
+        <TurnstileWidget onToken={setTurnstileToken} />
 
         <div className="space-y-3">
           {workspace.polls.map((poll) => (

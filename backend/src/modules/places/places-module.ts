@@ -1,5 +1,9 @@
-import pg from 'pg';
+import type pg from 'pg';
 import type { AppEnv } from '../../config/env.js';
+import {
+  getSharedPgPool,
+  releaseSharedPgPool,
+} from '../../store/shared-pool.js';
 import { MemoryGeoCache, PgGeoCache, type GeoCache } from './geo-cache.js';
 import { InMemoryPlacesRepository } from './memory-repository.js';
 import {
@@ -18,8 +22,6 @@ import type { PlacesRepository } from './repository.js';
 import { seedPlacesData } from './seed.js';
 import { SlidingWindowRateLimiter } from './util/rate-limit.js';
 import { HttpClient } from './util/http.js';
-
-const { Pool } = pg;
 
 export interface PlacesServices {
   repo: PlacesRepository;
@@ -46,25 +48,17 @@ export interface CreatePlacesServicesOptions {
   http?: HttpClient;
 }
 
-function pgPoolConfig(connectionString: string): pg.PoolConfig {
-  const needsSsl = connectionString.includes('.render.com') || connectionString.includes('sslmode=require');
-  return {
-    connectionString,
-    max: 8,
-    idleTimeoutMillis: 30_000,
-    ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-  };
-}
-
 export function createPlacesServices(options: CreatePlacesServicesOptions): PlacesServices {
   const { config } = options;
   let pool: pg.Pool | null = null;
+  let sharedDbUrl: string | null = null;
 
   let repo = options.repo;
   let cache = options.cache;
   if (!repo || !cache) {
     if (!options.forceLocalStore && config.DATABASE_URL) {
-      pool = new Pool(pgPoolConfig(config.DATABASE_URL));
+      sharedDbUrl = config.DATABASE_URL;
+      pool = getSharedPgPool(config.DATABASE_URL, 'web');
       repo ??= new PgPlacesRepository(pool);
       cache ??= new PgGeoCache(pool);
     } else {
@@ -109,7 +103,10 @@ export function createPlacesServices(options: CreatePlacesServicesOptions): Plac
     async close() {
       await ownedRepo.close();
       await ownedCache.close();
-      if (pool) await pool.end();
+      if (sharedDbUrl && pool) {
+        pool = null;
+        await releaseSharedPgPool(sharedDbUrl, 'web');
+      }
     },
   };
 }

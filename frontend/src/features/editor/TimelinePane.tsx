@@ -8,6 +8,8 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
+import { ModalDialog } from '@/components/ui/ModalDialog';
+import type { SyncClientMutationInput } from '@/lib/api-client';
 import type {
   BookingView,
   ItemKind,
@@ -40,6 +42,7 @@ interface TimelinePaneProps {
   routeLegsByPairKey: Record<string, RouteLegResult>;
   onSelectDay: (dayId: string) => void;
   onAddDay: () => void;
+  onDeleteDay: (dayId: string) => void;
   onUpdateDay: (
     dayId: string,
     patch: Partial<Pick<TripDay, 'themeTitle' | 'pacingLevel' | 'date'>>
@@ -50,7 +53,17 @@ interface TimelinePaneProps {
   onMoveStopToDay: (stopId: string, targetDayId: string) => void;
   onUpdateStop: (
     stopId: string,
-    patch: Partial<Pick<ItineraryItem, 'startTime' | 'durationMins' | 'title' | 'notes'>>
+    patch: Partial<
+      Pick<
+        ItineraryItem,
+        | 'startTime'
+        | 'durationMins'
+        | 'title'
+        | 'notes'
+        | 'accessibilityNotes'
+        | 'dietaryFlags'
+      >
+    >
   ) => void;
   onRemoveStop: (stopId: string) => void;
   onAddManualStop: (input: {
@@ -61,7 +74,11 @@ interface TimelinePaneProps {
   onPromoteShortlist: (shortlistId: string, targetDayId: string) => void;
   onRemoveShortlist: (shortlistId: string) => void;
   onLegResolved: (pairKey: string, leg: RouteLegResult) => void;
-  onApplyAssistProposal: (nextWorkspace: TripWorkspace, summaryMsg: string) => void;
+  onApplyAssistProposal: (
+    nextWorkspace: TripWorkspace,
+    summaryMsg: string,
+    mutations: SyncClientMutationInput[]
+  ) => void;
 }
 
 export function TimelinePane({
@@ -73,6 +90,7 @@ export function TimelinePane({
   routeLegsByPairKey,
   onSelectDay,
   onAddDay,
+  onDeleteDay,
   onUpdateDay,
   onHighlightStop,
   onReorderStops,
@@ -89,6 +107,7 @@ export function TimelinePane({
   const [dragFromIdx, setDragFromIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
+  const [confirmDeleteDayId, setConfirmDeleteDayId] = useState<string | null>(null);
 
   // Quick manual stop state
   const [quickTitle, setQuickTitle] = useState('');
@@ -155,6 +174,15 @@ export function TimelinePane({
       startTime: quickTime || null,
     });
     setQuickTitle('');
+  };
+
+  const handleRequestDeleteCurrentDay = () => {
+    if (!currentDay || activeDays.length <= 1) return;
+    if (currentDayStops.length > 0) {
+      setConfirmDeleteDayId(currentDay.id);
+      return;
+    }
+    onDeleteDay(currentDay.id);
   };
 
   return (
@@ -251,6 +279,22 @@ export function TimelinePane({
                     <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
                   </a>
                 )}
+
+                <button
+                  type="button"
+                  disabled={activeDays.length <= 1}
+                  onClick={handleRequestDeleteCurrentDay}
+                  aria-label={`Delete Day ${currentDay.dayNumber}`}
+                  title={
+                    activeDays.length <= 1
+                      ? 'At least one day is required'
+                      : `Delete Day ${currentDay.dayNumber}`
+                  }
+                  className="inline-flex min-h-[34px] items-center gap-1 rounded-md border border-navy/25 bg-[#FFFDF8] px-2.5 py-1 text-[12.5px] font-semibold text-vermilion-deep transition-colors hover:bg-paper disabled:opacity-35"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+                  <span>Delete day</span>
+                </button>
               </div>
             </div>
 
@@ -264,6 +308,7 @@ export function TimelinePane({
               </label>
               <input
                 id={`day-theme-${currentDay.id}`}
+                data-day-id={currentDay.id}
                 type="text"
                 value={currentDay.themeTitle}
                 onChange={(e) =>
@@ -507,6 +552,41 @@ export function TimelinePane({
           )}
         </section>
       </div>
+
+      {/* Confirm Delete Day Modal when Day has Stops */}
+      <ModalDialog
+        open={Boolean(confirmDeleteDayId)}
+        onClose={() => setConfirmDeleteDayId(null)}
+        title={`Delete Day ${currentDay?.dayNumber ?? ''}?`}
+      >
+        <div className="on-paper space-y-4 text-[14px] text-navy">
+          <p className="text-paper-ink">
+            Day {currentDay?.dayNumber} has {currentDayStops.length}{' '}
+            {currentDayStops.length === 1 ? 'stop' : 'stops'}. Deleting this day will move its stops safely into your Shortlist so nothing is lost.
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteDayId(null)}
+              className="inline-flex min-h-[42px] items-center rounded-lg border border-navy/35 bg-[#FFFDF8] px-4 py-2 font-semibold text-navy hover:bg-paper"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirmDeleteDayId) {
+                  onDeleteDay(confirmDeleteDayId);
+                }
+                setConfirmDeleteDayId(null);
+              }}
+              className="btn-stamp min-h-[42px] px-4 py-2 text-[14px]"
+            >
+              Delete Day {currentDay?.dayNumber}
+            </button>
+          </div>
+        </div>
+      </ModalDialog>
     </section>
   );
 }

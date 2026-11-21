@@ -123,14 +123,15 @@ export async function fetchExplore(query: ExploreQuery): Promise<ExploreResult> 
       ...(process.env.NODE_ENV === 'production'
         ? { next: { revalidate: 60 } }
         : { cache: 'no-store' }),
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {
       const data = (await res.json()) as Omit<ExploreResult, 'fallback'>;
       return { ...data, fallback: false };
     }
-  } catch {
-    // fall through to samples
+  } catch (err) {
+    // Handle TimeoutError, AbortError, or offline network errors gracefully
+    void err;
   }
   return sampleExplore(query);
 }
@@ -139,11 +140,12 @@ export async function fetchExploreDetail(slug: string): Promise<ExploreDetail | 
   try {
     const res = await fetch(`${apiBase()}/v1/explore/${encodeURIComponent(slug)}`, {
       next: { revalidate: 60 },
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(8000),
     });
     if (res.ok) return (await res.json()) as ExploreDetail;
     if (res.status !== 404) return sampleDetail(slug);
-  } catch {
+  } catch (err) {
+    void err;
     return sampleDetail(slug);
   }
   return sampleDetail(slug);

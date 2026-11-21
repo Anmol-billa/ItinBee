@@ -12,7 +12,9 @@ import type {
   PackStatus,
   PlaceRecord,
 } from '../modules/places/types.js';
+import { isInsideIndiaBbox } from '../modules/places/providers/openrouteservice.js';
 import { isValidLatLng } from '../modules/places/util/geo.js';
+import { sanitizeImageObject, toTitleCasePlaceName } from '../modules/places/util/text.js';
 
 export const PLACES_ATTRIBUTION =
   'Place data © OpenStreetMap contributors (ODbL) · Wikivoyage & Wikipedia text CC BY-SA 4.0 · Wikidata CC0 · Images: Wikimedia Commons (per-image licence)';
@@ -108,7 +110,7 @@ function placeToDto(p: PlaceRecord, distanceM: number | null): PlaceDto {
   return {
     id: p.id,
     refId: p.refId,
-    name: p.name,
+    name: toTitleCasePlaceName(p.name),
     nameLocal: p.nameLocal,
     category: p.category,
     subtype: p.subtype,
@@ -122,7 +124,7 @@ function placeToDto(p: PlaceRecord, distanceM: number | null): PlaceDto {
     typicalDurationMins: p.typicalDurationMins,
     bestTime: p.bestTime,
     dietaryHints: p.dietaryHints,
-    image: p.image,
+    image: sanitizeImageObject(p.image),
     popularity: p.popularity,
     distanceM,
     origin: p.sources.length > 0 && p.sources.every((s) => s.provider === 'curated') ? 'curated' : 'pack',
@@ -133,10 +135,19 @@ function placeToDto(p: PlaceRecord, distanceM: number | null): PlaceDto {
 }
 
 function livePlaceToDto(p: LivePlace, retrievedAt: string): PlaceDto {
+  const image = p.imageUrl
+    ? sanitizeImageObject({
+        url: p.imageUrl,
+        author: null,
+        license: null,
+        licenseUrl: null,
+        sourceUrl: wikipediaUrl(p.wikipediaTitle),
+      })
+    : null;
   return {
     id: p.id,
     refId: p.id,
-    name: p.name,
+    name: toTitleCasePlaceName(p.name),
     nameLocal: {},
     category: p.category,
     subtype: p.subtype,
@@ -150,9 +161,7 @@ function livePlaceToDto(p: LivePlace, retrievedAt: string): PlaceDto {
     typicalDurationMins: null,
     bestTime: null,
     dietaryHints: [],
-    image: p.imageUrl
-      ? { url: p.imageUrl, author: null, license: null, licenseUrl: null, sourceUrl: wikipediaUrl(p.wikipediaTitle) }
-      : null,
+    image,
     popularity: 0,
     distanceM: p.distanceM,
     origin: 'live',
@@ -191,7 +200,7 @@ export const placesRoutes: FastifyPluginAsyncZod<{ services: PlacesServices }> =
     return {
       id: d.id,
       slug: d.slug,
-      name: d.name,
+      name: toTitleCasePlaceName(d.name),
       kind: d.kind,
       parentSlug,
       countryCode: d.countryCode,
@@ -199,7 +208,7 @@ export const placesRoutes: FastifyPluginAsyncZod<{ services: PlacesServices }> =
       lng: d.lng,
       aliases: d.aliases,
       bestMonths: d.bestMonths,
-      heroImage: d.heroImage,
+      heroImage: sanitizeImageObject(d.heroImage),
       packStatus: packs.effectiveStatus(d) as PackStatus,
     };
   }
@@ -586,6 +595,7 @@ export const placesRoutes: FastifyPluginAsyncZod<{ services: PlacesServices }> =
             coordinates: z.array(z.tuple([z.number(), z.number()])).describe('[lng, lat] pairs (decoded geometry)'),
             source: z.enum(['openrouteservice', 'estimate']),
             cached: z.boolean(),
+            advisory: z.string().optional(),
             attribution: z.string(),
           }),
           429: z.object({ error: z.string(), retryAfterSec: z.number() }),
@@ -599,12 +609,18 @@ export const placesRoutes: FastifyPluginAsyncZod<{ services: PlacesServices }> =
         return reply.code(429).send({ error: 'Too many routing requests', retryAfterSec: gate.retryAfterSec });
       }
       const r = await services.providers.routing.route(req.body.profile, req.body.coordinates);
+      const inIndia = req.body.coordinates.every((c) => isInsideIndiaBbox(c));
+      const attribution =
+        r.source === 'openrouteservice'
+          ? 'Routing by openrouteservice.org · © OpenStreetMap contributors'
+          : r.advisory === 'Estimated walking distance'
+            ? 'Estimated walking distance · © OpenStreetMap contributors'
+            : inIndia
+              ? 'Estimated with Itinbee India transit calibration · © OpenStreetMap contributors'
+              : 'Estimated road transit · © OpenStreetMap contributors';
       return reply.code(200).send({
         ...r,
-        attribution:
-          r.source === 'openrouteservice'
-            ? 'Routing by openrouteservice.org · © OpenStreetMap contributors'
-            : 'Estimated with the Itinbee India transit calibration (no routing key / provider unavailable)',
+        attribution,
       });
     }
   );

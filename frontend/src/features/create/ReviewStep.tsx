@@ -27,13 +27,14 @@ import {
   intentReducer,
   validateIntent,
 } from '@/features/create/intent-reducer';
-import type {
-  BudgetTier,
-  ConfirmBody,
-  GroupType,
-  JobMode,
-  Pace,
-  TripIntent,
+import {
+  formatBookingSummary,
+  type BudgetTier,
+  type ConfirmBody,
+  type GroupType,
+  type JobMode,
+  type Pace,
+  type TripIntent,
 } from '@/lib/import-types';
 
 const GROUP_OPTIONS: Array<{ id: GroupType; label: string }> = [
@@ -767,7 +768,9 @@ export function ReviewStep({
                         {b.provider}
                       </span>
                     </div>
-                    <p className="text-[14px] text-paper-ink">{b.summary}</p>
+                    <p className="text-[14px] text-paper-ink">
+                      {formatBookingSummary(b.summary)}
+                    </p>
                     {b.lowConfidenceFields.length > 0 ? (
                       <p className="text-[13px] font-semibold text-vermilion-ink">
                         Please verify in editor: {b.lowConfidenceFields.join(', ')}

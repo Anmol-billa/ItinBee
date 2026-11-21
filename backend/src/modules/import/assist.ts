@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CURATED_OPEN_POIS } from '../geo/curated-india-pois.js';
 import { getTemplatePoiCatalog } from '../explore/template-catalog.js';
 import type { PlacesServices } from '../places/places-module.js';
+import { STARTER_OPEN_POIS } from '../places/seed/starter-pois.js';
 import { haversineMeters } from '../places/util/geo.js';
 import { namesSimilar, normalizeName } from '../places/util/text.js';
 import {
@@ -147,8 +148,23 @@ async function gatherTripCandidates(
 
   const nearTrip = (lat: number, lng: number): boolean => {
     if (coords.length === 0) return true;
-    return coords.some((c) => haversineMeters(c, { lat, lng }) <= 80_000);
+    return coords.some((c) => haversineMeters(c, { lat, lng }) <= 45_000);
   };
+
+  for (const sp of STARTER_OPEN_POIS) {
+    if (!nearTrip(sp.lat, sp.lng)) continue;
+    add({
+      placeRefId: sp.refId,
+      title: sp.name,
+      kind: sp.category === 'food' || sp.category === 'cafe' ? 'meal' : 'activity',
+      category: sp.category,
+      lat: sp.lat,
+      lng: sp.lng,
+      durationMins: sp.typicalDurationMins,
+      notes: sp.whyVisit || sp.description,
+      dietaryFlags: sp.dietaryHints,
+    });
+  }
 
   for (const cp of CURATED_OPEN_POIS) {
     if (!nearTrip(cp.lat, cp.lng)) continue;

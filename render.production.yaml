@@ -1,4 +1,18 @@
-# Production Render Blueprint (Zero Cold-Starts, Dedicated BullMQ Pack & Import Worker, Persistent PostGIS)
+# ==============================================================================
+# PRIMARY PRODUCTION RENDER BLUEPRINT (`render.production.yaml`)
+# Zero Cold-Starts, Dedicated BullMQ Pack & Import Worker, Persistent PostGIS,
+# Shared Crypto Secrets (`JWT_SECRET` + `DEV_MASTER_KEY_HEX`), and Exact CORS
+# wired to Render's `*.onrender.com` service hosts out-of-the-box.
+# ==============================================================================
+
+envVarGroups:
+  - name: itinbee-shared-secrets
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DEV_MASTER_KEY_HEX
+        generateValue: true
+
 databases:
   - name: itinbee-db
     databaseName: itinbee_prod
@@ -7,7 +21,7 @@ databases:
     region: singapore
 
 services:
-  # 1. Always-On Fastify API + SSE + WebSocket Service
+  # 1. Always-On Fastify API + SSE + Authenticated WebSocket Service
   - type: web
     name: itinbee-backend
     runtime: node
@@ -21,16 +35,36 @@ services:
     startCommand: npm run start
     healthCheckPath: /health
     envVars:
+      - fromGroup: itinbee-shared-secrets
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
-      - key: JWT_SECRET
-        generateValue: true
       - key: ADMIN_TOKEN
+        generateValue: true
+      - key: WEBHOOK_HMAC_SECRET
         generateValue: true
       - key: RUN_INLINE_WORKER
         value: "false"
+      - key: FRONTEND_HOST
+        fromService:
+          type: web
+          name: itinbee-frontend
+          property: host
+      - key: PUBLIC_BACKEND_HOST
+        fromService:
+          type: web
+          name: itinbee-backend
+          property: host
+      - key: DATABASE_URL
+        fromDatabase:
+          name: itinbee-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: itinbee-kv
+          property: connectionString
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: GEMINI_API_KEY
@@ -41,21 +75,42 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
-      - key: DATABASE_URL
-        fromDatabase:
-          name: itinbee-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: itinbee-kv
-          property: connectionString
+      - key: RESEND_FROM_EMAIL
+        value: "Itinbee <onboarding@resend.dev>"
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: AWS_REGION
+        value: ap-south-1
       - key: AWS_S3_VAULT_REGION
         value: ap-south-1
+      - key: AWS_S3_VAULT_BUCKET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: KMS_KEY_ID
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
       - key: GCP_VERTEX_LOCATION
         value: asia-south1
 
-  # 2. Dedicated Background Worker (Destination Pack Builder + Smart Import Pipeline)
+  # 2. Dedicated Background Worker (Destination Pack Builder + Ticket Ingestion)
   - type: worker
     name: itinbee-worker
     runtime: node
@@ -68,6 +123,7 @@ services:
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start:worker
     envVars:
+      - fromGroup: itinbee-shared-secrets
       - key: NODE_ENV
         value: production
       - key: GEMINI_MODEL
@@ -108,7 +164,16 @@ services:
           type: web
           name: itinbee-backend
           property: hostport
+      - key: PUBLIC_BACKEND_HOST
+        fromService:
+          type: web
+          name: itinbee-backend
+          property: host
       - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        sync: false
+      - key: NEXT_PUBLIC_TURNSTILE_SITE_KEY
+        sync: false
+      - key: SENTRY_DSN
         sync: false
 
   # 4. Persistent Redis Key Value

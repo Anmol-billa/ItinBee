@@ -29,14 +29,60 @@ export interface IntentMustInclude {
   resolved: boolean;
 }
 
+export interface BookingSummaryObject {
+  headline: string;
+  routeLabel?: string;
+  vehicleNumber?: string;
+  vehicleName?: string;
+  operatorName?: string;
+  coach?: string;
+  seatOrBerth?: string;
+  terminalOrPlatform?: string;
+  boardingPoint?: string;
+  propertyName?: string;
+}
+
 export interface IntentBooking {
   itemKind: string;
   title: string;
   provider: string;
   startIso?: string;
   endIso?: string;
-  summary: string;
+  summary: string | BookingSummaryObject;
   lowConfidenceFields: string[];
+}
+
+export type BookingAnchor = IntentBooking;
+
+/**
+ * Formats a `BookingAnchor.summary` (either a plain string in local preview
+ * or a structured `BookingSummaryObject` from the backend) into a clean human-readable string.
+ */
+export function formatBookingSummary(
+  summary: string | BookingSummaryObject | Record<string, unknown> | null | undefined
+): string {
+  if (!summary) return '';
+  if (typeof summary === 'string') return summary.trim();
+  if (typeof summary === 'object') {
+    const rec = summary as Record<string, unknown>;
+    const str = (key: string) =>
+      typeof rec[key] === 'string' && (rec[key] as string).trim()
+        ? (rec[key] as string).trim()
+        : null;
+    const headline = str('headline') || str('propertyName') || str('routeLabel');
+    const vehicle = str('vehicleNumber') || str('vehicleName') || str('operatorName');
+    const route = headline && str('routeLabel') && str('routeLabel') !== headline ? str('routeLabel') : null;
+    const coachVal = str('coach');
+    const coach = coachVal
+      ? /^coach\b/i.test(coachVal)
+        ? coachVal
+        : `Coach ${coachVal}`
+      : null;
+    const terminal = str('terminalOrPlatform');
+    const seat = str('seatOrBerth');
+    return [headline, route, vehicle, terminal, coach, seat].filter(Boolean).join(' · ');
+  }
+  return String(summary);
 }
 
 export interface IntentQuestion {

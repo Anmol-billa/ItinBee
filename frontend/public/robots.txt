@@ -1,18 +1,22 @@
 User-agent: *
 Allow: /
-Allow: /t/
+Disallow: /t/
 Allow: /llms.txt
 
 User-agent: GPTBot
 Allow: /
+Disallow: /t/
 
 User-agent: Claude-Web
 Allow: /
+Disallow: /t/
 
 User-agent: PerplexityBot
 Allow: /
+Disallow: /t/
 
 User-agent: Google-Extended
 Allow: /
+Disallow: /t/
 
 Sitemap: https://itinbee.com/sitemap.xml

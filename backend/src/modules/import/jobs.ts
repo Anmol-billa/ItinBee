@@ -1,11 +1,15 @@
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import pg from 'pg';
+import type pg from 'pg';
 import type { AppEnv } from '../../config/env.js';
 import {
   defaultKmsEnvelope,
   type KmsEnvelopeService,
 } from '../../security/kms-envelope.js';
+import {
+  getSharedPgPool,
+  releaseSharedPgPool,
+} from '../../store/shared-pool.js';
 import type { CurrencyCode } from '../../types/domain.js';
 import type { TripStore } from '../../store/repository.js';
 import type { ExploreService } from '../explore/explore-service.js';
@@ -27,8 +31,6 @@ import {
   buildGroundedItinerary,
   type DayStreamEvent,
 } from './stage-b-planner.js';
-
-const { Pool } = pg;
 
 export type JobStatus =
   | 'queued'
@@ -99,9 +101,26 @@ export class ImportNotFoundError extends Error {
   }
 }
 
+export class ImportUnauthorizedError extends Error {
+  public readonly code = 'unauthorized';
+  constructor(message = 'Authentication required') {
+    super(message);
+    this.name = 'ImportUnauthorizedError';
+  }
+}
+
+export class ImportForbiddenError extends Error {
+  public readonly code = 'forbidden';
+  constructor(message = 'You do not have access to this import job') {
+    super(message);
+    this.name = 'ImportForbiddenError';
+  }
+}
+
 interface InternalJobRecord {
   id: string;
   ownerId: string;
+  userId: string;
   ipHash: string;
   locale: 'en' | 'hi';
   baseTripSlug?: string;
@@ -157,10 +176,12 @@ export class ImportJobService {
   private readonly quotas = new Map<string, { used: number; resetAt: string }>();
   private readonly emitter = new EventEmitter();
   private readonly stageAPromises = new Map<string, Promise<void>>();
+  private readonly activeLocalJobIds = new Set<string>();
   private readonly inFlight = new Set<Promise<void>>();
   private readonly fetcher: SafeFetcher;
   private readonly kms: KmsEnvelopeService;
   private pool: pg.Pool | null = null;
+  private readonly sharedDatabaseUrl: string | null = null;
 
   constructor(private readonly deps: ImportJobServiceDeps) {
     this.emitter.setMaxListeners(500);
@@ -168,15 +189,8 @@ export class ImportJobService {
     this.kms = deps.kms ?? defaultKmsEnvelope;
 
     if (!deps.forceLocalStore && deps.config.DATABASE_URL) {
-      const needsSsl =
-        deps.config.DATABASE_URL.includes('.render.com') ||
-        deps.config.DATABASE_URL.includes('sslmode=require');
-      this.pool = new Pool({
-        connectionString: deps.config.DATABASE_URL,
-        max: 5,
-        idleTimeoutMillis: 30_000,
-        ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-      });
+      this.sharedDatabaseUrl = deps.config.DATABASE_URL;
+      this.pool = getSharedPgPool(deps.config.DATABASE_URL, 'web');
     }
   }
 
@@ -190,6 +204,20 @@ export class ImportJobService {
   public async waitForIdle(): Promise<void> {
     while (this.inFlight.size > 0) {
       await Promise.allSettled([...this.inFlight]);
+    }
+  }
+
+  private assertJobAccess(
+    job: InternalJobRecord,
+    callerUserId: string | null | undefined
+  ): void {
+    const ownerUserId = job.userId || job.ownerId;
+    if (!ownerUserId) return;
+    if (!callerUserId) {
+      throw new ImportUnauthorizedError();
+    }
+    if (callerUserId !== ownerUserId) {
+      throw new ImportForbiddenError();
     }
   }
 
@@ -228,7 +256,6 @@ export class ImportJobService {
         if (!f.dataBase64 || typeof f.dataBase64 !== 'string') {
           throw new ImportValidationError(`File "${f.name}" has empty data.`);
         }
-        // Approximate decoded byte length (exact check via Buffer.byteLength)
         bytes += Buffer.byteLength(f.dataBase64, 'base64');
       }
       if (bytes > IMPORT_LIMITS.totalBytes) {
@@ -365,10 +392,21 @@ export class ImportJobService {
     }
   }
 
+  /**
+   * Loads (or refreshes) job state from PostgreSQL when `this.pool` is active and the job
+   * is NOT actively executing on *this* instance (`!inFlightLocally`), keeping multi-instance
+   * web/worker deployments coherent.
+   */
   private async loadJobFromDbIfNeeded(jobId: string): Promise<InternalJobRecord | null> {
+    const inFlightLocally = this.activeLocalJobIds.has(jobId);
     const mem = this.jobs.get(jobId);
-    if (mem) return mem;
-    if (!this.pool) return null;
+
+    if (inFlightLocally && mem) {
+      return mem;
+    }
+    if (!this.pool) {
+      return mem ?? null;
+    }
 
     try {
       const res = await this.pool.query(
@@ -376,7 +414,7 @@ export class ImportJobService {
         [jobId]
       );
       const row = res.rows[0];
-      if (!row) return null;
+      if (!row) return mem ?? null;
 
       let bookingCandidates: ParsedBookingCandidate[] = [];
       if (row.booking_candidates_enc) {
@@ -391,9 +429,11 @@ export class ImportJobService {
         }
       }
 
+      const ownerStr = String(row.owner_id);
       const loaded: InternalJobRecord = {
         id: String(row.id),
-        ownerId: String(row.owner_id),
+        ownerId: ownerStr,
+        userId: ownerStr,
         ipHash: String(row.client_ip_hash ?? ''),
         locale: row.locale === 'hi' ? 'hi' : 'en',
         baseTripSlug: row.base_trip_slug ? String(row.base_trip_slug) : undefined,
@@ -412,7 +452,7 @@ export class ImportJobService {
       this.jobs.set(jobId, loaded);
       return loaded;
     } catch {
-      return null;
+      return mem ?? null;
     }
   }
 
@@ -457,6 +497,7 @@ export class ImportJobService {
     const job: InternalJobRecord = {
       id: jobId,
       ownerId: params.ownerId,
+      userId: params.ownerId,
       ipHash: params.ipHash,
       locale: params.input.locale ?? 'en',
       baseTripSlug: params.input.baseTripSlug,
@@ -482,6 +523,7 @@ export class ImportJobService {
     });
     await this.persistJob(job);
 
+    this.activeLocalJobIds.add(jobId);
     const stageAPromise = (async () => {
       await Promise.resolve();
       await this.runStageA(job, params.input);
@@ -490,6 +532,7 @@ export class ImportJobService {
     this.track(
       stageAPromise.finally(() => {
         this.stageAPromises.delete(jobId);
+        this.activeLocalJobIds.delete(jobId);
       })
     );
 
@@ -538,6 +581,7 @@ export class ImportJobService {
 
       job.mode = stageA.mode;
       job.intent = stageA.intent;
+      job.bookingCandidates = stageA.bookingCandidates;
 
       // Emit public detected chips (strictly the 7 contract kinds)
       const emittedKeys = new Set<string>();
@@ -584,9 +628,15 @@ export class ImportJobService {
     }
   }
 
-  public async getJobState(jobId: string): Promise<JobState | null> {
+  public async getJobState(
+    jobId: string,
+    callerUserId?: string | null
+  ): Promise<JobState | null> {
     const job = await this.loadJobFromDbIfNeeded(jobId);
     if (!job) return null;
+    if (callerUserId !== undefined) {
+      this.assertJobAccess(job, callerUserId);
+    }
     return this.toJobState(job);
   }
 
@@ -594,7 +644,7 @@ export class ImportJobService {
     jobId: string;
     intent: TripIntent;
     answers?: Record<string, string>;
-    callerOwnerId: string;
+    callerOwnerId: string | null;
   }): Promise<{ status: 'building' }> {
     // Wait for Stage A if caller confirmed while Stage A was still finishing
     const pendingA = this.stageAPromises.get(params.jobId);
@@ -607,13 +657,11 @@ export class ImportJobService {
       throw new ImportNotFoundError();
     }
 
+    this.assertJobAccess(job, params.callerOwnerId);
+
     // Idempotent: repeated confirm calls on building/done jobs succeed without duplicating trips
     if (job.status === 'building' || job.status === 'done') {
       return { status: 'building' };
-    }
-
-    if (params.callerOwnerId) {
-      job.ownerId = params.callerOwnerId;
     }
 
     job.status = 'building';
@@ -624,11 +672,16 @@ export class ImportJobService {
     });
     await this.persistJob(job);
 
+    this.activeLocalJobIds.add(job.id);
     const stageBPromise = (async () => {
       await Promise.resolve();
       await this.runStageB(job, params.intent, params.answers);
     })();
-    this.track(stageBPromise);
+    this.track(
+      stageBPromise.finally(() => {
+        this.activeLocalJobIds.delete(job.id);
+      })
+    );
 
     return { status: 'building' };
   }
@@ -722,7 +775,7 @@ export class ImportJobService {
         items: claimItems,
       });
 
-      // Persist encrypted vault Booking records for any deterministically parsed tickets
+      // Persist encrypted vault Booking records for deterministically or multimodally parsed tickets
       for (let i = 0; i < job.bookingCandidates.length; i += 1) {
         const cand = job.bookingCandidates[i]!;
         await this.deps.store.createBooking({
@@ -766,7 +819,8 @@ export class ImportJobService {
 
   public async subscribeEvents(
     jobId: string,
-    onEvent: (event: JobEvent) => void
+    onEvent: (event: JobEvent) => void,
+    callerUserId?: string | null
   ): Promise<{
     history: JobEvent[];
     status: JobStatus;
@@ -774,6 +828,9 @@ export class ImportJobService {
   } | null> {
     const job = await this.loadJobFromDbIfNeeded(jobId);
     if (!job) return null;
+    if (callerUserId !== undefined) {
+      this.assertJobAccess(job, callerUserId);
+    }
 
     const history = [...job.events];
     const channel = `job:${job.id}`;
@@ -791,9 +848,9 @@ export class ImportJobService {
   public async close(): Promise<void> {
     await this.waitForIdle();
     this.emitter.removeAllListeners();
-    if (this.pool) {
-      await this.pool.end();
+    if (this.sharedDatabaseUrl && this.pool) {
       this.pool = null;
+      await releaseSharedPgPool(this.sharedDatabaseUrl, 'web');
     }
   }
 }

@@ -1,3 +1,4 @@
+import { isMacroGeographicEntity } from './categorize.js';
 import { haversineMeters, isValidLatLng } from './util/geo.js';
 import { namesSimilar, normalizeName } from './util/text.js';
 import type { PlaceCategory } from './types.js';
@@ -89,7 +90,10 @@ export function candidatesMatch(a: PlaceCandidate, b: PlaceCandidate): boolean {
 export function mergeCandidates(candidates: readonly PlaceCandidate[]): MergedCandidate[] {
   const located = candidates.filter(
     (c): c is PlaceCandidate & { lat: number; lng: number } =>
-      c.lat !== null && c.lng !== null && isValidLatLng(c.lat, c.lng)
+      c.lat !== null &&
+      c.lng !== null &&
+      isValidLatLng(c.lat, c.lng) &&
+      !isMacroGeographicEntity(c.description, c.name, c.osmTags)
   );
   const uf = new UnionFind(located.length);
 

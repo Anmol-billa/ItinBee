@@ -2,14 +2,70 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+function normalizeHttpOrigin(raw: string): string {
+  const withProto = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `http://${raw}`;
+  return withProto.replace(/\/+$/, '');
+}
+
 function resolveServerBackendOrigin(): string {
   const raw =
     process.env.INTERNAL_API_URL ||
+    process.env.PUBLIC_BACKEND_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
     'http://127.0.0.1:4000';
-  const normalized = raw.startsWith('http') ? raw : `http://${raw}`;
-  return normalized.replace(/\/+$/, '');
+  return normalizeHttpOrigin(raw);
 }
+
+/**
+ * Resolves the browser-reachable WebSocket base URL.
+ * NEVER exposes a private Render internal host (`http://itinbee-backend-xxxx:10000`) to browsers!
+ */
+function resolveBrowserWsBaseUrl(): string {
+  const toWs = (httpUrl: string) =>
+    httpUrl.replace(/\/+$/, '').replace(/^https:/i, 'wss:').replace(/^http:/i, 'ws:');
+
+  if (process.env.NEXT_PUBLIC_API_URL?.trim()) {
+    return toWs(normalizeHttpOrigin(process.env.NEXT_PUBLIC_API_URL.trim()));
+  }
+  if (process.env.PUBLIC_BACKEND_URL?.trim()) {
+    return toWs(normalizeHttpOrigin(process.env.PUBLIC_BACKEND_URL.trim()));
+  }
+  if (process.env.PUBLIC_BACKEND_HOST?.trim()) {
+    const host = process.env.PUBLIC_BACKEND_HOST.trim()
+      .replace(/^https?:\/\//i, '')
+      .replace(/\/+$/, '');
+    return `wss://${host}`;
+  }
+
+  const internal = process.env.INTERNAL_API_URL?.trim();
+  if (internal) {
+    try {
+      const parsed = new URL(normalizeHttpOrigin(internal));
+      if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+        return toWs(parsed.origin);
+      }
+    } catch {
+      /* ignore invalid URL */
+    }
+  }
+
+  return 'ws://localhost:4000';
+}
+
+function rewriteSetCookieForFirstParty(rawCookie: string): string {
+  return rawCookie.replace(/;\s*Domain=[^;]*/gi, '');
+}
+
+const FORWARDED_REQUEST_HEADERS = [
+  'content-type',
+  'accept',
+  'authorization',
+  'cookie',
+  'last-event-id',
+  'x-forwarded-for',
+  'x-real-ip',
+  'user-agent',
+] as const;
 
 async function handleProxy(
   req: NextRequest,
@@ -20,13 +76,13 @@ async function handleProxy(
 
   if (path.length === 1 && path[0] === '_ws') {
     return NextResponse.json({
-      wsBaseUrl: backendOrigin.replace(/^http/, 'ws'),
+      wsBaseUrl: resolveBrowserWsBaseUrl(),
     });
   }
 
   const targetUrl = `${backendOrigin}/${path.join('/')}${req.nextUrl.search}`;
   const headers = new Headers();
-  for (const name of ['content-type', 'accept', 'authorization', 'cookie', 'last-event-id']) {
+  for (const name of FORWARDED_REQUEST_HEADERS) {
     const val = req.headers.get(name);
     if (val) headers.set(name, val);
   }
@@ -49,6 +105,8 @@ async function handleProxy(
     const respHeaders = new Headers();
     const upstreamType = upstream.headers.get('content-type');
     if (upstreamType) respHeaders.set('content-type', upstreamType);
+    const contentDisposition = upstream.headers.get('content-disposition');
+    if (contentDisposition) respHeaders.set('content-disposition', contentDisposition);
     const retryAfter = upstream.headers.get('retry-after');
     if (retryAfter) respHeaders.set('retry-after', retryAfter);
 
@@ -57,7 +115,7 @@ async function handleProxy(
         ? upstream.headers.getSetCookie()
         : [];
     for (const c of setCookies) {
-      respHeaders.append('set-cookie', c);
+      respHeaders.append('set-cookie', rewriteSetCookieForFirstParty(c));
     }
 
     if (upstreamType?.includes('text/event-stream') && upstream.body) {

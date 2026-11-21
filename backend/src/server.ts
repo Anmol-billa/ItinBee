@@ -6,28 +6,48 @@ import {
   ensureSeedDataInPostgres,
   runSqlMigrations,
 } from './store/pg-store.js';
+import { closeSharedPools, withStartupDbRetry } from './store/shared-pool.js';
 
 async function main(): Promise<void> {
+  const isProd = env.NODE_ENV === 'production';
   let forceLocalStore = false;
 
   if (env.DATABASE_URL) {
     try {
       const currentDir = path.dirname(fileURLToPath(import.meta.url));
       const migrationsDir = path.resolve(currentDir, '../migrations');
-      const applied = await runSqlMigrations(env.DATABASE_URL, migrationsDir);
-      if (applied.length > 0) {
-        console.log(
-          `Applied ${applied.length} SQL migration(s): ${applied.join(', ')}`
-        );
-      }
-      await ensureSeedDataInPostgres(env.DATABASE_URL);
+      await withStartupDbRetry(
+        'PostgreSQL migrations & seed',
+        async () => {
+          const applied = await runSqlMigrations(env.DATABASE_URL!, migrationsDir);
+          if (applied.length > 0) {
+            console.log(
+              `Applied ${applied.length} SQL migration(s): ${applied.join(', ')}`
+            );
+          }
+          await ensureSeedDataInPostgres(env.DATABASE_URL!);
+        },
+        { maxAttempts: isProd ? 6 : 2 }
+      );
     } catch (err) {
+      if (isProd) {
+        console.error(
+          'FATAL: PostgreSQL migration/seed failed after retries in production; refusing to fall back to ephemeral LocalDevStore:',
+          err
+        );
+        process.exit(1);
+      }
       console.warn(
-        'PostgreSQL migration/seed unavailable; falling back to LocalDevStore:',
+        'PostgreSQL migration/seed unavailable in non-production; falling back to LocalDevStore:',
         err instanceof Error ? err.message : err
       );
       forceLocalStore = true;
     }
+  } else if (isProd) {
+    console.error('FATAL: DATABASE_URL is required in NODE_ENV=production.');
+    process.exit(1);
+  } else {
+    forceLocalStore = true;
   }
 
   const { app, store, bus } = await buildApp({ forceLocalStore });
@@ -37,6 +57,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}, shutting down Itinbee backend cleanly...`);
     await app.close();
+    await closeSharedPools();
     process.exit(0);
   };
 

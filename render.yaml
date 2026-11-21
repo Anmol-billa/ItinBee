@@ -1,13 +1,28 @@
+# ==============================================================================
+# DEMO / PREVIEW RENDER BLUEPRINT (`render.yaml`)
+# WARNING: Render `free` PostgreSQL (`itinbee-db`) expires after 30 days and free
+# web services spin down on idle! Use `render.production.yaml` for production!
+# ==============================================================================
+
+envVarGroups:
+  - name: itinbee-preview-secrets
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DEV_MASTER_KEY_HEX
+        generateValue: true
+
 databases:
   - name: itinbee-db
     databaseName: itinbee_prod
     user: itinbee_app
     plan: free
     region: singapore
-    # Backend auto-runs migrations 001–009 (including PostGIS) and seeds destinations + templates on startup
+    # NOTE: Free Render PostgreSQL expires after 30 days.
+    # Backend auto-runs migrations 001–010 (including PostGIS + vault_blobs + trip_invites) on startup.
 
 services:
-  # 1. Standalone Fastify API + WebSocket + Inline BullMQ Worker (Free Preview Blueprint)
+  # 1. Standalone Fastify API + WebSocket + Inline BullMQ Worker (Demo/Preview)
   - type: web
     name: itinbee-backend
     runtime: node
@@ -21,16 +36,34 @@ services:
     startCommand: npm run start
     healthCheckPath: /health
     envVars:
+      - fromGroup: itinbee-preview-secrets
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
-      - key: JWT_SECRET
-        generateValue: true
       - key: ADMIN_TOKEN
         generateValue: true
       - key: RUN_INLINE_WORKER
         value: "true"
+      - key: FRONTEND_HOST
+        fromService:
+          type: web
+          name: itinbee-frontend
+          property: host
+      - key: PUBLIC_BACKEND_HOST
+        fromService:
+          type: web
+          name: itinbee-backend
+          property: host
+      - key: DATABASE_URL
+        fromDatabase:
+          name: itinbee-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: itinbee-kv
+          property: connectionString
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: GEMINI_API_KEY
@@ -41,17 +74,32 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
-      - key: DATABASE_URL
-        fromDatabase:
-          name: itinbee-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: itinbee-kv
-          property: connectionString
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
       - key: AWS_S3_VAULT_REGION
         value: ap-south-1
+      - key: AWS_S3_VAULT_BUCKET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: WEBHOOK_HMAC_SECRET
+        generateValue: true
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
       - key: GCP_VERTEX_LOCATION
         value: asia-south1
 
@@ -76,11 +124,18 @@ services:
         fromService:
           type: web
           name: itinbee-backend
-          envVarKey: RENDER_EXTERNAL_URL
+          property: hostport
+      - key: PUBLIC_BACKEND_HOST
+        fromService:
+          type: web
+          name: itinbee-backend
+          property: host
       - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
         sync: false
+      - key: NEXT_PUBLIC_TURNSTILE_SITE_KEY
+        sync: false
 
-  # 3. Managed Redis-Compatible Key Value (WS Pub/Sub, Turnstile Rate Limits, Quotas)
+  # 3. Managed Redis-Compatible Key Value (WS Pub/Sub, Sliding-Window Rate Limits, Quotas)
   - type: keyvalue
     name: itinbee-kv
     region: singapore

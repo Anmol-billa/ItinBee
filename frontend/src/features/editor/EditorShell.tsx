@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Check,
   Compass,
@@ -15,14 +16,20 @@ import {
   createBlankSandboxWorkspace,
   SAMPLE_WORKSPACES,
 } from '@/data/sample-trips';
-import { browserApiBase } from '@/lib/api-base';
 import {
   claimSandboxToCloud,
+  fetchTripWorkspace,
   pushSyncMutations,
-  resolveWsBaseUrl,
+  resolveLiveTripWsUrl,
+  updateTripMeta,
   type SyncClientMutationInput,
 } from '@/lib/api-client';
+import { syncDestinationSummaryDays } from '@/lib/formatters';
 import {
+  deleteLocalSandboxDraft,
+  enqueueSyncOutbox,
+  flushSyncOutbox,
+  hasPendingSyncOutbox,
   localDb,
   loadLocalWorkspace,
   midpointSortKey,
@@ -53,7 +60,10 @@ import {
   promoteShortlistItemToDay,
   reorderStopsInDay,
 } from './editor-helpers';
-import type { DiscoveredPlace } from './places-discovery';
+import {
+  resolveInitialTripCenter,
+  type DiscoveredPlace,
+} from './places-discovery';
 
 interface EditorShellProps {
   initialWorkspace: TripWorkspace | null;
@@ -65,10 +75,97 @@ type MobilePlanPane = 'plan' | 'places' | 'map';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const LIVE_WS_EVENT_TYPES = new Set([
+  'sync_delta',
+  'poll_updated',
+  'expense_added',
+  'expense_deleted',
+  'booking_ingested',
+  'trip_updated',
+  'member_added',
+  'member_updated',
+]);
+
+function buildItemUpsertPayload(item: ItineraryItem): Record<string, unknown> {
+  return {
+    dayId: item.dayId,
+    kind: item.kind,
+    title: item.title,
+    notes: item.notes,
+    lat: item.lat,
+    lng: item.lng,
+    placeRefId: item.placeRefId,
+    addressLocalScript: item.addressLocalScript,
+    sortKey: item.sortKey,
+    startTime: item.startTime,
+    durationMins: item.durationMins,
+    transitMeta: item.transitMeta,
+    dietaryFlags: item.dietaryFlags,
+    accessibilityNotes: item.accessibilityNotes,
+    elderSummaryI18n: item.elderSummaryI18n,
+    isShortlist: item.isShortlist,
+  };
+}
+
+/**
+ * Merges incoming server workspace without clobbering any field the user is
+ * actively typing into (`document.activeElement`).
+ */
+function mergeLiveWorkspacePreservingFocus(
+  prev: TripWorkspace | null,
+  incoming: TripWorkspace
+): TripWorkspace {
+  if (!prev || typeof document === 'undefined') return incoming;
+  const active = document.activeElement as HTMLElement | null;
+  if (
+    !active ||
+    (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')
+  ) {
+    return incoming;
+  }
+
+  let mergedTrip = incoming.trip;
+  if (active.id === 'trip-title-edit-input') {
+    mergedTrip = { ...mergedTrip, title: prev.trip.title };
+  }
+
+  let mergedDays = incoming.days;
+  const focusedDayId = active.getAttribute('data-day-id');
+  if (focusedDayId) {
+    const localDay = prev.days.find((d) => d.id === focusedDayId);
+    if (localDay) {
+      mergedDays = mergedDays.map((d) =>
+        d.id === focusedDayId ? { ...d, themeTitle: localDay.themeTitle } : d
+      );
+    }
+  }
+
+  let mergedItems = incoming.items;
+  const focusedStopId = active.getAttribute('data-stop-id');
+  if (focusedStopId) {
+    const localStop = prev.items.find((i) => i.id === focusedStopId);
+    if (localStop) {
+      mergedItems = mergedItems.map((i) =>
+        i.id === focusedStopId
+          ? { ...i, title: localStop.title, notes: localStop.notes }
+          : i
+      );
+    }
+  }
+
+  return {
+    ...incoming,
+    trip: mergedTrip,
+    days: mergedDays,
+    items: mergedItems,
+  };
+}
+
 export function EditorShell({
   initialWorkspace,
   requestedId,
 }: EditorShellProps) {
+  const router = useRouter();
   const [workspace, setWorkspace] = useState<TripWorkspace | null>(
     initialWorkspace
   );
@@ -90,7 +187,9 @@ export function EditorShell({
   const [destinationCenter, setDestinationCenter] = useState<{
     lat: number;
     lng: number;
-  } | null>(null);
+  } | null>(() =>
+    resolveInitialTripCenter(initialWorkspace?.trip, initialWorkspace?.items ?? [])
+  );
   const [hoveredCandidateId, setHoveredCandidateId] = useState<string | null>(
     null
   );
@@ -109,6 +208,28 @@ export function EditorShell({
   const [claimedShareUrl, setClaimedShareUrl] = useState<string | null>(null);
   const [claimingShare, setClaimingShare] = useState(false);
   const [copiedQuickField, setCopiedQuickField] = useState<string | null>(null);
+
+  const latestSeqRef = useRef<number>(initialWorkspace?.trip.latestSeq ?? 0);
+  const daySyncTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
+  const workspaceRef = useRef<TripWorkspace | null>(initialWorkspace);
+
+  useEffect(() => {
+    workspaceRef.current = workspace;
+    if (workspace) {
+      latestSeqRef.current = workspace.trip.latestSeq;
+    }
+  }, [workspace]);
+
+  // Clean up debounced timers on unmount
+  useEffect(() => {
+    const timers = daySyncTimersRef.current;
+    return () => {
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
+    };
+  }, []);
 
   const notify = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -134,24 +255,29 @@ export function EditorShell({
     };
   }, []);
 
-  // Client-side IndexedDB + authenticated guest fallback when SSR had no workspace (or local edits are newer)
+  // Client-side IndexedDB + authenticated guest fallback when SSR had no workspace
   useEffect(() => {
     let cancelled = false;
 
     const resolveWorkspace = async () => {
       if (initialWorkspace) {
-        const localSaved =
-          (await loadLocalWorkspace(`trip:${initialWorkspace.trip.id}`)) ??
-          (await loadLocalWorkspace(`sandbox:${initialWorkspace.trip.shortId}`));
-        if (
-          !cancelled &&
-          localSaved &&
-          localSaved.trip.updatedAt > initialWorkspace.trip.updatedAt
-        ) {
-          setWorkspace(localSaved);
-          setSelectedDayId(
-            localSaved.days.find((d) => !d.deletedAt)?.id ?? ''
-          );
+        // NEVER overwrite newer server `latestSeq` state with stale IndexedDB data
+        // UNLESS there are pending outbox mutations for this tripId!
+        const hasOutbox = await hasPendingSyncOutbox(initialWorkspace.trip.id);
+        if (hasOutbox) {
+          const localSaved =
+            (await loadLocalWorkspace(`trip:${initialWorkspace.trip.id}`)) ??
+            (await loadLocalWorkspace(`sandbox:${initialWorkspace.trip.shortId}`));
+          if (
+            !cancelled &&
+            localSaved &&
+            localSaved.trip.updatedAt > initialWorkspace.trip.updatedAt
+          ) {
+            setWorkspace(localSaved);
+            setSelectedDayId(
+              localSaved.days.find((d) => !d.deletedAt)?.id ?? ''
+            );
+          }
         }
         if (!cancelled) setResolvingLocal(false);
         return;
@@ -195,21 +321,13 @@ export function EditorShell({
         }
       }
 
-      // 3. Try browser-side fetch with guest cookies
-      try {
-        const res = await fetch(
-          `${browserApiBase()}/v1/trips/${encodeURIComponent(requestedId)}`,
-          { credentials: 'include' }
-        );
-        if (res.ok && !cancelled) {
-          const cloudWs = (await res.json()) as TripWorkspace;
-          setWorkspace(cloudWs);
-          setSelectedDayId(cloudWs.days.find((d) => !d.deletedAt)?.id ?? '');
-          setResolvingLocal(false);
-          return;
-        }
-      } catch {
-        // Offline or not found
+      // 3. Try browser-side fetch with cookies + user bearer token
+      const cloudWs = await fetchTripWorkspace(requestedId);
+      if (cloudWs && !cancelled) {
+        setWorkspace(cloudWs);
+        setSelectedDayId(cloudWs.days.find((d) => !d.deletedAt)?.id ?? '');
+        setResolvingLocal(false);
+        return;
       }
 
       // 4. Support fresh local drafts (/trip/new, /trip/blank, /trip/draft-*)
@@ -251,6 +369,14 @@ export function EditorShell({
     );
   }, [workspace]);
 
+  // Keep initial map center synchronized when workspace resolves or destinationSummary changes
+  const effectiveMapCenter = useMemo(() => {
+    return (
+      destinationCenter ??
+      resolveInitialTripCenter(workspace?.trip, workspace?.items ?? [])
+    );
+  }, [destinationCenter, workspace?.trip, workspace?.items]);
+
   // Persist every workspace update to IndexedDB automatically
   useEffect(() => {
     if (!workspace) return;
@@ -260,19 +386,105 @@ export function EditorShell({
     }
   }, [workspace]);
 
-  // Connect live WebSocket room when online on a cloud trip
+  // Flush durable offline outbox on mount and whenever browser comes back online
+  const flushOutboxForCurrentTrip = useCallback(async () => {
+    const curr = workspaceRef.current;
+    if (!curr || !isCloudTrip) return;
+    try {
+      const { flushedCount, latestSeq } = await flushSyncOutbox(
+        curr.trip.id,
+        pushSyncMutations
+      );
+      if (flushedCount > 0) {
+        if (latestSeq !== null) {
+          latestSeqRef.current = latestSeq;
+          setWorkspace((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  trip: { ...prev.trip, latestSeq },
+                }
+              : prev
+          );
+        }
+        notify(`Synced ${flushedCount} offline change${flushedCount === 1 ? '' : 's'} to cloud.`);
+      }
+    } catch {
+      // Still offline; will retry on next 'online' event
+    }
+  }, [isCloudTrip, notify]);
+
   useEffect(() => {
-    if (!workspace || !isCloudTrip || typeof window === 'undefined') return;
+    if (!isCloudTrip || !workspace?.trip.id) return;
+    void flushOutboxForCurrentTrip();
+
+    const handleOnlineFlush = () => {
+      void flushOutboxForCurrentTrip();
+    };
+    window.addEventListener('online', handleOnlineFlush);
+    return () => {
+      window.removeEventListener('online', handleOnlineFlush);
+    };
+  }, [isCloudTrip, workspace?.trip.id, flushOutboxForCurrentTrip]);
+
+  // Connect live WebSocket room with ws-ticket + onmessage workspace sync + 25s ping heartbeat
+  useEffect(() => {
+    if (!workspace?.trip.id || !isCloudTrip || !isOnline || typeof window === 'undefined') {
+      setWsConnected(false);
+      return;
+    }
+    const tripId = workspace.trip.id;
     let cancelled = false;
     let ws: WebSocket | null = null;
-    resolveWsBaseUrl()
-      .then((wsBase) => {
+    let pingInterval: ReturnType<typeof setInterval> | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    resolveLiveTripWsUrl(tripId)
+      .then((wsUrl) => {
         if (cancelled) return;
         try {
-          ws = new WebSocket(`${wsBase}/v1/trips/${workspace.trip.id}/live`);
-          ws.onopen = () => setWsConnected(true);
-          ws.onclose = () => setWsConnected(false);
-          ws.onerror = () => setWsConnected(false);
+          ws = new WebSocket(wsUrl);
+          ws.onopen = () => {
+            if (cancelled) return;
+            setWsConnected(true);
+            pingInterval = setInterval(() => {
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                  ws.send(JSON.stringify({ type: 'ping' }));
+                } catch {
+                  /* ignore */
+                }
+              }
+            }, 25_000);
+          };
+          ws.onmessage = (evt) => {
+            if (cancelled || typeof evt.data !== 'string') return;
+            try {
+              const msg = JSON.parse(evt.data) as { type?: string };
+              if (msg.type && LIVE_WS_EVENT_TYPES.has(msg.type)) {
+                if (refreshTimer) clearTimeout(refreshTimer);
+                refreshTimer = setTimeout(() => {
+                  void fetchTripWorkspace(tripId).then((fresh) => {
+                    if (!cancelled && fresh) {
+                      latestSeqRef.current = fresh.trip.latestSeq;
+                      setWorkspace((prev) =>
+                        mergeLiveWorkspacePreservingFocus(prev, fresh)
+                      );
+                    }
+                  });
+                }, 120);
+              }
+            } catch {
+              /* ignore malformed frame */
+            }
+          };
+          ws.onclose = () => {
+            if (!cancelled) setWsConnected(false);
+            if (pingInterval) clearInterval(pingInterval);
+          };
+          ws.onerror = () => {
+            if (!cancelled) setWsConnected(false);
+          };
         } catch {
           setWsConnected(false);
         }
@@ -281,14 +493,40 @@ export function EditorShell({
 
     return () => {
       cancelled = true;
+      if (pingInterval) clearInterval(pingInterval);
+      if (refreshTimer) clearTimeout(refreshTimer);
       ws?.close();
     };
-  }, [workspace?.trip.id, isCloudTrip]);
+  }, [workspace?.trip.id, isCloudTrip, isOnline]);
 
   const queueSync = useCallback(
     (tripId: string, baseSeq: number, mutations: SyncClientMutationInput[]) => {
       if (!isCloudTrip || mutations.length === 0) return;
-      pushSyncMutations(tripId, baseSeq, mutations).catch(() => {});
+      const effectiveSeq = Math.max(baseSeq, latestSeqRef.current);
+      const stamped = mutations.map((m) => ({
+        ...m,
+        baseSeq: effectiveSeq,
+      }));
+      pushSyncMutations(tripId, effectiveSeq, stamped)
+        .then((res) => {
+          if (typeof res?.latestSeq === 'number') {
+            latestSeqRef.current = res.latestSeq;
+            setWorkspace((prev) =>
+              prev && prev.trip.id === tripId
+                ? {
+                    ...prev,
+                    trip: {
+                      ...prev.trip,
+                      latestSeq: Math.max(prev.trip.latestSeq, res.latestSeq),
+                    },
+                  }
+                : prev
+            );
+          }
+        })
+        .catch(() => {
+          void enqueueSyncOutbox(tripId, effectiveSeq, stamped);
+        });
     },
     [isCloudTrip]
   );
@@ -310,6 +548,28 @@ export function EditorShell({
     []
   );
 
+  /**
+   * Claims a local sandbox draft into the cloud, deletes old `trip:<oldId>` and
+   * `sandbox:<oldShortId>` records so `/trips` never shows duplicates, and updates URL.
+   */
+  const upgradeDraftToCloud = useCallback(
+    async (draft: TripWorkspace): Promise<TripWorkspace> => {
+      const oldId = draft.trip.id;
+      const oldShortId = draft.trip.shortId;
+      const claimed = await claimSandboxToCloud(draft);
+      if (claimed.trip.id !== oldId || claimed.trip.shortId !== oldShortId) {
+        await deleteLocalSandboxDraft(oldId, oldShortId);
+      }
+      latestSeqRef.current = claimed.trip.latestSeq;
+      setWorkspace(claimed);
+      if (claimed.trip.id !== requestedId) {
+        router.replace(`/trip/${claimed.trip.id}`);
+      }
+      return claimed;
+    },
+    [requestedId, router]
+  );
+
   const activeDays = useMemo(() => {
     if (!workspace) return [];
     return workspace.days
@@ -325,6 +585,11 @@ export function EditorShell({
   const handleAddDay = () => {
     if (!workspace) return;
     const nextNum = (activeDays[activeDays.length - 1]?.dayNumber ?? 0) + 1;
+    const nextTotalDays = activeDays.length + 1;
+    const nextDestSummary = syncDestinationSummaryDays(
+      workspace.trip.destinationSummary,
+      nextTotalDays
+    );
     const newDay: TripDay = {
       id: crypto.randomUUID(),
       tripId: workspace.trip.id,
@@ -338,6 +603,10 @@ export function EditorShell({
     };
     mutateWorkspace((prev) => ({
       ...prev,
+      trip: {
+        ...prev.trip,
+        destinationSummary: nextDestSummary,
+      },
       days: [...prev.days, newDay],
     }));
     setSelectedDayId(newDay.id);
@@ -356,9 +625,105 @@ export function EditorShell({
         },
       },
     ]);
+    if (isCloudTrip && nextDestSummary !== workspace.trip.destinationSummary) {
+      void updateTripMeta(workspace.trip.id, {
+        destinationSummary: nextDestSummary,
+      });
+    }
     notify(`Added Day ${nextNum}.`);
   };
 
+  const handleDeleteDay = (dayId: string) => {
+    if (!workspace || activeDays.length <= 1) return;
+    const targetDay = activeDays.find((d) => d.id === dayId);
+    if (!targetDay) return;
+
+    const nowIso = new Date().toISOString();
+    const hlc = nextClientHlc();
+    const remainingDays = activeDays
+      .filter((d) => d.id !== dayId)
+      .map((d, idx) => ({
+        ...d,
+        dayNumber: idx + 1,
+        hlcTimestamp: d.dayNumber !== idx + 1 ? nextClientHlc() : d.hlcTimestamp,
+      }));
+    const renumberedById = new Map(remainingDays.map((d) => [d.id, d]));
+    const nextDestSummary = syncDestinationSummaryDays(
+      workspace.trip.destinationSummary,
+      remainingDays.length
+    );
+
+    const orphanedItems = workspace.items.filter(
+      (i) => i.dayId === dayId && !i.deletedAt
+    );
+
+    mutateWorkspace((prev) => ({
+      ...prev,
+      trip: {
+        ...prev.trip,
+        destinationSummary: nextDestSummary,
+      },
+      days: prev.days.map((d) => {
+        if (d.id === dayId) {
+          return { ...d, deletedAt: nowIso, hlcTimestamp: hlc };
+        }
+        return renumberedById.get(d.id) ?? d;
+      }),
+      items: prev.items.filter((i) => i.dayId !== dayId),
+      shortlist: [
+        ...prev.shortlist,
+        ...orphanedItems.map((item) => ({
+          ...item,
+          dayId: null,
+          isShortlist: true,
+          hlcTimestamp: hlc,
+        })),
+      ],
+    }));
+
+    setSelectedDayId(remainingDays[0]?.id ?? '');
+
+    const mutations: SyncClientMutationInput[] = [
+      {
+        clientOpId: crypto.randomUUID(),
+        hlcTimestamp: hlc,
+        baseSeq: workspace.trip.latestSeq,
+        entityType: 'trip_day',
+        entityId: dayId,
+        action: 'delete',
+        payload: {},
+      },
+    ];
+    for (const d of remainingDays) {
+      const orig = activeDays.find((origDay) => origDay.id === d.id);
+      if (orig && orig.dayNumber !== d.dayNumber) {
+        mutations.push({
+          clientOpId: crypto.randomUUID(),
+          hlcTimestamp: d.hlcTimestamp,
+          baseSeq: workspace.trip.latestSeq,
+          entityType: 'trip_day',
+          entityId: d.id,
+          action: 'upsert',
+          payload: {
+            dayNumber: d.dayNumber,
+            themeTitle: d.themeTitle,
+            pacingLevel: d.pacingLevel,
+            date: d.date,
+          },
+        });
+      }
+    }
+
+    queueSync(workspace.trip.id, workspace.trip.latestSeq, mutations);
+    if (isCloudTrip && nextDestSummary !== workspace.trip.destinationSummary) {
+      void updateTripMeta(workspace.trip.id, {
+        destinationSummary: nextDestSummary,
+      });
+    }
+    notify(`Deleted Day ${targetDay.dayNumber}.`);
+  };
+
+  // Debounced by 400ms so typing a day theme title never spams POST /sync on every keystroke
   const handleUpdateDay = (
     dayId: string,
     patch: Partial<Pick<TripDay, 'themeTitle' | 'pacingLevel' | 'date'>>
@@ -371,25 +736,35 @@ export function EditorShell({
         d.id === dayId ? { ...d, ...patch, hlcTimestamp: hlc } : d
       ),
     }));
-    const existing = workspace.days.find((d) => d.id === dayId);
-    if (existing) {
-      queueSync(workspace.trip.id, workspace.trip.latestSeq, [
+
+    const tripId = workspace.trip.id;
+    const prevTimer = daySyncTimersRef.current.get(dayId);
+    if (prevTimer) clearTimeout(prevTimer);
+
+    const timer = setTimeout(() => {
+      daySyncTimersRef.current.delete(dayId);
+      const latestWs = workspaceRef.current;
+      const latestDay = latestWs?.days.find((d) => d.id === dayId);
+      if (!latestWs || !latestDay) return;
+      queueSync(tripId, latestWs.trip.latestSeq, [
         {
           clientOpId: crypto.randomUUID(),
-          hlcTimestamp: hlc,
-          baseSeq: workspace.trip.latestSeq,
+          hlcTimestamp: latestDay.hlcTimestamp,
+          baseSeq: latestWs.trip.latestSeq,
           entityType: 'trip_day',
           entityId: dayId,
           action: 'upsert',
           payload: {
-            dayNumber: existing.dayNumber,
-            themeTitle: patch.themeTitle ?? existing.themeTitle,
-            pacingLevel: patch.pacingLevel ?? existing.pacingLevel,
-            date: patch.date !== undefined ? patch.date : existing.date,
+            dayNumber: latestDay.dayNumber,
+            themeTitle: latestDay.themeTitle,
+            pacingLevel: latestDay.pacingLevel,
+            date: latestDay.date,
           },
         },
       ]);
-    }
+    }, 400);
+
+    daySyncTimersRef.current.set(dayId, timer);
   };
 
   const handleAddDiscoveredPlaceToDay = (
@@ -456,17 +831,7 @@ export function EditorShell({
         entityType: 'itinerary_item',
         entityId: newItem.id,
         action: 'upsert',
-        payload: {
-          dayId: newItem.dayId,
-          kind: newItem.kind,
-          title: newItem.title,
-          notes: newItem.notes,
-          lat: newItem.lat,
-          lng: newItem.lng,
-          placeRefId: newItem.placeRefId,
-          sortKey: newItem.sortKey,
-          durationMins: newItem.durationMins,
-        },
+        payload: buildItemUpsertPayload(newItem),
       },
     ]);
 
@@ -482,14 +847,27 @@ export function EditorShell({
           s.title.toLowerCase() === place.name.toLowerCase())
     );
     if (existing) {
+      const hlc = nextClientHlc();
       mutateWorkspace((prev) => ({
         ...prev,
         shortlist: prev.shortlist.filter((s) => s.id !== existing.id),
       }));
+      queueSync(workspace.trip.id, workspace.trip.latestSeq, [
+        {
+          clientOpId: crypto.randomUUID(),
+          hlcTimestamp: hlc,
+          baseSeq: workspace.trip.latestSeq,
+          entityType: 'itinerary_item',
+          entityId: existing.id,
+          action: 'delete',
+          payload: {},
+        },
+      ]);
       notify(`Removed "${place.name}" from Shortlist.`);
       return;
     }
 
+    const hlc = nextClientHlc();
     const item: ItineraryItem = {
       id: crypto.randomUUID(),
       tripId: workspace.trip.id,
@@ -510,7 +888,7 @@ export function EditorShell({
       elderSummaryI18n: { en: place.name },
       isShortlist: true,
       serverSeq: workspace.trip.latestSeq + 1,
-      hlcTimestamp: nextClientHlc(),
+      hlcTimestamp: hlc,
       deletedAt: null,
       googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`,
     };
@@ -519,6 +897,17 @@ export function EditorShell({
       ...prev,
       shortlist: [...prev.shortlist, item],
     }));
+    queueSync(workspace.trip.id, workspace.trip.latestSeq, [
+      {
+        clientOpId: crypto.randomUUID(),
+        hlcTimestamp: hlc,
+        baseSeq: workspace.trip.latestSeq,
+        entityType: 'itinerary_item',
+        entityId: item.id,
+        action: 'upsert',
+        payload: buildItemUpsertPayload(item),
+      },
+    ]);
     notify(`Saved "${place.name}" to Shortlist.`);
   };
 
@@ -578,13 +967,7 @@ export function EditorShell({
         entityType: 'itinerary_item',
         entityId: newItem.id,
         action: 'upsert',
-        payload: {
-          dayId: newItem.dayId,
-          kind: newItem.kind,
-          title: newItem.title,
-          sortKey: newItem.sortKey,
-          startTime: newItem.startTime,
-        },
+        payload: buildItemUpsertPayload(newItem),
       },
     ]);
   };
@@ -602,8 +985,7 @@ export function EditorShell({
     }
     setClaimingShare(true);
     try {
-      const synced = await claimSandboxToCloud(workspace);
-      setWorkspace(synced);
+      const synced = await upgradeDraftToCloud(workspace);
       setClaimedShareUrl(`${origin}/t/${synced.trip.shortId}`);
     } catch {
       setClaimedShareUrl(`${origin}/t/${workspace.trip.shortId}`);
@@ -670,13 +1052,17 @@ export function EditorShell({
         pollCount={workspace.polls.length}
         activeMode={activeMode}
         isOnline={isOnline}
-        isLiveSynced={wsConnected || (isOnline && isCloudTrip)}
+        wsConnected={wsConnected}
+        isCloudTrip={isCloudTrip}
         onSelectMode={(next) => setActiveMode(next)}
         onUpdateTitle={(newTitle) => {
           mutateWorkspace((prev) => ({
             ...prev,
             trip: { ...prev.trip, title: newTitle },
           }));
+          if (isCloudTrip) {
+            void updateTripMeta(workspace.trip.id, { title: newTitle });
+          }
           notify('Updated trip title.');
         }}
         onOpenQuickShare={() => void handleOpenQuickShare()}
@@ -742,38 +1128,122 @@ export function EditorShell({
                   routeLegsByPairKey={routeLegsByPairKey}
                   onSelectDay={(dayId) => setSelectedDayId(dayId)}
                   onAddDay={handleAddDay}
+                  onDeleteDay={handleDeleteDay}
                   onUpdateDay={handleUpdateDay}
                   onHighlightStop={(stopId) => setHighlightedStopId(stopId)}
                   onReorderStops={(dayId, fromIdx, toIdx) => {
+                    const nextItems = reorderStopsInDay(
+                      workspace.items,
+                      dayId,
+                      fromIdx,
+                      toIdx
+                    );
                     mutateWorkspace((prev) => ({
                       ...prev,
-                      items: reorderStopsInDay(prev.items, dayId, fromIdx, toIdx),
+                      items: nextItems,
                     }));
+                    const prevById = new Map(workspace.items.map((i) => [i.id, i]));
+                    const changed = nextItems.filter((item) => {
+                      const before = prevById.get(item.id);
+                      return before && before.sortKey !== item.sortKey;
+                    });
+                    if (changed.length > 0) {
+                      queueSync(
+                        workspace.trip.id,
+                        workspace.trip.latestSeq,
+                        changed.map((item) => ({
+                          clientOpId: crypto.randomUUID(),
+                          hlcTimestamp: item.hlcTimestamp,
+                          baseSeq: workspace.trip.latestSeq,
+                          entityType: 'itinerary_item',
+                          entityId: item.id,
+                          action: 'upsert',
+                          payload: buildItemUpsertPayload(item),
+                        }))
+                      );
+                    }
                   }}
                   onMoveStopOffset={(dayId, stopId, delta) => {
+                    const nextItems = moveStopByOffset(
+                      workspace.items,
+                      dayId,
+                      stopId,
+                      delta
+                    );
                     mutateWorkspace((prev) => ({
                       ...prev,
-                      items: moveStopByOffset(prev.items, dayId, stopId, delta),
+                      items: nextItems,
                     }));
+                    const moved = nextItems.find((i) => i.id === stopId);
+                    if (moved) {
+                      queueSync(workspace.trip.id, workspace.trip.latestSeq, [
+                        {
+                          clientOpId: crypto.randomUUID(),
+                          hlcTimestamp: moved.hlcTimestamp,
+                          baseSeq: workspace.trip.latestSeq,
+                          entityType: 'itinerary_item',
+                          entityId: moved.id,
+                          action: 'upsert',
+                          payload: buildItemUpsertPayload(moved),
+                        },
+                      ]);
+                    }
                   }}
                   onMoveStopToDay={(stopId, targetDayId) => {
+                    const nextItems = moveStopToDay(
+                      workspace.items,
+                      stopId,
+                      targetDayId
+                    );
                     mutateWorkspace((prev) => ({
                       ...prev,
-                      items: moveStopToDay(prev.items, stopId, targetDayId),
+                      items: nextItems,
                     }));
+                    const moved = nextItems.find((i) => i.id === stopId);
+                    if (moved) {
+                      queueSync(workspace.trip.id, workspace.trip.latestSeq, [
+                        {
+                          clientOpId: crypto.randomUUID(),
+                          hlcTimestamp: moved.hlcTimestamp,
+                          baseSeq: workspace.trip.latestSeq,
+                          entityType: 'itinerary_item',
+                          entityId: moved.id,
+                          action: 'upsert',
+                          payload: buildItemUpsertPayload(moved),
+                        },
+                      ]);
+                    }
                     const targetNum =
                       activeDays.find((d) => d.id === targetDayId)?.dayNumber ?? 1;
                     notify(`Moved stop to Day ${targetNum}.`);
                   }}
                   onUpdateStop={(stopId, patch) => {
+                    const hlc = nextClientHlc();
+                    const existing = workspace.items.find((i) => i.id === stopId);
                     mutateWorkspace((prev) => ({
                       ...prev,
                       items: prev.items.map((i) =>
-                        i.id === stopId
-                          ? { ...i, ...patch, hlcTimestamp: nextClientHlc() }
-                          : i
+                        i.id === stopId ? { ...i, ...patch, hlcTimestamp: hlc } : i
                       ),
                     }));
+                    if (existing) {
+                      const updated: ItineraryItem = {
+                        ...existing,
+                        ...patch,
+                        hlcTimestamp: hlc,
+                      };
+                      queueSync(workspace.trip.id, workspace.trip.latestSeq, [
+                        {
+                          clientOpId: crypto.randomUUID(),
+                          hlcTimestamp: hlc,
+                          baseSeq: workspace.trip.latestSeq,
+                          entityType: 'itinerary_item',
+                          entityId: stopId,
+                          action: 'upsert',
+                          payload: buildItemUpsertPayload(updated),
+                        },
+                      ]);
+                    }
                   }}
                   onRemoveStop={(stopId) => {
                     const nowIso = new Date().toISOString();
@@ -800,20 +1270,51 @@ export function EditorShell({
                   }}
                   onAddManualStop={handleAddManualStop}
                   onPromoteShortlist={(shortlistId, targetDayId) => {
-                    mutateWorkspace((prev) =>
-                      promoteShortlistItemToDay(prev, shortlistId, targetDayId)
+                    const promotedWs = promoteShortlistItemToDay(
+                      workspace,
+                      shortlistId,
+                      targetDayId
                     );
+                    mutateWorkspace(() => promotedWs);
+                    const promotedItem = promotedWs.items.find(
+                      (i) => i.id === shortlistId
+                    );
+                    if (promotedItem) {
+                      queueSync(workspace.trip.id, workspace.trip.latestSeq, [
+                        {
+                          clientOpId: crypto.randomUUID(),
+                          hlcTimestamp: promotedItem.hlcTimestamp,
+                          baseSeq: workspace.trip.latestSeq,
+                          entityType: 'itinerary_item',
+                          entityId: promotedItem.id,
+                          action: 'upsert',
+                          payload: buildItemUpsertPayload(promotedItem),
+                        },
+                      ]);
+                    }
                     const targetNum =
                       activeDays.find((d) => d.id === targetDayId)?.dayNumber ?? 1;
                     notify(`Moved shortlisted place to Day ${targetNum}.`);
                   }}
                   onRemoveShortlist={(shortlistId) => {
+                    const hlc = nextClientHlc();
                     mutateWorkspace((prev) => ({
                       ...prev,
                       shortlist: prev.shortlist.filter(
                         (s) => s.id !== shortlistId
                       ),
                     }));
+                    queueSync(workspace.trip.id, workspace.trip.latestSeq, [
+                      {
+                        clientOpId: crypto.randomUUID(),
+                        hlcTimestamp: hlc,
+                        baseSeq: workspace.trip.latestSeq,
+                        entityType: 'itinerary_item',
+                        entityId: shortlistId,
+                        action: 'delete',
+                        payload: {},
+                      },
+                    ]);
                   }}
                   onLegResolved={(pairKey, leg) => {
                     setRouteLegsByPairKey((prev) =>
@@ -823,8 +1324,15 @@ export function EditorShell({
                         : { ...prev, [pairKey]: leg }
                     );
                   }}
-                  onApplyAssistProposal={(nextWs, summaryMsg) => {
+                  onApplyAssistProposal={(nextWs, summaryMsg, mutations) => {
                     mutateWorkspace(() => nextWs);
+                    if (mutations.length > 0) {
+                      queueSync(
+                        workspace.trip.id,
+                        workspace.trip.latestSeq,
+                        mutations
+                      );
+                    }
                     notify(summaryMsg);
                   }}
                 />
@@ -868,7 +1376,7 @@ export function EditorShell({
                   candidates={candidates}
                   hoveredCandidateId={hoveredCandidateId}
                   routeLegsByPairKey={routeLegsByPairKey}
-                  centerHint={destinationCenter}
+                  centerHint={effectiveMapCenter}
                   onSelectStop={(stopId, dayId) => {
                     setHighlightedStopId(stopId);
                     if (dayId) setSelectedDayId(dayId);
@@ -895,17 +1403,20 @@ export function EditorShell({
             currentDay={currentDay}
             isCloudSynced={isCloudTrip}
             onUpdateWorkspace={mutateWorkspace}
+            onQueueSync={queueSync}
             onNotify={notify}
           />
         ) : activeMode === 'budget' ? (
           <BudgetTab
             workspace={workspace}
+            isCloudSynced={isCloudTrip}
             onUpdateWorkspace={mutateWorkspace}
             onNotify={notify}
           />
         ) : activeMode === 'group' ? (
           <GroupTab
             workspace={workspace}
+            isCloudSynced={isCloudTrip}
             onUpdateWorkspace={mutateWorkspace}
             onNotify={notify}
           />
@@ -913,6 +1424,7 @@ export function EditorShell({
           <ShareTab
             workspace={workspace}
             isCloudSynced={isCloudTrip}
+            onUpgradeToCloud={upgradeDraftToCloud}
             onUpdateWorkspace={mutateWorkspace}
             onNotify={notify}
           />
@@ -967,6 +1479,11 @@ export function EditorShell({
               <span>{copiedQuickField === 'url' ? 'Copied' : 'Copy'}</span>
             </button>
           </div>
+          {copiedQuickField === 'url' && (
+            <p role="status" className="text-[12px] font-semibold text-jade">
+              Copied share link to clipboard.
+            </p>
+          )}
 
           <div className="grid gap-2 sm:grid-cols-2">
             <button

@@ -1,20 +1,31 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Check,
   Copy,
   Download,
   ExternalLink,
+  FileJson,
   Globe,
+  Image as ImageIcon,
   Languages,
   Share2,
+  Upload,
 } from 'lucide-react';
 import { ElderCardView } from '@/components/share/ElderCardView';
 import { SAMPLE_WORKSPACES } from '@/data/sample-trips';
 import { browserApiBase } from '@/lib/api-base';
-import { claimSandboxToCloud } from '@/lib/api-client';
+import {
+  claimSandboxToCloud,
+  getSignedInUserBearerToken,
+} from '@/lib/api-client';
+import {
+  downloadTripBundleJson,
+  exportWhatsAppElderCardPng,
+  importTripBundleJson,
+} from '@/lib/bundle-export';
 import { BUDGETS, TRIP_TYPES, type BudgetTier } from '@/lib/explore-client';
 import { exportItineraryWithLiveQrPdf } from '@/lib/pdf-export';
 import type { TripWorkspace } from '@/lib/types';
@@ -22,6 +33,7 @@ import type { TripWorkspace } from '@/lib/types';
 interface ShareTabProps {
   workspace: TripWorkspace;
   isCloudSynced: boolean;
+  onUpgradeToCloud?: (draft: TripWorkspace) => Promise<TripWorkspace>;
   onUpdateWorkspace: (updater: (prev: TripWorkspace) => TripWorkspace) => void;
   onNotify: (msg: string) => void;
 }
@@ -29,6 +41,7 @@ interface ShareTabProps {
 export function ShareTab({
   workspace,
   isCloudSynced,
+  onUpgradeToCloud,
   onUpdateWorkspace,
   onNotify,
 }: ShareTabProps) {
@@ -36,6 +49,8 @@ export function ShareTab({
   const [claiming, setClaiming] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showElderPreview, setShowElderPreview] = useState(true);
+  const [renderingPng, setRenderingPng] = useState(false);
+  const bundleInputRef = useRef<HTMLInputElement | null>(null);
 
   // Publish to Explore state
   const [selectedTypes, setSelectedTypes] = useState<string[]>(['friends']);
@@ -82,8 +97,12 @@ export function ShareTab({
     }
     setClaiming(true);
     try {
-      const synced = await claimSandboxToCloud(workspace);
-      onUpdateWorkspace(() => synced);
+      const synced = onUpgradeToCloud
+        ? await onUpgradeToCloud(workspace)
+        : await claimSandboxToCloud(workspace);
+      if (!onUpgradeToCloud) {
+        onUpdateWorkspace(() => synced);
+      }
       const url = `${origin}/t/${synced.trip.shortId}`;
       setClaimedUrl(url);
       return url;
@@ -108,6 +127,42 @@ export function ShareTab({
     onNotify('Copied WhatsApp guest share link.');
   };
 
+  const handleDownloadElderPng = async () => {
+    setRenderingPng(true);
+    try {
+      await exportWhatsAppElderCardPng({
+        trip: workspace.trip,
+        days: workspace.days,
+        items: workspace.items,
+        liveShareUrl: shareUrl,
+      });
+      onNotify('Downloaded WhatsApp Elder Card PNG.');
+    } catch {
+      onNotify('Could not generate Elder Card image.');
+    } finally {
+      setRenderingPng(false);
+    }
+  };
+
+  const handleImportBundleFile = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      const imported = importTripBundleJson(raw);
+      onUpdateWorkspace(() => imported);
+      onNotify(`Imported "${imported.trip.title}" from .itinbee.json bundle.`);
+    } catch (err) {
+      onNotify(
+        err instanceof Error ? err.message : 'Could not import .itinbee.json file.'
+      );
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   const handlePublishToExplore = async (e: React.FormEvent) => {
     e.preventDefault();
     setPublishBusy(true);
@@ -117,8 +172,12 @@ export function ShareTab({
       let targetTripId = workspace.trip.id;
       if (!isCloudSynced && !SAMPLE_WORKSPACES[workspace.trip.shortId]) {
         try {
-          const synced = await claimSandboxToCloud(workspace);
-          onUpdateWorkspace(() => synced);
+          const synced = onUpgradeToCloud
+            ? await onUpgradeToCloud(workspace)
+            : await claimSandboxToCloud(workspace);
+          if (!onUpgradeToCloud) {
+            onUpdateWorkspace(() => synced);
+          }
           targetTripId = synced.trip.id;
         } catch {
           // Proceed with current tripId
@@ -129,13 +188,18 @@ export function ShareTab({
         tripTypes: selectedTypes.length > 0 ? selectedTypes : ['friends'],
         budgetTier,
       });
+      const userToken = getSignedInUserBearerToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(userToken ? { Authorization: `Bearer ${userToken}` } : {}),
+      };
 
       let res = await fetch(
         `${browserApiBase()}/v1/trips/${encodeURIComponent(targetTripId)}/publish`,
         {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: publishBody,
         }
       );
@@ -152,7 +216,7 @@ export function ShareTab({
           {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: publishBody,
           }
         );
@@ -174,7 +238,7 @@ export function ShareTab({
       }
     } catch {
       setPublishStatusMsg(
-        'Currently offline — reconnect to publish to the community Explore catalog. Your offline PDF export works right now.'
+        'Currently offline — reconnect to publish to the community Explore catalog. Your offline PDF & .itinbee.json exports work right now.'
       );
     } finally {
       setPublishBusy(false);
@@ -188,11 +252,11 @@ export function ShareTab({
           Share, Elder Card &amp; Publish
         </h2>
         <span className="text-[13px] text-paper-ink">
-          Zero-login WhatsApp card · Masked PNRs · Printable QR PDF
+          Zero-login WhatsApp card · Masked PNRs · Portable .itinbee.json
         </span>
       </div>
 
-      {/* WhatsApp Share Link & Printable QR PDF */}
+      {/* WhatsApp Share Link, Elder Card PNG, QR PDF & .itinbee.json */}
       <section className="space-y-4 rounded-xl border border-navy/20 bg-[#FFFDF8] p-4 shadow-panel sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-2 text-[17px] font-bold text-navy">
@@ -209,7 +273,7 @@ export function ShareTab({
         </div>
 
         <p className="text-[13.5px] text-paper-ink">
-          Anyone with this link can read the day-by-day plan, switch between English and Hindi (अ/A), and vote on polls without signing up. Ticket PNRs stay redacted.
+          Anyone with this link can read the day-by-day plan, switch between English and Hindi (अ/A), and vote on polls without signing up. Ticket PNRs and seats stay redacted.
         </p>
 
         <div className="flex flex-wrap gap-2">
@@ -238,6 +302,14 @@ export function ShareTab({
           </button>
         </div>
 
+        {copiedKey && (
+          <p role="status" className="text-[12.5px] font-semibold text-jade">
+            {copiedKey === 'link'
+              ? 'WhatsApp share link copied to clipboard.'
+              : 'Formatted WhatsApp digest copied to clipboard.'}
+          </p>
+        )}
+
         <div className="flex flex-wrap items-center gap-2.5 pt-1">
           <button
             type="button"
@@ -247,6 +319,20 @@ export function ShareTab({
             <Copy className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
             <span>
               {copiedKey === 'digest' ? 'Copied WhatsApp digest' : 'Copy formatted WhatsApp message'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            disabled={renderingPng}
+            onClick={() => void handleDownloadElderPng()}
+            className="inline-flex min-h-[42px] items-center gap-1.5 rounded-lg border-2 border-navy bg-saffron px-3.5 py-2 text-[13.5px] font-bold text-navy hover:bg-saffron/85 disabled:opacity-50"
+          >
+            <ImageIcon className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
+            <span>
+              {renderingPng
+                ? 'Rendering PNG…'
+                : 'Download WhatsApp Elder Card (PNG)'}
             </span>
           </button>
 
@@ -265,6 +351,42 @@ export function ShareTab({
             <Download className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
             <span>Download printable QR PDF</span>
           </button>
+        </div>
+
+        {/* Portable .itinbee.json Bundle Export / Import */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-navy/15 pt-3.5">
+          <div className="text-[12.5px] text-paper-ink">
+            <strong className="text-navy">Portable trip archive:</strong> Export or restore a full offline backup (`.itinbee.json`).
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                downloadTripBundleJson(workspace);
+                onNotify('Exported .itinbee.json bundle.');
+              }}
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-navy/35 bg-[#FFFDF8] px-3 py-1.5 text-[13px] font-semibold text-navy hover:bg-paper"
+            >
+              <FileJson className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+              <span>Export .itinbee.json</span>
+            </button>
+
+            <input
+              ref={bundleInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleImportBundleFile}
+              className="sr-only"
+            />
+            <button
+              type="button"
+              onClick={() => bundleInputRef.current?.click()}
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-navy/35 bg-paper px-3 py-1.5 text-[13px] font-semibold text-navy hover:bg-paper-dark"
+            >
+              <Upload className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+              <span>Import .itinbee.json</span>
+            </button>
+          </div>
         </div>
       </section>
 

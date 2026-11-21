@@ -740,6 +740,93 @@
   ]
  },
  {
+  "slug": "mysuru",
+  "name": "Mysuru",
+  "kind": "city",
+  "parentSlug": "karnataka",
+  "countryCode": "IN",
+  "lat": 12.2958,
+  "lng": 76.6394,
+  "wikipediaTitle": "Mysore",
+  "wikivoyageTitle": "Mysore",
+  "aliases": [
+   "Mysore"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "coorg",
+  "name": "Coorg",
+  "kind": "region",
+  "parentSlug": "karnataka",
+  "countryCode": "IN",
+  "lat": 12.4244,
+  "lng": 75.7382,
+  "wikipediaTitle": "Kodagu",
+  "wikivoyageTitle": "Kodagu",
+  "aliases": [
+   "Madikeri",
+   "Kodagu"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3,
+   4
+  ]
+ },
+ {
+  "slug": "tamil-nadu",
+  "name": "Tamil Nadu",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 11.1271,
+  "lng": 78.6569,
+  "wikipediaTitle": "Tamil Nadu",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "ooty",
+  "name": "Ooty",
+  "kind": "city",
+  "parentSlug": "tamil-nadu",
+  "countryCode": "IN",
+  "lat": 11.4102,
+  "lng": 76.695,
+  "wikipediaTitle": "Ooty",
+  "wikivoyageTitle": "Ooty",
+  "aliases": [
+   "Udhagamandalam",
+   "Udagamandalam",
+   "Nilgiris"
+  ],
+  "bestMonths": [
+   3,
+   4,
+   5,
+   9,
+   10,
+   11
+  ]
+ },
+ {
   "slug": "pondicherry",
   "name": "Pondicherry",
   "kind": "city",

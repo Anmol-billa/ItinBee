@@ -4,17 +4,25 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Check,
+  Cloud,
   Compass,
   FolderLock,
   IndianRupee,
   LogIn,
   Pencil,
   Share2,
+  UserCheck,
   Users,
   Wifi,
   WifiOff,
 } from 'lucide-react';
 import { BrandMark } from '@/components/world/PublicNav';
+import {
+  AUTH_CHANGE_EVENT,
+  fetchCurrentUser,
+  readCachedUser,
+  type AuthUser,
+} from '@/lib/auth-client';
 import type { TripMeta } from '@/lib/types';
 
 export type EditorMode = 'plan' | 'bookings' | 'budget' | 'group' | 'share';
@@ -27,7 +35,8 @@ interface EditorHeaderProps {
   pollCount: number;
   activeMode: EditorMode;
   isOnline: boolean;
-  isLiveSynced: boolean;
+  wsConnected: boolean;
+  isCloudTrip: boolean;
   onSelectMode: (mode: EditorMode) => void;
   onUpdateTitle: (newTitle: string) => void;
   onOpenQuickShare: () => void;
@@ -41,17 +50,43 @@ export function EditorHeader({
   pollCount,
   activeMode,
   isOnline,
-  isLiveSynced,
+  wsConnected,
+  isCloudTrip,
   onSelectMode,
   onUpdateTitle,
   onOpenQuickShare,
 }: EditorHeaderProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(trip.title);
+  const [signedInUser, setSignedInUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
     setDraftTitle(trip.title);
   }, [trip.title]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const syncCached = () => {
+      const cached = readCachedUser();
+      if (!cancelled) {
+        setSignedInUser(cached && !cached.guest ? cached : null);
+      }
+    };
+    syncCached();
+    void fetchCurrentUser().then((u) => {
+      if (!cancelled) {
+        setSignedInUser(u);
+      }
+    });
+
+    window.addEventListener(AUTH_CHANGE_EVENT, syncCached);
+    window.addEventListener('storage', syncCached);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncCached);
+      window.removeEventListener('storage', syncCached);
+    };
+  }, []);
 
   const commitTitle = () => {
     const trimmed = draftTitle.trim();
@@ -80,9 +115,12 @@ export function EditorHeader({
     ? trip.destinationSummary.replace(/\(\d+D\)/gi, '').trim()
     : 'Custom route';
 
+  const accountFirstName =
+    signedInUser?.displayName.trim().split(/\s+/)[0] || 'Account';
+
   return (
     <header className="z-30 shrink-0 border-b border-saffron/30 bg-trunk-dark text-paper">
-      {/* Top Row: Brand, Nav, Editable Trip Title, Status, Sign in, Share CTA */}
+      {/* Top Row: Brand, Nav, Editable Trip Title, Status, Account/Sign in, Share CTA */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:flex-nowrap">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3 sm:gap-4 lg:flex-nowrap">
           <Link
@@ -170,17 +208,22 @@ export function EditorHeader({
           </div>
         </div>
 
-        {/* Right Controls: Sync Pill, Save/Sign in, Stamped Share Button */}
+        {/* Right Controls: Honest 3-State Sync Pill, Account/Sign in, Stamped Share Button */}
         <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
           <span
             role="status"
             data-testid="sync-status-pill"
             className="hidden items-center gap-1.5 rounded-full border border-paper/25 bg-trunk-deep px-3 py-1 text-[12px] font-semibold text-paper sm:inline-flex"
           >
-            {isOnline && isLiveSynced ? (
+            {isOnline && wsConnected ? (
               <>
                 <Wifi className="h-3.5 w-3.5 text-saffron" strokeWidth={1.9} aria-hidden="true" />
                 <span>Live synced</span>
+              </>
+            ) : isOnline && isCloudTrip ? (
+              <>
+                <Cloud className="h-3.5 w-3.5 text-saffron" strokeWidth={1.9} aria-hidden="true" />
+                <span>Saved to cloud</span>
               </>
             ) : (
               <>
@@ -194,14 +237,24 @@ export function EditorHeader({
             )}
           </span>
 
-          <Link
-            href={`/login?next=${encodeURIComponent(`/trip/${trip.id}`)}`}
-            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-paper/35 px-3 py-1.5 text-[13.5px] font-semibold text-paper transition-colors hover:bg-paper/10"
-          >
-            <LogIn className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
-            <span className="hidden sm:inline">Save / Sign in</span>
-            <span className="sm:hidden">Sign in</span>
-          </Link>
+          {signedInUser ? (
+            <Link
+              href="/account"
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-paper/35 px-3 py-1.5 text-[13.5px] font-semibold text-paper transition-colors hover:bg-paper/10"
+            >
+              <UserCheck className="h-3.5 w-3.5 text-saffron" strokeWidth={2} aria-hidden="true" />
+              <span className="max-w-[120px] truncate">{accountFirstName}</span>
+            </Link>
+          ) : (
+            <Link
+              href={`/login?next=${encodeURIComponent(`/trip/${trip.id}`)}`}
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-paper/35 px-3 py-1.5 text-[13.5px] font-semibold text-paper transition-colors hover:bg-paper/10"
+            >
+              <LogIn className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+              <span className="hidden sm:inline">Save / Sign in</span>
+              <span className="sm:hidden">Sign in</span>
+            </Link>
+          )}
 
           <button
             type="button"

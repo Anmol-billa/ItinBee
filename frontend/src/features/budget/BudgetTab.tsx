@@ -1,9 +1,17 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { Check, Copy, IndianRupee, Plus, QrCode } from 'lucide-react';
+import { Check, Copy, IndianRupee, Plus, QrCode, Save, Trash2 } from 'lucide-react';
 import { ModalDialog } from '@/components/ui/ModalDialog';
+import {
+  createCloudExpense,
+  createCloudKittyPool,
+  deleteCloudExpense,
+  fetchCloudSettlements,
+  updateCloudTripMember,
+} from '@/lib/api-client';
+import { formatDietaryTag } from '@/lib/formatters';
 import {
   computeLocalSettlements,
   REFERENCE_FX_TO_INR,
@@ -19,14 +27,17 @@ import type {
 
 interface BudgetTabProps {
   workspace: TripWorkspace;
+  isCloudSynced?: boolean;
   onUpdateWorkspace: (updater: (prev: TripWorkspace) => TripWorkspace) => void;
   onNotify: (msg: string) => void;
 }
 
 const CURRENCIES: CurrencyCode[] = ['INR', 'THB', 'VND', 'AED', 'JPY', 'EUR', 'USD'];
+const UPI_VPA_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z0-9]{2,32}$/;
 
 export function BudgetTab({
   workspace,
+  isCloudSynced = false,
   onUpdateWorkspace,
   onNotify,
 }: BudgetTabProps) {
@@ -40,11 +51,20 @@ export function BudgetTab({
   );
   const [expSplitMode, setExpSplitMode] = useState<SplitMode>('equal');
   const [expExcludeTag, setExpExcludeTag] = useState<string>('vegetarian');
+  const [submittingExp, setSubmittingExp] = useState(false);
 
   // Kitty creation state
   const [kittyTitle, setKittyTitle] = useState('');
   const [kittyPerMemberInr, setKittyPerMemberInr] = useState('2500');
   const [showKittyForm, setShowKittyForm] = useState(false);
+
+  // Cloud settlements + inline VPA configuration
+  const [cloudSettlements, setCloudSettlements] = useState<
+    UpiSettlementInstruction[] | null
+  >(null);
+  const [vpaDraftByUser, setVpaDraftByUser] = useState<Record<string, string>>({});
+  const [vpaErrorByUser, setVpaErrorByUser] = useState<Record<string, string>>({});
+  const [savingVpaUserId, setSavingVpaUserId] = useState<string | null>(null);
 
   // Active settlement QR modal
   const [activeSettlement, setActiveSettlement] =
@@ -52,8 +72,51 @@ export function BudgetTab({
   const [settlementQrUrl, setSettlementQrUrl] = useState<string | null>(null);
   const [copiedUpi, setCopiedUpi] = useState(false);
 
+  const refreshSettlements = useCallback(async () => {
+    if (!isCloudSynced) {
+      setCloudSettlements(null);
+      return;
+    }
+    try {
+      const res = await fetchCloudSettlements(workspace.trip.id);
+      setCloudSettlements(res.settlements);
+    } catch {
+      // Offline fallback uses computeLocalSettlements
+      setCloudSettlements(null);
+    }
+  }, [isCloudSynced, workspace.trip.id]);
+
   useEffect(() => {
-    if (!activeSettlement?.qrPayload) {
+    void refreshSettlements();
+  }, [
+    refreshSettlements,
+    workspace.expenses.length,
+    workspace.kittyPools.length,
+    workspace.members,
+  ]);
+
+  const localSettlements = useMemo(
+    () => computeLocalSettlements(workspace),
+    [workspace]
+  );
+
+  const settlements = cloudSettlements ?? localSettlements;
+
+  // Keep open modal synced with updated settlement (e.g. right after saving a payee's VPA!)
+  useEffect(() => {
+    if (!activeSettlement) return;
+    const updated = settlements.find(
+      (s) =>
+        s.fromUserId === activeSettlement.fromUserId &&
+        s.toUserId === activeSettlement.toUserId
+    );
+    if (updated && updated.payeeVpa !== activeSettlement.payeeVpa) {
+      setActiveSettlement(updated);
+    }
+  }, [settlements, activeSettlement]);
+
+  useEffect(() => {
+    if (!activeSettlement?.payeeVpa || !activeSettlement?.qrPayload) {
       setSettlementQrUrl(null);
       return;
     }
@@ -66,21 +129,59 @@ export function BudgetTab({
       .catch(() => setSettlementQrUrl(null));
   }, [activeSettlement]);
 
-  const settlements = useMemo(
-    () => computeLocalSettlements(workspace),
-    [workspace]
-  );
-
   const totalSpentInrMinor = useMemo(
     () =>
       workspace.expenses.reduce(
-        (acc, exp) => acc + (exp.entryType === 'charge' ? exp.inrEquivalentMinor : 0),
+        (acc, exp) =>
+          acc +
+          (exp.entryType === 'charge'
+            ? exp.inrEquivalentMinor
+            : exp.entryType === 'adjustment'
+              ? exp.inrEquivalentMinor
+              : 0),
         0
       ),
     [workspace.expenses]
   );
 
-  const handleAddExpense = (e: React.FormEvent) => {
+  const handleSaveMemberVpa = async (toUserId: string, toName: string) => {
+    const candidate = (vpaDraftByUser[toUserId] ?? '').trim().toLowerCase();
+    if (!UPI_VPA_RE.test(candidate)) {
+      setVpaErrorByUser((prev) => ({
+        ...prev,
+        [toUserId]: 'Enter a valid UPI ID (e.g. name@okaxis)',
+      }));
+      return;
+    }
+    setVpaErrorByUser((prev) => {
+      const next = { ...prev };
+      delete next[toUserId];
+      return next;
+    });
+    setSavingVpaUserId(toUserId);
+
+    onUpdateWorkspace((prev) => ({
+      ...prev,
+      members: prev.members.map((m) =>
+        m.userId === toUserId ? { ...m, upiVpa: candidate, hasUpiVpa: true } : m
+      ),
+    }));
+
+    if (isCloudSynced) {
+      try {
+        await updateCloudTripMember(workspace.trip.id, toUserId, {
+          upiVpa: candidate,
+        });
+        await refreshSettlements();
+      } catch {
+        // Local member VPA update remains active offline
+      }
+    }
+    setSavingVpaUserId(null);
+    onNotify(`Saved verified UPI ID ${candidate} for ${toName}.`);
+  };
+
+  const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const numeric = Number(expAmount);
     if (!expTitle.trim() || !Number.isFinite(numeric) || numeric <= 0) return;
@@ -107,37 +208,116 @@ export function BudgetTab({
       splitsInrMinor[m.userId] = perHead + bump;
     }
 
-    const newExp: ExpenseView = {
-      id: crypto.randomUUID(),
-      tripId: workspace.trip.id,
-      clientOpId: crypto.randomUUID(),
-      entryType: 'charge',
-      reversesExpenseId: null,
-      title: expTitle.trim(),
-      category: expSplitMode === 'fuel_fastag' ? 'fuel_fastag' : 'dining',
-      paidBy: expPaidBy || workspace.members[0]!.userId,
-      kittyPoolId: null,
-      amountMinor,
-      currency: expCurrency,
-      inrEquivalentMinor: inrMinor,
-      fxRate,
-      splitMode: expSplitMode,
-      excludedTags: expSplitMode === 'tag_exclude' ? [expExcludeTag] : [],
-      splitsInrMinor,
-      upiTxnRef: null,
-      createdAt: new Date().toISOString(),
-    };
+    const clientOpId = crypto.randomUUID();
+    const paidBy = expPaidBy || workspace.members[0]!.userId;
+    const category = expSplitMode === 'fuel_fastag' ? 'fuel_fastag' : 'dining';
+    const excludedTags = expSplitMode === 'tag_exclude' ? [expExcludeTag] : [];
 
-    onUpdateWorkspace((prev) => ({
-      ...prev,
-      expenses: [newExp, ...prev.expenses],
-    }));
-    setExpTitle('');
-    setExpAmount('');
-    onNotify('Logged expense and recalculated min-cash-flow UPI settlements.');
+    setSubmittingExp(true);
+    try {
+      if (isCloudSynced) {
+        const savedExp = await createCloudExpense(workspace.trip.id, {
+          clientOpId,
+          entryType: 'charge',
+          title: expTitle.trim(),
+          category,
+          paidBy,
+          amountMinor,
+          currency: expCurrency,
+          splitMode: expSplitMode,
+          excludedTags,
+        });
+        onUpdateWorkspace((prev) => ({
+          ...prev,
+          expenses: [
+            savedExp,
+            ...prev.expenses.filter((x) => x.id !== savedExp.id),
+          ],
+        }));
+        await refreshSettlements();
+      } else {
+        const localExp: ExpenseView = {
+          id: crypto.randomUUID(),
+          tripId: workspace.trip.id,
+          clientOpId,
+          entryType: 'charge',
+          reversesExpenseId: null,
+          title: expTitle.trim(),
+          category,
+          paidBy,
+          kittyPoolId: null,
+          amountMinor,
+          currency: expCurrency,
+          inrEquivalentMinor: inrMinor,
+          fxRate,
+          splitMode: expSplitMode,
+          excludedTags,
+          splitsInrMinor,
+          upiTxnRef: null,
+          createdAt: new Date().toISOString(),
+        };
+        onUpdateWorkspace((prev) => ({
+          ...prev,
+          expenses: [localExp, ...prev.expenses],
+        }));
+      }
+      setExpTitle('');
+      setExpAmount('');
+      onNotify('Logged expense and recalculated min-cash-flow UPI settlements.');
+    } catch {
+      // Offline fallback if cloud POST fails
+      const fallbackExp: ExpenseView = {
+        id: crypto.randomUUID(),
+        tripId: workspace.trip.id,
+        clientOpId,
+        entryType: 'charge',
+        reversesExpenseId: null,
+        title: expTitle.trim(),
+        category,
+        paidBy,
+        kittyPoolId: null,
+        amountMinor,
+        currency: expCurrency,
+        inrEquivalentMinor: inrMinor,
+        fxRate,
+        splitMode: expSplitMode,
+        excludedTags,
+        splitsInrMinor,
+        upiTxnRef: null,
+        createdAt: new Date().toISOString(),
+      };
+      onUpdateWorkspace((prev) => ({
+        ...prev,
+        expenses: [fallbackExp, ...prev.expenses],
+      }));
+      setExpTitle('');
+      setExpAmount('');
+      onNotify('Saved expense offline — settlements updated locally.');
+    } finally {
+      setSubmittingExp(false);
+    }
   };
 
-  const handleCreateKitty = (e: React.FormEvent) => {
+  const handleDeleteExpense = async (exp: ExpenseView) => {
+    if (isCloudSynced) {
+      try {
+        await deleteCloudExpense(workspace.trip.id, exp.id);
+      } catch (err) {
+        onNotify(err instanceof Error ? err.message : 'Could not delete expense.');
+        return;
+      }
+    }
+    onUpdateWorkspace((prev) => ({
+      ...prev,
+      expenses: prev.expenses.filter((e) => e.id !== exp.id),
+    }));
+    if (isCloudSynced) {
+      await refreshSettlements();
+    }
+    onNotify(`Removed "${exp.title}" from ledger.`);
+  };
+
+  const handleCreateKitty = async (e: React.FormEvent) => {
     e.preventDefault();
     const perMember = Number(kittyPerMemberInr);
     if (!kittyTitle.trim() || !Number.isFinite(perMember) || perMember <= 0) return;
@@ -146,12 +326,36 @@ export function BudgetTab({
     for (const m of workspace.members) {
       memberContribs[m.userId] = perMinor;
     }
+    const custodianId = workspace.members[0]?.userId ?? crypto.randomUUID();
     const totalMinor = perMinor * Math.max(1, workspace.members.length);
+
+    if (isCloudSynced) {
+      try {
+        const savedPool = await createCloudKittyPool(workspace.trip.id, {
+          title: kittyTitle.trim(),
+          custodianId,
+          currency: 'INR',
+          memberContributionsMinor: memberContribs,
+        });
+        onUpdateWorkspace((prev) => ({
+          ...prev,
+          kittyPools: [savedPool, ...prev.kittyPools],
+        }));
+        setKittyTitle('');
+        setShowKittyForm(false);
+        await refreshSettlements();
+        onNotify(`Created shared kitty "${savedPool.title}".`);
+        return;
+      } catch {
+        // Fall through to local kitty pool if offline
+      }
+    }
+
     const newPool: KittyPoolView = {
       id: crypto.randomUUID(),
       tripId: workspace.trip.id,
       title: kittyTitle.trim(),
-      custodianId: workspace.members[0]?.userId ?? 'owner',
+      custodianId,
       currency: 'INR',
       initialContributionMinor: totalMinor,
       memberContributionsMinor: memberContribs,
@@ -345,11 +549,11 @@ export function BudgetTab({
 
             <button
               type="submit"
-              disabled={!expTitle.trim() || !expAmount}
+              disabled={submittingExp || !expTitle.trim() || !expAmount}
               className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border-2 border-navy bg-navy px-4 py-2 text-[14px] font-bold text-[#FFFDF8] transition-colors hover:bg-trunk disabled:opacity-45"
             >
               <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-              <span>Log expense</span>
+              <span>{submittingExp ? 'Logging…' : 'Log expense'}</span>
             </button>
           </div>
         </form>
@@ -367,37 +571,101 @@ export function BudgetTab({
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
-            {settlements.map((s) => (
-              <div
-                key={`${s.fromUserId}-${s.toUserId}`}
-                className="flex items-center justify-between gap-3 rounded-xl border border-navy/20 bg-[#FFFDF8] p-4 shadow-panel"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-[15px] font-bold text-navy">
-                    {s.fromName} → {s.toName}
-                  </div>
-                  <div className="font-mono text-[12px] tabular-nums text-paper-ink">
-                    {s.paymentMode === 'UPI_DEEP_LINK'
-                      ? 'Direct upi://pay intent ready (<= ₹2,000)'
-                      : '> ₹2,000 copy VPA + QR mode'}
-                  </div>
-                </div>
+            {settlements.map((s) => {
+              const missingVpa = !s.payeeVpa;
+              const draftVpa = vpaDraftByUser[s.toUserId] ?? '';
+              const vpaErr = vpaErrorByUser[s.toUserId];
 
-                <button
-                  type="button"
-                  onClick={() => setActiveSettlement(s)}
-                  className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-lg border-2 border-navy bg-vermilion-deep px-3 py-1.5 font-mono text-[13px] font-bold tabular-nums text-[#FFFDF8] transition-colors hover:bg-[#A82E19]"
+              return (
+                <div
+                  key={`${s.fromUserId}-${s.toUserId}`}
+                  className="space-y-3 rounded-xl border border-navy/20 bg-[#FFFDF8] p-4 shadow-panel"
                 >
-                  <QrCode className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
-                  <span>Settle {s.amountInrFormatted}</span>
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-[15px] font-bold text-navy">
+                        {s.fromName} → {s.toName}
+                      </div>
+                      <div className="font-mono text-[12px] tabular-nums text-paper-ink">
+                        {missingVpa
+                          ? `No UPI ID set for ${s.toName}`
+                          : s.paymentMode === 'UPI_DEEP_LINK'
+                            ? `Direct upi://pay ready · ${s.payeeVpa}`
+                            : `> ₹2,000 QR / copy mode · ${s.payeeVpa}`}
+                      </div>
+                    </div>
+
+                    {missingVpa ? (
+                      <span className="shrink-0 rounded-lg border border-navy/25 bg-paper px-3 py-1.5 font-mono text-[13.5px] font-bold tabular-nums text-navy">
+                        {s.amountInrFormatted}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setActiveSettlement(s)}
+                        className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-lg border-2 border-navy bg-vermilion-deep px-3 py-1.5 font-mono text-[13px] font-bold tabular-nums text-[#FFFDF8] transition-colors hover:bg-[#A82E19]"
+                      >
+                        <QrCode className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
+                        <span>Settle {s.amountInrFormatted}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {missingVpa && (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void handleSaveMemberVpa(s.toUserId, s.toName);
+                      }}
+                      className="space-y-1.5 border-t border-navy/10 pt-2.5"
+                    >
+                      <label
+                        htmlFor={`set-vpa-${s.fromUserId}-${s.toUserId}`}
+                        className="block text-[12px] font-semibold text-navy"
+                      >
+                        Set UPI ID for {s.toName}
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          id={`set-vpa-${s.fromUserId}-${s.toUserId}`}
+                          type="text"
+                          spellCheck={false}
+                          autoCapitalize="none"
+                          value={draftVpa}
+                          onChange={(e) =>
+                            setVpaDraftByUser((prev) => ({
+                              ...prev,
+                              [s.toUserId]: e.target.value,
+                            }))
+                          }
+                          placeholder="name@okaxis"
+                          aria-invalid={vpaErr ? 'true' : 'false'}
+                          className="min-h-[38px] min-w-0 flex-1 rounded-lg border border-navy/40 bg-[#FFFDF8] px-2.5 py-1 font-mono text-[13px] text-navy"
+                        />
+                        <button
+                          type="submit"
+                          disabled={savingVpaUserId === s.toUserId || !draftVpa.trim()}
+                          className="inline-flex min-h-[38px] items-center gap-1 rounded-lg border border-navy bg-navy px-3 py-1 text-[12.5px] font-bold text-[#FFFDF8] disabled:opacity-45"
+                        >
+                          <Save className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
+                          <span>Save</span>
+                        </button>
+                      </div>
+                      {vpaErr && (
+                        <p role="alert" className="text-[12px] font-semibold text-vermilion-deep">
+                          {vpaErr}
+                        </p>
+                      )}
+                    </form>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
 
-      {/* Immutable Ledger Entries */}
+      {/* Ledger Entries */}
       <section className="space-y-3">
         <h3 className="text-[17px] font-bold text-navy">
           Ledger History ({workspace.expenses.length})
@@ -416,24 +684,34 @@ export function BudgetTab({
                   key={exp.id}
                   className="flex items-center justify-between gap-3 px-4 py-3"
                 >
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="text-[14.5px] font-bold text-navy">{exp.title}</div>
                     <div className="text-[12.5px] text-paper-ink">
                       Paid by {payer} · {exp.splitMode.replace('_', ' ')}
                       {exp.excludedTags.length > 0
-                        ? ` (excl. ${exp.excludedTags.join(', ')})`
+                        ? ` (excl. ${exp.excludedTags.map(formatDietaryTag).join(', ')})`
                         : ''}
                     </div>
                   </div>
-                  <div className="text-right font-mono tabular-nums">
-                    <div className="text-[14.5px] font-bold text-navy">
-                      ₹{(exp.inrEquivalentMinor / 100).toLocaleString('en-IN')}
-                    </div>
-                    {exp.currency !== 'INR' && (
-                      <div className="text-[11.5px] text-paper-ink">
-                        {(exp.amountMinor / 100).toLocaleString()} {exp.currency}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right font-mono tabular-nums">
+                      <div className="text-[14.5px] font-bold text-navy">
+                        ₹{(exp.inrEquivalentMinor / 100).toLocaleString('en-IN')}
                       </div>
-                    )}
+                      {exp.currency !== 'INR' && (
+                        <div className="text-[11.5px] text-paper-ink">
+                          {(exp.amountMinor / 100).toLocaleString()} {exp.currency}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteExpense(exp)}
+                      aria-label={`Delete expense ${exp.title}`}
+                      className="icon-hit inline-grid h-8 w-8 place-items-center rounded-md text-vermilion-deep hover:bg-paper"
+                    >
+                      <Trash2 className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+                    </button>
                   </div>
                 </li>
               );
@@ -456,7 +734,9 @@ export function BudgetTab({
                   {activeSettlement.fromName} → {activeSettlement.toName}
                 </div>
                 <div className="font-mono text-[12px] text-paper-ink">
-                  VPA: {activeSettlement.payeeVpa}
+                  {activeSettlement.payeeVpa
+                    ? `VPA: ${activeSettlement.payeeVpa}`
+                    : `No UPI ID configured for ${activeSettlement.toName}`}
                 </div>
               </div>
               <span className="font-mono text-[20px] font-bold tabular-nums text-navy">
@@ -468,7 +748,7 @@ export function BudgetTab({
               {activeSettlement.thresholdNote}
             </p>
 
-            {settlementQrUrl && (
+            {activeSettlement.payeeVpa && settlementQrUrl && (
               <div className="flex justify-center py-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -482,7 +762,7 @@ export function BudgetTab({
             )}
 
             <div className="flex flex-col gap-2">
-              {activeSettlement.upiUri && (
+              {activeSettlement.payeeVpa && activeSettlement.upiUri && (
                 <a
                   href={activeSettlement.upiUri}
                   className="btn-stamp w-full text-center text-[14px]"
@@ -502,9 +782,18 @@ export function BudgetTab({
                   <Copy className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
                 )}
                 <span>
-                  {copiedUpi ? 'Copied VPA & exact amount' : 'Copy UPI ID + exact amount'}
+                  {copiedUpi
+                    ? 'Copied settlement details'
+                    : activeSettlement.payeeVpa
+                      ? 'Copy UPI ID + exact amount'
+                      : 'Copy exact amount'}
                 </span>
               </button>
+              {copiedUpi && (
+                <p role="status" className="text-center text-[12px] font-semibold text-jade">
+                  Copied to clipboard.
+                </p>
+              )}
             </div>
           </div>
         )}

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ExternalLink, Languages, ShieldCheck } from 'lucide-react';
+import { formatDietaryTag, redactSharedSummaryText } from '@/lib/formatters';
 import type { BookingView, ItineraryItem, TripDay, TripMeta } from '@/lib/types';
 
 interface ElderCardViewProps {
@@ -49,8 +50,8 @@ export function ElderCardView({ trip, days, items, bookings }: ElderCardViewProp
         <ShieldCheck className="h-4 w-4 shrink-0 text-jade" strokeWidth={1.7} aria-hidden="true" />
         <span>
           {lang === 'en'
-            ? 'Privacy active: ticket PNRs and personal IDs are masked on shared links.'
-            : 'सुरक्षा सक्रिय: साझा लिंक पर टिकट पीएनआर और पहचान संख्या गोपनीय रखी गई हैं।'}
+            ? 'Privacy active: ticket PNRs, coaches, seats and personal IDs are masked on shared links.'
+            : 'सुरक्षा सक्रिय: साझा लिंक पर टिकट पीएनआर, कोच, सीट और पहचान संख्या गोपनीय रखी गई हैं।'}
         </span>
       </div>
 
@@ -75,10 +76,11 @@ export function ElderCardView({ trip, days, items, bookings }: ElderCardViewProp
                 <ul className="space-y-4">
                   {dayStops.map((stop) => {
                     const bk = bookingByItem.get(stop.id);
-                    const summaryText =
+                    const rawSummary =
                       lang === 'hi'
                         ? stop.elderSummaryI18n?.hi || stop.notes || stop.title
                         : stop.elderSummaryI18n?.en || stop.notes || stop.title;
+                    const summaryText = redactSharedSummaryText(rawSummary) || stop.title;
 
                     return (
                       <li
@@ -111,12 +113,12 @@ export function ElderCardView({ trip, days, items, bookings }: ElderCardViewProp
                                 key={flag}
                                 className="rounded-md border border-jade/30 bg-jade-wash px-2.5 py-0.5 text-sm font-medium text-jade"
                               >
-                                {flag}
+                                {formatDietaryTag(flag)}
                               </span>
                             ))}
                             {stop.accessibilityNotes && (
                               <span className="rounded-md border border-line bg-canvas-elevated px-2.5 py-0.5 text-sm text-ink-secondary">
-                                {stop.accessibilityNotes}
+                                {redactSharedSummaryText(stop.accessibilityNotes)}
                               </span>
                             )}
                           </div>

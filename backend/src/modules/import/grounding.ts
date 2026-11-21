@@ -1,13 +1,15 @@
 import { CURATED_OPEN_POIS } from '../geo/curated-india-pois.js';
 import { getTemplatePoiCatalog } from '../explore/template-catalog.js';
 import type { PlacesServices } from '../places/places-module.js';
+import { STARTER_OPEN_POIS } from '../places/seed/starter-pois.js';
 import type { DestinationRecord } from '../places/types.js';
 import { haversineMeters } from '../places/util/geo.js';
-import { namesSimilar, normalizeName } from '../places/util/text.js';
-import type {
-  IntentDestination,
-  IntentMustInclude,
-  TripIntent,
+import { namesSimilar, normalizeName, toTitleCasePlaceName } from '../places/util/text.js';
+import {
+  dedupeMustInclude,
+  type IntentDestination,
+  type IntentMustInclude,
+  type TripIntent,
 } from './intent.js';
 
 export interface GazetteerTown {
@@ -70,10 +72,10 @@ export const TOWN_GAZETTEER: readonly GazetteerTown[] = [
   { key: 'varkala', aliases: ['kovalam', 'trivandrum', 'thiruvananthapuram', 'poovar'], name: 'Varkala', country: 'India', countryCode: 'IN', lat: 8.7379, lng: 76.7163, destinationSlug: 'kerala' },
   { key: 'thekkady', aliases: ['periyar', 'vagamon'], name: 'Thekkady', country: 'India', countryCode: 'IN', lat: 9.6031, lng: 77.1615, destinationSlug: 'kerala' },
   { key: 'wayanad', aliases: ['kalpetta', 'kozhikode'], name: 'Wayanad', country: 'India', countryCode: 'IN', lat: 11.6854, lng: 76.132, destinationSlug: 'kerala' },
-  { key: 'coorg', aliases: ['madikeri', 'kodagu', 'virajpet', 'kushalnagar'], name: 'Coorg', country: 'India', countryCode: 'IN', lat: 12.4244, lng: 75.7382, destinationSlug: 'karnataka' },
+  { key: 'coorg', aliases: ['madikeri', 'kodagu', 'virajpet', 'kushalnagar'], name: 'Coorg', country: 'India', countryCode: 'IN', lat: 12.4244, lng: 75.7382, destinationSlug: 'coorg' },
   { key: 'gokarna', aliases: ['om beach', 'kudle beach', 'murudeshwar'], name: 'Gokarna', country: 'India', countryCode: 'IN', lat: 14.5479, lng: 74.3188, destinationSlug: 'karnataka' },
-  { key: 'mysuru', aliases: ['mysore', 'chikmagalur', 'chikkamagaluru', 'kabini', 'udupi'], name: 'Mysuru', country: 'India', countryCode: 'IN', lat: 12.2958, lng: 76.6394, destinationSlug: 'karnataka' },
-  { key: 'ooty', aliases: ['udagamandalam', 'nilgiris'], name: 'Ooty', country: 'India', countryCode: 'IN', lat: 11.4102, lng: 76.695, destinationSlug: 'india' },
+  { key: 'chikmagalur', aliases: ['chikkamagaluru', 'kabini', 'udupi'], name: 'Chikmagalur', country: 'India', countryCode: 'IN', lat: 13.3161, lng: 75.772, destinationSlug: 'karnataka' },
+  { key: 'ooty', aliases: ['udagamandalam', 'udhagamandalam', 'nilgiris'], name: 'Ooty', country: 'India', countryCode: 'IN', lat: 11.4102, lng: 76.695, destinationSlug: 'ooty' },
   { key: 'coonoor', aliases: ['kotagiri'], name: 'Coonoor', country: 'India', countryCode: 'IN', lat: 11.353, lng: 76.7959, destinationSlug: 'india' },
   { key: 'kodaikanal', aliases: ['madurai', 'rameswaram', 'kanyakumari', 'thanjavur', 'chennai', 'mahabalipuram'], name: 'Kodaikanal', country: 'India', countryCode: 'IN', lat: 10.2381, lng: 77.4892, destinationSlug: 'india' },
   { key: 'auroville', aliases: [], name: 'Auroville', country: 'India', countryCode: 'IN', lat: 12.0069, lng: 79.8106, destinationSlug: 'pondicherry' },
@@ -219,7 +221,11 @@ export async function groundIntent(
       Number.isFinite(raw.lat) &&
       Number.isFinite(raw.lng)
     ) {
-      groundedDests.push({ ...raw, order: i + 1 });
+      groundedDests.push({
+        ...raw,
+        name: toTitleCasePlaceName(raw.name),
+        order: i + 1,
+      });
       continue;
     }
 
@@ -282,7 +288,7 @@ export async function groundIntent(
 
     // Unresolved: explicitly strip any ungrounded coords/slug
     groundedDests.push({
-      name: raw.name,
+      name: toTitleCasePlaceName(raw.name),
       ...(raw.country ? { country: raw.country } : {}),
       ...(raw.nights !== undefined ? { nights: raw.nights } : {}),
       order: i + 1,
@@ -291,10 +297,20 @@ export async function groundIntent(
     });
   }
 
+  // Deduplicate destinations that resolved to the same canonical name (e.g. "Agonda" + "South Goa" -> "South Goa")
+  const dedupedDests: IntentDestination[] = [];
+  const seenDestNames = new Set<string>();
+  for (const gd of groundedDests) {
+    const key = normalizeName(gd.name);
+    if (key && seenDestNames.has(key)) continue;
+    if (key) seenDestNames.add(key);
+    dedupedDests.push({ ...gd, order: dedupedDests.length + 1 });
+  }
+
   // Gather candidate places in resolved destinations for grounding mustInclude
   const resolvedDestIds = new Set<string>();
   const resolvedCoords: Array<{ lat: number; lng: number }> = [];
-  for (const gd of groundedDests) {
+  for (const gd of dedupedDests) {
     if (gd.lat !== undefined && gd.lng !== undefined) {
       resolvedCoords.push({ lat: gd.lat, lng: gd.lng });
     }
@@ -357,6 +373,26 @@ export async function groundIntent(
         placeRefId: storedHit.refId,
         lat: storedHit.lat,
         lng: storedHit.lng,
+        resolved: true,
+      });
+      continue;
+    }
+
+    // Check STARTER_OPEN_POIS (including explicit aliases like "city palace udaipur")
+    const starterHit = STARTER_OPEN_POIS.find(
+      (sp) =>
+        (normalizeName(sp.name) === qn ||
+          namesSimilar(sp.name, item.name) ||
+          sp.aliases.some((a) => normalizeName(a) === qn || namesSimilar(a, item.name))) &&
+        nearEnough(sp.lat, sp.lng)
+    );
+    if (starterHit) {
+      groundedMust.push({
+        name: starterHit.name,
+        sourceQuote: item.sourceQuote,
+        placeRefId: starterHit.refId,
+        lat: starterHit.lat,
+        lng: starterHit.lng,
         resolved: true,
       });
       continue;
@@ -468,9 +504,17 @@ export async function groundIntent(
     });
   }
 
+  const seenRefIds = new Set<string>();
+  const uniqueMust = dedupeMustInclude(groundedMust).filter((m) => {
+    if (!m.placeRefId) return true;
+    if (seenRefIds.has(m.placeRefId)) return false;
+    seenRefIds.add(m.placeRefId);
+    return true;
+  });
+
   return {
     ...intent,
-    destinations: groundedDests,
-    mustInclude: groundedMust,
+    destinations: dedupedDests,
+    mustInclude: uniqueMust,
   };
 }

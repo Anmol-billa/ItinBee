@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp, type BuiltAppBundle } from '../src/app.js';
+import { signAccessToken } from '../src/security/auth-tokens.js';
 import { SEED_IDS } from '../src/store/seed-data.js';
 
 describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandbox Claim', () => {
@@ -17,16 +18,26 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     bundle = await buildApp({ forceLocalStore: true, logger: false });
     const { app } = bundle;
     const goaTripId = SEED_IDS.trips.southGoa;
-    // South Goa members:
-    // - ananya (no exclusions)
-    // - rohan (no exclusions)
-    // - meera (['vegetarian', 'non_drinker'])
-    // - karthik (['non_drinker'])
+    const ananyaHeaders = {
+      authorization: `Bearer ${signAccessToken({
+        sub: SEED_IDS.users.ananya,
+        displayName: 'Ananya Sharma',
+        tier: 'free',
+      })}`,
+    };
+    const karthikHeaders = {
+      authorization: `Bearer ${signAccessToken({
+        sub: SEED_IDS.users.karthik,
+        displayName: 'Karthik Nair',
+        tier: 'free',
+      })}`,
+    };
 
     // 1. Create an upfront Kitty Pool: Ananya (custodian) & Rohan each contribute ₹1,000 (100,000 paise) -> ₹2,000 pool
     const kittyRes = await app.inject({
       method: 'POST',
       url: `/v1/trips/${goaTripId}/kitty-pools`,
+      headers: ananyaHeaders,
       payload: {
         title: 'Goa Cab & Parking Kitty',
         custodianId: SEED_IDS.users.ananya,
@@ -45,6 +56,7 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     const kittyExpRes = await app.inject({
       method: 'POST',
       url: `/v1/trips/${goaTripId}/expenses`,
+      headers: ananyaHeaders,
       payload: {
         clientOpId: crypto.randomUUID(),
         title: 'Madgaon to Palolem Innova Cab',
@@ -59,10 +71,10 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     expect(kittyExpRes.statusCode).toBe(201);
 
     // 3. Log a Craft Beer & Calamari bill of ₹3,000 (300,000 paise) paid by Rohan, excluding `non_drinker` & `vegetarian`
-    //    -> Only Ananya & Rohan participate (₹1,500 = 150,000 paise each); Meera & Karthik owe ₹0!
     const tagExcludeRes = await app.inject({
       method: 'POST',
       url: `/v1/trips/${goaTripId}/expenses`,
+      headers: ananyaHeaders,
       payload: {
         clientOpId: crypto.randomUUID(),
         title: 'Beach Shack Craft Beer & Calamari',
@@ -85,6 +97,7 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     const mistakeRes = await app.inject({
       method: 'POST',
       url: `/v1/trips/${goaTripId}/expenses`,
+      headers: ananyaHeaders,
       payload: {
         clientOpId: crypto.randomUUID(),
         title: 'Duplicate Scooter Entry',
@@ -100,6 +113,7 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     const reversalRes = await app.inject({
       method: 'POST',
       url: `/v1/trips/${goaTripId}/expenses`,
+      headers: ananyaHeaders,
       payload: {
         clientOpId: crypto.randomUUID(),
         entryType: 'adjustment',
@@ -111,15 +125,10 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     expect(reversalRes.statusCode).toBe(201);
     expect(reversalRes.json().inrEquivalentMinor).toBe(-80_000);
 
-    // Check settlements right now:
-    // - Ananya net: +100k (kitty contrib) - 200k (kitty cash held) + 200k (kitty spent) - 50k (cab share) - 150k (shack share) = -100,000 (-₹1,000)
-    // - Rohan net:  +100k (kitty contrib) - 50k (cab share) + 300k (shack paid) - 150k (shack share) = +200,000 (+₹2,000)
-    // - Meera net:  -50,000 (-₹500)
-    // - Karthik net: -50,000 (-₹500)
-    // Sum of nets = 0! All settlements here are <= ₹2,000 (`100,000`, `50,000`, `50,000` paise) -> UPI_DEEP_LINK!
     const settleUnderLimit = await app.inject({
       method: 'GET',
       url: `/v1/trips/${goaTripId}/settlements`,
+      headers: ananyaHeaders,
     });
     expect(settleUnderLimit.statusCode).toBe(200);
     const sBody1 = settleUnderLimit.json();
@@ -137,6 +146,7 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     await app.inject({
       method: 'POST',
       url: `/v1/trips/${goaTripId}/expenses`,
+      headers: ananyaHeaders,
       payload: {
         clientOpId: crypto.randomUUID(),
         title: 'Agonda Beach Villa Balance',
@@ -151,6 +161,7 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     const settleOverLimit = await app.inject({
       method: 'GET',
       url: `/v1/trips/${goaTripId}/settlements`,
+      headers: ananyaHeaders,
     });
     const sBody2 = settleOverLimit.json();
     for (const instruction of sBody2.settlements) {
@@ -165,6 +176,7 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     const vndExp = await app.inject({
       method: 'POST',
       url: `/v1/trips/${SEED_IDS.trips.vietnam7d}/expenses`,
+      headers: karthikHeaders,
       payload: {
         clientOpId: crypto.randomUUID(),
         title: 'Hanoi Old Quarter Chay Dinner',
@@ -180,20 +192,28 @@ describe('Unlimited Indian UPI Ledger, Kitty Pools, Turnstile Polls, Geo & Sandb
     });
     expect(vndExp.statusCode).toBe(201);
     const vndBody = vndExp.json();
-    expect(vndBody.inrEquivalentMinor).toBe(170_000); // 500,000 * 0.0034 = ₹1,700.00 = 170,000 paise
+    expect(vndBody.inrEquivalentMinor).toBe(170_000);
     const weightSum =
       vndBody.splitsInrMinor[SEED_IDS.users.karthik] +
       vndBody.splitsInrMinor[SEED_IDS.users.ananya];
-    expect(weightSum).toBe(170_000); // Exact paisa conservation under Hamilton rounding!
+    expect(weightSum).toBe(170_000);
   });
 
   it('enforces Cloudflare Turnstile verification and guest_session_hash deduplication on zero-OTP WhatsApp polls', async () => {
     bundle = await buildApp({ forceLocalStore: true, logger: false });
     const { app } = bundle;
+    const ownerHeaders = {
+      authorization: `Bearer ${signAccessToken({
+        sub: SEED_IDS.users.ananya,
+        displayName: 'Ananya Sharma',
+        tier: 'free',
+      })}`,
+    };
 
     const pollRes = await app.inject({
       method: 'POST',
       url: `/v1/trips/${SEED_IDS.trips.rishikeshLandour}/polls`,
+      headers: ownerHeaders,
       payload: {
         question: 'Rishikesh Rafting Stretch?',
         options: [

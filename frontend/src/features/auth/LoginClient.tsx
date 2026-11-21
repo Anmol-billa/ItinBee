@@ -13,6 +13,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import { Postmark } from '@/components/world/Postmark';
+import { TurnstileWidget } from '@/components/security/TurnstileWidget';
 import {
   activateLocalDevAccount,
   AuthApiError,
@@ -67,6 +68,7 @@ export function LoginClient({
 
   const [triedSubmit, setTriedSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
   const [error, setError] = useState<{ message: string; isNetwork: boolean } | null>(null);
   const [statusNote, setStatusNote] = useState<string | null>(null);
 
@@ -172,7 +174,7 @@ export function LoginClient({
     }
     setSubmitting(true);
     try {
-      const res = await requestMagicCode(email);
+      const res = await requestMagicCode(email, turnstileToken || undefined);
       setDevMagicCode(res.devMagicCode ?? null);
       setStep('code');
       setTriedSubmit(false);
@@ -325,6 +327,8 @@ export function LoginClient({
                 <span>Enter an email address in the format you@example.com.</span>
               </p>
             ) : null}
+
+            <TurnstileWidget onToken={setTurnstileToken} className="mt-4" />
 
             <button type="submit" disabled={submitting} className="btn-stamp mt-5 w-full">
               {submitting ? <span className="spinner" aria-hidden="true" /> : <Mail size={18} strokeWidth={2.25} aria-hidden="true" />}

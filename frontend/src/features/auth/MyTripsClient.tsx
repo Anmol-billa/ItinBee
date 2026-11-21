@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
+  AlertCircle,
   ArrowRight,
   Calendar,
   Cloud,
@@ -12,6 +14,7 @@ import {
   MapPin,
   Settings,
   Sparkles,
+  Upload,
 } from 'lucide-react';
 import {
   fetchCurrentSession,
@@ -19,6 +22,9 @@ import {
   type AuthSessionState,
   type MyTripSummary,
 } from '@/lib/auth-client';
+import { claimSandboxToCloud } from '@/lib/api-client';
+import { importTripBundleJson } from '@/lib/bundle-export';
+import { saveLocalWorkspace } from '@/lib/offline-db';
 
 function formatTripDates(start: string | null, end: string | null): string {
   if (!start && !end) return 'Flexible dates';
@@ -29,9 +35,12 @@ function formatTripDates(start: string | null, end: string | null): string {
 }
 
 export function MyTripsClient() {
+  const router = useRouter();
   const [session, setSession] = useState<AuthSessionState | null>(null);
   const [trips, setTrips] = useState<MyTripSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importError, setImportError] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +54,31 @@ export function MyTripsClient() {
       cancelled = true;
     };
   }, []);
+
+  const handleImportBundle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(null);
+    try {
+      const raw = await file.text();
+      const imported = importTripBundleJson(raw);
+      await saveLocalWorkspace(`trip:${imported.trip.id}`, imported);
+      await saveLocalWorkspace(`sandbox:${imported.trip.shortId}`, imported);
+      try {
+        const claimed = await claimSandboxToCloud(imported);
+        router.push(`/trip/${claimed.trip.id}`);
+        return;
+      } catch {
+        router.push(`/trip/${imported.trip.id}`);
+      }
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : 'Could not import .itinbee.json bundle.'
+      );
+    } finally {
+      e.target.value = '';
+    }
+  };
 
   const isSignedIn = Boolean(session?.user && !session.guest);
 
@@ -64,6 +98,23 @@ export function MyTripsClient() {
             <Sparkles size={18} strokeWidth={2.25} aria-hidden="true" />
             New itinerary
           </Link>
+
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleImportBundle}
+            className="sr-only"
+          />
+          <button
+            type="button"
+            onClick={() => importInputRef.current?.click()}
+            className="btn-line btn-line-light text-paper"
+          >
+            <Upload size={17} strokeWidth={2.25} aria-hidden="true" />
+            Import .itinbee.json
+          </button>
+
           {isSignedIn ? (
             <Link href="/account" className="btn-line btn-line-light text-paper">
               <Settings size={17} strokeWidth={2.25} aria-hidden="true" />
@@ -77,6 +128,16 @@ export function MyTripsClient() {
           )}
         </div>
       </div>
+
+      {importError ? (
+        <p
+          role="alert"
+          className="on-paper mt-5 flex items-center gap-2 rounded-lg border-2 border-[#a82e19] bg-[#fffdf8] px-4 py-3 text-[14.5px] font-bold text-vermilion-ink"
+        >
+          <AlertCircle size={17} strokeWidth={2.25} aria-hidden="true" />
+          <span>{importError}</span>
+        </p>
+      ) : null}
 
       {/* Account / Guest Status Banner */}
       {!loading ? (

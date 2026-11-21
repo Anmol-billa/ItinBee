@@ -152,12 +152,14 @@ export class WikipediaClient implements WikipediaProvider {
             const page = byTitle.get(resolve(requested));
             if (!page || page.missing) continue;
             const coord = page.coordinates?.[0];
+            const rawThumb = page.thumbnail?.source?.trim() ?? '';
+            const normThumb = rawThumb.startsWith('//') ? `https:${rawThumb}` : rawThumb;
             out[requested] = {
               title: page.title,
               pageId: page.pageid ?? null,
               wikidataId: page.pageprops?.wikibase_item ?? null,
               description: clean(page.description),
-              thumbnailUrl: page.thumbnail?.source ?? null,
+              thumbnailUrl: /^https?:\/\/\S+/i.test(normThumb) ? normThumb : null,
               imageFile: page.pageimage ?? null,
               lat: coord?.lat ?? null,
               lng: coord?.lon ?? null,
@@ -382,15 +384,17 @@ export class CommonsClient implements CommonsProvider {
             if (!page || page.missing || !info) continue;
             const meta = info.extmetadata ?? {};
             const artist = meta.Artist?.value ? clean(stripWikiMarkup(meta.Artist.value)) : null;
+            const rawThumbUrl = (info.thumburl ?? info.url ?? '').trim();
+            const thumbUrl = rawThumbUrl.startsWith('//') ? `https:${rawThumbUrl}` : rawThumbUrl;
+            if (!/^https?:\/\/\S+/i.test(thumbUrl)) continue;
             out[requested] = {
               file: page.title,
-              thumbUrl: info.thumburl ?? info.url ?? '',
+              thumbUrl,
               sourceUrl: info.descriptionurl ?? '',
               author: artist ? truncate(artist, 140) : null,
               license: clean(meta.LicenseShortName?.value ?? meta.UsageTerms?.value),
               licenseUrl: clean(meta.LicenseUrl?.value),
             };
-            if (!out[requested]?.thumbUrl) delete out[requested];
           }
           return out;
         },

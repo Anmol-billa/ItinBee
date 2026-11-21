@@ -32,7 +32,7 @@ import type {
   SourceProvider,
 } from './types.js';
 import { haversineMeters } from './util/geo.js';
-import { clean, slugify } from './util/text.js';
+import { clean, normalizeName, sanitizeImageObject, slugify, toTitleCasePlaceName } from './util/text.js';
 
 /** Pack radius around the destination centre (metres). State/country are aggregates and never get their own pack. */
 export function packRadiusM(kind: DestinationKind): number | null {
@@ -365,16 +365,25 @@ export async function buildDestinationPack(
 
   const wpCandidates: PlaceCandidate[] = [];
   for (const h of geoHits) {
+    if (dest.wikipediaTitle && h.title === dest.wikipediaTitle) {
+      droppedJunk += 1;
+      continue;
+    }
     const d = details.get(h.title);
     const cat = categorizeWikipedia(d?.description ?? null, h.title);
     if (!cat) {
       droppedJunk += 1;
       continue;
     }
+    const strippedTitle = h.title.replace(/\s+\([^)]*\)$/, '');
+    if (normalizeName(strippedTitle) === normalizeName(dest.name)) {
+      droppedJunk += 1;
+      continue;
+    }
     wpCandidates.push({
       key: `wp:${h.pageId}`,
       origin: 'wikipedia',
-      name: h.title.replace(/\s+\([^)]*\)$/, ''),
+      name: toTitleCasePlaceName(strippedTitle),
       altNames: [h.title],
       nameLocal: {},
       lat: h.lat,
@@ -573,13 +582,13 @@ export async function buildDestinationPack(
   const toImage = (file: string | null | undefined): ImageInfo | null => {
     const info = file ? fileInfo[file] : undefined;
     if (!info) return null;
-    return {
+    return sanitizeImageObject({
       url: info.thumbUrl,
       author: info.author,
       license: info.license,
       licenseUrl: info.licenseUrl,
       sourceUrl: info.sourceUrl || null,
-    };
+    });
   };
 
   // 10. final popularity (with image/description known), ranking, assembly
@@ -731,7 +740,7 @@ export async function buildDestinationPack(
     return {
       refId,
       destinationId: dest.id,
-      name,
+      name: toTitleCasePlaceName(name),
       nameLocal: osmM?.nameLocal ?? {},
       category: d.category,
       subtype: d.subtype,

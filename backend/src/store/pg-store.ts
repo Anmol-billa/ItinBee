@@ -34,6 +34,8 @@ import {
 import {
   buildOutboundChecklist,
   buildWhatsappDigestText,
+  syncDurationSummarySuffix,
+  type BookingVaultMeta,
   type CastPollVoteInput,
   type CreateBookingInput,
   type CreateExpenseInput,
@@ -41,8 +43,17 @@ import {
   type CreatePollInput,
   type CreateTripInput,
   type SandboxClaimInput,
+  type TripInviteStored,
   type TripStore,
+  type UpdateTripMetaInput,
+  type VaultBlobRecord,
 } from './repository.js';
+import {
+  buildSharedPgPoolConfig,
+  getSharedPgPool,
+  releaseSharedPgPool,
+  type PgPoolRole,
+} from './shared-pool.js';
 import { buildPreSeededSampleDataset } from './seed-data.js';
 import type {
   BookingProvider,
@@ -54,6 +65,7 @@ import type {
   ExpenseEntryType,
   ExpenseView,
   GuestShareResponse,
+  InviteRole,
   ItineraryItem,
   KittyPoolView,
   MemberRole,
@@ -68,6 +80,7 @@ import type {
   TripWorkspaceResponse,
   UpiSettlementInstruction,
   UserPublic,
+  UserSelf,
 } from '../types/domain.js';
 
 const { Pool } = pg;
@@ -82,23 +95,31 @@ function generateShortId(title: string): string {
   return `${slug || 'trip'}-${rand}`.slice(0, 12);
 }
 
-function buildPgPoolConfig(connectionString: string): pg.PoolConfig {
-  const needsSsl =
-    connectionString.includes('.render.com') ||
-    connectionString.includes('sslmode=require');
-  return {
-    connectionString,
-    max: 15,
-    idleTimeoutMillis: 30_000,
-    ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-  };
+async function allocateUniqueShortIdPg(
+  queryable: { query: pg.Pool['query'] },
+  title: string
+): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const candidate = generateShortId(title);
+    const check = await queryable.query(
+      'SELECT 1 FROM trips WHERE short_id = $1 LIMIT 1',
+      [candidate]
+    );
+    if (!check.rowCount || check.rowCount === 0) {
+      return candidate;
+    }
+  }
+  return crypto.randomBytes(6).toString('hex');
 }
 
 export async function runSqlMigrations(
   connectionString: string,
   migrationsDir: string
 ): Promise<string[]> {
-  const pool = new Pool(buildPgPoolConfig(connectionString));
+  const pool = new Pool({
+    ...buildSharedPgPoolConfig(connectionString, 'worker'),
+    max: 2,
+  });
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -149,7 +170,10 @@ export async function ensureSeedDataInPostgres(
   connectionString: string,
   kms: KmsEnvelopeService = defaultKmsEnvelope
 ): Promise<void> {
-  const pool = new Pool(buildPgPoolConfig(connectionString));
+  const pool = new Pool({
+    ...buildSharedPgPoolConfig(connectionString, 'worker'),
+    max: 2,
+  });
   try {
     const seed = buildPreSeededSampleDataset();
     const client = await pool.connect();
@@ -161,8 +185,8 @@ export async function ensureSeedDataInPostgres(
         const phoneEnc = await kms.encryptString(u.phone, `user:${u.id}:phone`);
         const upiEnc = await kms.encryptString(u.upiVpa, `user:${u.id}:upi`);
         await client.query(
-          `INSERT INTO users (id, phone_hash, phone_enc, display_name, preferred_lang, upi_vpa_enc, tier)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `INSERT INTO users (id, phone_hash, phone_enc, display_name, preferred_lang, upi_vpa_enc, tier, auth_provider)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'phone')
            ON CONFLICT (id) DO NOTHING`,
           [u.id, phoneHash, phoneEnc, u.displayName, u.preferredLang, upiEnc, u.tier]
         );
@@ -258,7 +282,7 @@ export async function ensureSeedDataInPostgres(
             `booking:${t.id}:${b.id}:pnr`
           );
           const pnrLast3 = extractPnrLast3(b.pnrPlain);
-          const sanitizedPax = sanitizePassengerMeta(b.passengers, true);
+          const sanitizedPax = sanitizePassengerMeta(b.passengers, false);
           const paxEnc = await kms.encryptString(
             JSON.stringify(sanitizedPax),
             `booking:${t.id}:${b.id}:pax`
@@ -319,12 +343,25 @@ export async function ensureSeedDataInPostgres(
 
 export class PostgresTripStore implements TripStore {
   public readonly backendKind = 'postgres' as const;
+  private readonly connectionString: string;
+  private readonly role: PgPoolRole;
   private readonly pool: pg.Pool;
   private readonly kms: KmsEnvelopeService;
+  private closed = false;
 
-  constructor(connectionString: string, kms: KmsEnvelopeService = defaultKmsEnvelope) {
-    this.pool = new Pool(buildPgPoolConfig(connectionString));
-    this.kms = kms;
+  constructor(
+    connectionString: string,
+    kmsOrOpts?: KmsEnvelopeService | { kms?: KmsEnvelopeService; role?: PgPoolRole }
+  ) {
+    this.connectionString = connectionString;
+    if (kmsOrOpts && 'encryptString' in kmsOrOpts) {
+      this.kms = kmsOrOpts;
+      this.role = 'web';
+    } else {
+      this.kms = kmsOrOpts?.kms ?? defaultKmsEnvelope;
+      this.role = kmsOrOpts?.role ?? 'web';
+    }
+    this.pool = getSharedPgPool(connectionString, this.role);
   }
 
   public async checkHealth(): Promise<{ ok: boolean; detail: string }> {
@@ -350,6 +387,34 @@ export class PostgresTripStore implements TripStore {
     };
   }
 
+  private async mapUserSelfRow(row: Record<string, unknown>): Promise<UserSelf> {
+    const base = this.mapUserRow(row);
+    const upiVpa = row.upi_vpa_enc
+      ? await this.kms.decryptString(
+          Buffer.from(row.upi_vpa_enc as Buffer),
+          `user:${base.id}:upi`
+        )
+      : null;
+    return {
+      ...base,
+      upiVpa,
+    };
+  }
+
+  private mapMemberRow(row: Record<string, unknown>): TripMemberPublic {
+    return {
+      userId: String(row.user_id),
+      displayName: String(row.display_name ?? 'Traveller'),
+      role: row.role as MemberRole,
+      vaultAccess: Boolean(row.vault_access),
+      dietaryTags: (row.dietary_tags as string[]) ?? [],
+      hasUpiVpa: Boolean(row.upi_vpa_enc),
+      isCompanion:
+        Boolean(row.is_companion) || row.auth_provider === 'companion',
+      joinedAt: new Date(String(row.joined_at)).toISOString(),
+    };
+  }
+
   public async upsertUserByPhone(
     phone: string,
     displayName?: string,
@@ -370,7 +435,10 @@ export class PostgresTripStore implements TripStore {
       const updated = await this.pool.query(
         `UPDATE users
          SET display_name = COALESCE($2, display_name),
-             upi_vpa_enc = $3
+             upi_vpa_enc = $3,
+             auth_provider = 'phone',
+             is_guest = FALSE,
+             is_companion = FALSE
          WHERE id = $1
          RETURNING *`,
         [uid, displayName?.trim() || null, upiEnc]
@@ -388,8 +456,8 @@ export class PostgresTripStore implements TripStore {
       : null;
 
     const inserted = await this.pool.query(
-      `INSERT INTO users (id, phone_hash, phone_enc, display_name, upi_vpa_enc)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (id, phone_hash, phone_enc, display_name, upi_vpa_enc, auth_provider, is_guest, is_companion)
+       VALUES ($1, $2, $3, $4, $5, 'phone', FALSE, FALSE)
        RETURNING *`,
       [
         uid,
@@ -405,8 +473,8 @@ export class PostgresTripStore implements TripStore {
   public async createGuestUser(displayName?: string): Promise<UserPublic> {
     const uid = crypto.randomUUID();
     const inserted = await this.pool.query(
-      `INSERT INTO users (id, display_name, is_guest)
-       VALUES ($1, $2, TRUE)
+      `INSERT INTO users (id, display_name, is_guest, auth_provider, is_companion)
+       VALUES ($1, $2, TRUE, 'guest', FALSE)
        RETURNING *`,
       [uid, displayName?.trim() || 'Traveller']
     );
@@ -442,7 +510,9 @@ export class PostgresTripStore implements TripStore {
         `UPDATE users
          SET display_name = COALESCE($2, display_name),
              upi_vpa_enc = $3,
-             is_guest = FALSE
+             auth_provider = 'email',
+             is_guest = FALSE,
+             is_companion = FALSE
          WHERE id = $1
          RETURNING *`,
         [uid, params.displayName?.trim() || null, upiEnc]
@@ -465,8 +535,8 @@ export class PostgresTripStore implements TripStore {
       'Traveller';
 
     const inserted = await this.pool.query(
-      `INSERT INTO users (id, email_hash, email_enc, display_name, upi_vpa_enc, is_guest)
-       VALUES ($1, $2, $3, $4, $5, FALSE)
+      `INSERT INTO users (id, email_hash, email_enc, display_name, upi_vpa_enc, auth_provider, is_guest, is_companion)
+       VALUES ($1, $2, $3, $4, $5, 'email', FALSE, FALSE)
        RETURNING *`,
       [uid, emailHash, emailEnc, inferredName.slice(0, 80), upiEnc]
     );
@@ -498,7 +568,9 @@ export class PostgresTripStore implements TripStore {
              upi_vpa_enc = $3,
              google_sub_hash = COALESCE(google_sub_hash, $4),
              email_hash = COALESCE(email_hash, $5),
-             is_guest = FALSE
+             auth_provider = 'google',
+             is_guest = FALSE,
+             is_companion = FALSE
          WHERE id = $1
          RETURNING *`,
         [uid, params.displayName.trim() || 'Traveller', upiEnc, subHash, emailHash]
@@ -516,8 +588,8 @@ export class PostgresTripStore implements TripStore {
       : null;
 
     const inserted = await this.pool.query(
-      `INSERT INTO users (id, google_sub_hash, email_hash, email_enc, display_name, upi_vpa_enc, is_guest)
-       VALUES ($1, $2, $3, $4, $5, $6, FALSE)
+      `INSERT INTO users (id, google_sub_hash, email_hash, email_enc, display_name, upi_vpa_enc, auth_provider, is_guest, is_companion)
+       VALUES ($1, $2, $3, $4, $5, $6, 'google', FALSE, FALSE)
        RETURNING *`,
       [uid, subHash, emailHash, emailEnc, params.displayName.trim() || 'Traveller', upiEnc]
     );
@@ -527,7 +599,7 @@ export class PostgresTripStore implements TripStore {
   public async updateUserProfile(
     userId: string,
     patch: { displayName?: string; preferredLang?: string; upiVpa?: string | null }
-  ): Promise<UserPublic | null> {
+  ): Promise<UserSelf | null> {
     const existing = await this.pool.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [
       userId,
     ]);
@@ -559,7 +631,7 @@ export class PostgresTripStore implements TripStore {
        RETURNING *`,
       [userId, nextName, nextLang, nextUpiEnc]
     );
-    return this.mapUserRow(updated.rows[0]!);
+    return this.mapUserSelfRow(updated.rows[0]!);
   }
 
   public async mergeGuestIntoUser(
@@ -623,6 +695,13 @@ export class PostgresTripStore implements TripStore {
     return res.rows[0] ? this.mapUserRow(res.rows[0]) : null;
   }
 
+  public async getUserSelfById(userId: string): Promise<UserSelf | null> {
+    const res = await this.pool.query('SELECT * FROM users WHERE id = $1', [
+      userId,
+    ]);
+    return res.rows[0] ? this.mapUserSelfRow(res.rows[0]) : null;
+  }
+
   public async deleteUser(userId: string): Promise<boolean> {
     const res = await this.pool.query('DELETE FROM users WHERE id = $1', [
       userId,
@@ -683,12 +762,12 @@ export class PostgresTripStore implements TripStore {
 
   public async createTrip(input: CreateTripInput): Promise<TripWorkspaceResponse> {
     const tripId = crypto.randomUUID();
-    const shortId = generateShortId(input.title);
     const daysCount = Math.min(Math.max(input.daysCount ?? 3, 1), 30);
 
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const shortId = await allocateUniqueShortIdPg(client, input.title);
       await client.query(
         `INSERT INTO trips (id, short_id, title, destination_summary, start_date, end_date, home_currency, is_public_template, elder_mode_enabled, latest_seq)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -747,6 +826,82 @@ export class PostgresTripStore implements TripStore {
     return (await this.getTripWorkspace(tripId, input.ownerId))!;
   }
 
+  public async updateTripMeta(
+    tripId: string,
+    patch: UpdateTripMetaInput
+  ): Promise<TripMeta | null> {
+    const existing = await this.pool.query(
+      'SELECT * FROM trips WHERE id = $1 LIMIT 1',
+      [tripId]
+    );
+    if (!existing.rows[0]) return null;
+    const cur = existing.rows[0];
+
+    const nextTitle =
+      patch.title !== undefined && patch.title.trim()
+        ? patch.title.trim()
+        : String(cur.title);
+    const nextSummary =
+      patch.destinationSummary !== undefined
+        ? patch.destinationSummary.trim()
+        : String(cur.destination_summary ?? '');
+    const nextElder =
+      patch.elderModeEnabled !== undefined
+        ? patch.elderModeEnabled
+        : Boolean(cur.elder_mode_enabled);
+    const nextStart =
+      patch.startDate !== undefined ? patch.startDate : cur.start_date;
+    const nextEnd = patch.endDate !== undefined ? patch.endDate : cur.end_date;
+    const nextCurrency =
+      patch.homeCurrency !== undefined
+        ? patch.homeCurrency
+        : String(cur.home_currency || 'INR').trim();
+
+    const updated = await this.pool.query(
+      `UPDATE trips
+       SET title = $2,
+           destination_summary = $3,
+           elder_mode_enabled = $4,
+           start_date = $5,
+           end_date = $6,
+           home_currency = $7,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [tripId, nextTitle, nextSummary, nextElder, nextStart, nextEnd, nextCurrency]
+    );
+    return this.mapTripMeta(updated.rows[0]!);
+  }
+
+  public async getTripAccessInfo(
+    tripId: string,
+    userId?: string | null
+  ): Promise<{ trip: TripMeta; member: TripMemberPublic | null } | null> {
+    const tripRes = await this.pool.query(
+      'SELECT * FROM trips WHERE id = $1 LIMIT 1',
+      [tripId]
+    );
+    if (!tripRes.rows[0]) return null;
+    const trip = this.mapTripMeta(tripRes.rows[0]);
+
+    if (!userId) {
+      return { trip, member: null };
+    }
+
+    const memRes = await this.pool.query(
+      `SELECT tm.*, u.display_name, u.upi_vpa_enc, u.is_companion, u.auth_provider
+       FROM trip_members tm
+       JOIN users u ON u.id = tm.user_id
+       WHERE tm.trip_id = $1 AND tm.user_id = $2
+       LIMIT 1`,
+      [tripId, userId]
+    );
+    return {
+      trip,
+      member: memRes.rows[0] ? this.mapMemberRow(memRes.rows[0]) : null,
+    };
+  }
+
   public async addTripMember(params: {
     tripId: string;
     userId: string;
@@ -769,16 +924,394 @@ export class PostgresTripStore implements TripStore {
     );
   }
 
+  public async upsertTripMemberWithDetails(params: {
+    tripId: string;
+    userId?: string;
+    displayName?: string;
+    role: MemberRole;
+    vaultAccess?: boolean;
+    dietaryTags?: string[];
+    upiVpa?: string | null;
+    callerUserId?: string;
+  }): Promise<TripMemberPublic> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      let resolvedUserId = params.userId;
+      let existingUserRow: Record<string, unknown> | undefined;
+
+      if (resolvedUserId) {
+        const uRes = await client.query(
+          'SELECT * FROM users WHERE id = $1 LIMIT 1',
+          [resolvedUserId]
+        );
+        existingUserRow = uRes.rows[0];
+      }
+
+      if (!existingUserRow) {
+        const uid = resolvedUserId ?? crypto.randomUUID();
+        resolvedUserId = uid;
+        const upiEnc =
+          params.upiVpa && params.upiVpa.trim()
+            ? await this.kms.encryptString(params.upiVpa.trim(), `user:${uid}:upi`)
+            : null;
+        await client.query(
+          `INSERT INTO users (id, display_name, upi_vpa_enc, auth_provider, is_guest, is_companion)
+           VALUES ($1, $2, $3, 'companion', FALSE, TRUE)`,
+          [uid, (params.displayName?.trim() || 'Co-traveller').slice(0, 80), upiEnc]
+        );
+      } else {
+        const isComp =
+          Boolean(existingUserRow.is_companion) ||
+          existingUserRow.auth_provider === 'companion';
+        const canEditUpi =
+          isComp ||
+          (params.callerUserId && String(existingUserRow.id) === params.callerUserId);
+
+        if (canEditUpi && (params.upiVpa !== undefined || (isComp && params.displayName?.trim()))) {
+          const nextName =
+            isComp && params.displayName?.trim()
+              ? params.displayName.trim().slice(0, 80)
+              : String(existingUserRow.display_name);
+          const nextUpiEnc =
+            params.upiVpa !== undefined
+              ? params.upiVpa && params.upiVpa.trim()
+                ? await this.kms.encryptString(
+                    params.upiVpa.trim(),
+                    `user:${resolvedUserId}:upi`
+                  )
+                : null
+              : existingUserRow.upi_vpa_enc;
+          await client.query(
+            'UPDATE users SET display_name = $2, upi_vpa_enc = $3 WHERE id = $1',
+            [resolvedUserId, nextName, nextUpiEnc]
+          );
+        }
+      }
+
+      const vaultAccess =
+        params.vaultAccess ?? (params.role === 'owner' || params.role === 'editor');
+      await client.query(
+        `INSERT INTO trip_members (trip_id, user_id, role, vault_access, dietary_tags)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (trip_id, user_id)
+         DO UPDATE SET
+           role = EXCLUDED.role,
+           vault_access = EXCLUDED.vault_access,
+           dietary_tags = EXCLUDED.dietary_tags`,
+        [params.tripId, resolvedUserId, params.role, vaultAccess, params.dietaryTags ?? []]
+      );
+
+      await client.query('UPDATE trips SET updated_at = NOW() WHERE id = $1', [
+        params.tripId,
+      ]);
+
+      const memRes = await client.query(
+        `SELECT tm.*, u.display_name, u.upi_vpa_enc, u.is_companion, u.auth_provider
+         FROM trip_members tm
+         JOIN users u ON u.id = tm.user_id
+         WHERE tm.trip_id = $1 AND tm.user_id = $2`,
+        [params.tripId, resolvedUserId]
+      );
+
+      await client.query('COMMIT');
+      return this.mapMemberRow(memRes.rows[0]!);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async updateTripMemberDetails(params: {
+    tripId: string;
+    memberUserId: string;
+    callerUserId: string;
+    role?: MemberRole;
+    vaultAccess?: boolean;
+    dietaryTags?: string[];
+    displayName?: string;
+    upiVpa?: string | null;
+  }): Promise<TripMemberPublic | 'last_owner' | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const memRes = await client.query(
+        `SELECT tm.*, u.display_name, u.upi_vpa_enc, u.is_companion, u.auth_provider
+         FROM trip_members tm
+         JOIN users u ON u.id = tm.user_id
+         WHERE tm.trip_id = $1 AND tm.user_id = $2
+         FOR UPDATE OF tm`,
+        [params.tripId, params.memberUserId]
+      );
+      if (!memRes.rows[0]) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const cur = memRes.rows[0];
+
+      if (params.role !== undefined && params.role !== 'owner' && cur.role === 'owner') {
+        const owners = await client.query(
+          "SELECT COUNT(*)::int AS cnt FROM trip_members WHERE trip_id = $1 AND role = 'owner'",
+          [params.tripId]
+        );
+        if (Number(owners.rows[0]?.cnt ?? 0) <= 1) {
+          await client.query('ROLLBACK');
+          return 'last_owner';
+        }
+      }
+
+      const nextRole = params.role ?? (cur.role as MemberRole);
+      const nextVault =
+        params.vaultAccess !== undefined
+          ? params.vaultAccess
+          : Boolean(cur.vault_access);
+      const nextTags =
+        params.dietaryTags !== undefined
+          ? params.dietaryTags
+          : ((cur.dietary_tags as string[]) ?? []);
+
+      await client.query(
+        `UPDATE trip_members
+         SET role = $3, vault_access = $4, dietary_tags = $5
+         WHERE trip_id = $1 AND user_id = $2`,
+        [params.tripId, params.memberUserId, nextRole, nextVault, nextTags]
+      );
+
+      const isComp =
+        Boolean(cur.is_companion) || cur.auth_provider === 'companion';
+      const canEditUser = isComp || params.memberUserId === params.callerUserId;
+      if (canEditUser && (params.displayName !== undefined || params.upiVpa !== undefined)) {
+        const nextName =
+          params.displayName !== undefined && params.displayName.trim()
+            ? params.displayName.trim().slice(0, 80)
+            : String(cur.display_name);
+        const nextUpiEnc =
+          params.upiVpa !== undefined
+            ? params.upiVpa && params.upiVpa.trim()
+              ? await this.kms.encryptString(
+                  params.upiVpa.trim(),
+                  `user:${params.memberUserId}:upi`
+                )
+              : null
+            : cur.upi_vpa_enc;
+        await client.query(
+          'UPDATE users SET display_name = $2, upi_vpa_enc = $3 WHERE id = $1',
+          [params.memberUserId, nextName, nextUpiEnc]
+        );
+      }
+
+      await client.query('UPDATE trips SET updated_at = NOW() WHERE id = $1', [
+        params.tripId,
+      ]);
+
+      const refreshed = await client.query(
+        `SELECT tm.*, u.display_name, u.upi_vpa_enc, u.is_companion, u.auth_provider
+         FROM trip_members tm
+         JOIN users u ON u.id = tm.user_id
+         WHERE tm.trip_id = $1 AND tm.user_id = $2`,
+        [params.tripId, params.memberUserId]
+      );
+      await client.query('COMMIT');
+      return this.mapMemberRow(refreshed.rows[0]!);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async removeTripMember(
+    tripId: string,
+    memberUserId: string
+  ): Promise<'removed' | 'not_found' | 'last_owner'> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const check = await client.query(
+        'SELECT role FROM trip_members WHERE trip_id = $1 AND user_id = $2 FOR UPDATE',
+        [tripId, memberUserId]
+      );
+      if (!check.rows[0]) {
+        await client.query('ROLLBACK');
+        return 'not_found';
+      }
+      if (check.rows[0].role === 'owner') {
+        const owners = await client.query(
+          "SELECT COUNT(*)::int AS cnt FROM trip_members WHERE trip_id = $1 AND role = 'owner'",
+          [tripId]
+        );
+        if (Number(owners.rows[0]?.cnt ?? 0) <= 1) {
+          await client.query('ROLLBACK');
+          return 'last_owner';
+        }
+      }
+      await client.query(
+        'DELETE FROM trip_members WHERE trip_id = $1 AND user_id = $2',
+        [tripId, memberUserId]
+      );
+      await client.query('UPDATE trips SET updated_at = NOW() WHERE id = $1', [
+        tripId,
+      ]);
+      await client.query('COMMIT');
+      return 'removed';
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async createTripInvite(params: {
+    tripId: string;
+    createdBy: string;
+    role: InviteRole;
+    vaultAccess: boolean;
+    inviteeEmail?: string | null;
+    ttlSeconds?: number;
+  }): Promise<TripInviteStored> {
+    const tripRes = await this.pool.query(
+      'SELECT id, title, destination_summary FROM trips WHERE id = $1 LIMIT 1',
+      [params.tripId]
+    );
+    if (!tripRes.rows[0]) {
+      throw new Error(`Trip not found: ${params.tripId}`);
+    }
+
+    const token = crypto.randomBytes(24).toString('base64url');
+    const ttl = params.ttlSeconds ?? 60 * 60 * 24 * 7;
+    const expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
+    const emailNorm = params.inviteeEmail?.trim().toLowerCase() || null;
+
+    await this.pool.query(
+      `INSERT INTO trip_invites (token, trip_id, created_by, role, vault_access, invitee_email, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        token,
+        params.tripId,
+        params.createdBy,
+        params.role,
+        params.vaultAccess,
+        emailNorm,
+        expiresAt,
+      ]
+    );
+
+    return {
+      token,
+      tripId: params.tripId,
+      tripTitle: String(tripRes.rows[0].title),
+      destinationSummary: String(tripRes.rows[0].destination_summary ?? ''),
+      role: params.role,
+      vaultAccess: params.vaultAccess,
+      inviteeEmail: emailNorm,
+      expiresAt,
+      acceptedCount: 0,
+    };
+  }
+
+  public async getTripInvite(token: string): Promise<TripInviteStored | null> {
+    const res = await this.pool.query(
+      `SELECT ti.*, t.title AS trip_title, t.destination_summary, u.display_name AS inviter_name
+       FROM trip_invites ti
+       JOIN trips t ON t.id = ti.trip_id
+       LEFT JOIN users u ON u.id = ti.created_by
+       WHERE ti.token = $1
+       LIMIT 1`,
+      [token]
+    );
+    if (!res.rows[0]) return null;
+    const r = res.rows[0];
+    return {
+      token: String(r.token),
+      tripId: String(r.trip_id),
+      tripTitle: String(r.trip_title),
+      destinationSummary: String(r.destination_summary ?? ''),
+      role: r.role as InviteRole,
+      vaultAccess: Boolean(r.vault_access),
+      inviterName: r.inviter_name ? String(r.inviter_name) : undefined,
+      inviteeEmail: r.invitee_email ? String(r.invitee_email) : null,
+      expiresAt: new Date(String(r.expires_at)).toISOString(),
+      acceptedCount: Number(r.accepted_count ?? 0),
+    };
+  }
+
+  public async acceptTripInvite(
+    token: string,
+    userId: string
+  ): Promise<{ tripId: string; role: MemberRole } | 'not_found' | 'expired'> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const invRes = await client.query(
+        'SELECT * FROM trip_invites WHERE token = $1 FOR UPDATE',
+        [token]
+      );
+      if (!invRes.rows[0]) {
+        await client.query('ROLLBACK');
+        return 'not_found';
+      }
+      const inv = invRes.rows[0];
+      if (new Date(String(inv.expires_at)).getTime() < Date.now()) {
+        await client.query('ROLLBACK');
+        return 'expired';
+      }
+
+      const tripId = String(inv.trip_id);
+      const inviteRole = inv.role as InviteRole;
+      const inviteVault = Boolean(inv.vault_access);
+
+      const upsertMem = await client.query(
+        `INSERT INTO trip_members (trip_id, user_id, role, vault_access)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (trip_id, user_id)
+         DO UPDATE SET
+           role = CASE
+             WHEN trip_members.role = 'owner' THEN 'owner'
+             WHEN trip_members.role = 'editor' OR EXCLUDED.role = 'editor' THEN 'editor'
+             WHEN trip_members.role = 'contributor' OR EXCLUDED.role = 'contributor' THEN 'contributor'
+             ELSE 'viewer'
+           END,
+           vault_access = trip_members.vault_access OR EXCLUDED.vault_access
+         RETURNING role`,
+        [tripId, userId, inviteRole, inviteVault]
+      );
+
+      await client.query(
+        'UPDATE trip_invites SET accepted_count = accepted_count + 1 WHERE token = $1',
+        [token]
+      );
+      await client.query('UPDATE trips SET updated_at = NOW() WHERE id = $1', [
+        tripId,
+      ]);
+
+      await client.query('COMMIT');
+      return {
+        tripId,
+        role: (upsertMem.rows[0]?.role as MemberRole) ?? inviteRole,
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   public async claimSandboxTrip(
     input: SandboxClaimInput
   ): Promise<TripWorkspaceResponse> {
     const tripId = crypto.randomUUID();
-    const shortId = generateShortId(input.title);
     const client = await this.pool.connect();
 
     try {
       await client.query('BEGIN');
       let seq = 0;
+      const shortId = await allocateUniqueShortIdPg(client, input.title);
 
       await client.query(
         `INSERT INTO trips (id, short_id, title, destination_summary, start_date, end_date, home_currency, elder_mode_enabled, latest_seq)
@@ -1119,7 +1652,7 @@ export class PostgresTripStore implements TripStore {
     const [membersRes, daysRes, itemsRes, bookingsRes, polls, ledger] =
       await Promise.all([
         this.pool.query(
-          `SELECT tm.*, u.display_name
+          `SELECT tm.*, u.display_name, u.upi_vpa_enc, u.is_companion, u.auth_provider
            FROM trip_members tm
            JOIN users u ON u.id = tm.user_id
            WHERE tm.trip_id = $1`,
@@ -1141,14 +1674,9 @@ export class PostgresTripStore implements TripStore {
         this.fetchKittyAndExpenses(tripId),
       ]);
 
-    const members: TripMemberPublic[] = membersRes.rows.map((r) => ({
-      userId: String(r.user_id),
-      displayName: String(r.display_name),
-      role: r.role as MemberRole,
-      vaultAccess: Boolean(r.vault_access),
-      dietaryTags: (r.dietary_tags as string[]) ?? [],
-      joinedAt: new Date(String(r.joined_at)).toISOString(),
-    }));
+    const members: TripMemberPublic[] = membersRes.rows.map((r) =>
+      this.mapMemberRow(r)
+    );
 
     const hasVaultAccess = Boolean(
       requesterUserId &&
@@ -1297,6 +1825,7 @@ export class PostgresTripStore implements TripStore {
         const d = this.mapDayRow(r);
         daysMap.set(d.id, d);
       }
+      const prevDayCount = [...daysMap.values()].filter((d) => !d.deletedAt).length;
 
       const itemsMap = new Map<string, ItineraryItem>();
       for (const r of itemsRes.rows) {
@@ -1449,9 +1978,19 @@ export class PostgresTripStore implements TripStore {
         );
       }
 
+      const activeDays = [...state.days.values()]
+        .filter((d) => !d.deletedAt)
+        .sort((a, b) => a.dayNumber - b.dayNumber);
+
+      const curSummary = String(tripRes.rows[0].destination_summary ?? '');
+      const nextSummary =
+        activeDays.length !== prevDayCount && activeDays.length >= 1
+          ? syncDurationSummarySuffix(curSummary, activeDays.length)
+          : curSummary;
+
       await client.query(
-        'UPDATE trips SET latest_seq = $2, updated_at = NOW() WHERE id = $1',
-        [params.tripId, state.latestSeq]
+        'UPDATE trips SET latest_seq = $2, destination_summary = $3, updated_at = NOW() WHERE id = $1',
+        [params.tripId, state.latestSeq, nextSummary]
       );
 
       await client.query('COMMIT');
@@ -1459,9 +1998,6 @@ export class PostgresTripStore implements TripStore {
       const pulledDeltas = state.opLog.filter(
         (op) => op.serverSeq > params.lastSeenSeq
       );
-      const activeDays = [...state.days.values()]
-        .filter((d) => !d.deletedAt)
-        .sort((a, b) => a.dayNumber - b.dayNumber);
       const { activeItems, shortlistItems } = projectOrderedItems(
         state.items.values()
       );
@@ -1505,8 +2041,8 @@ export class PostgresTripStore implements TripStore {
       `INSERT INTO bookings (
          id, trip_id, item_id, provider, pnr_enc, pnr_last3, passenger_meta_enc,
          summary_public, low_confidence_fields, status, raw_doc_s3_key, doc_size_bytes,
-         parser_confidence, co_traveller_consent_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         doc_file_name, doc_mime_type, parser_confidence, co_traveller_consent_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING *`,
       [
         bookingId,
@@ -1521,6 +2057,8 @@ export class PostgresTripStore implements TripStore {
         input.status ?? 'confirmed',
         input.rawDocS3Key ?? null,
         docSizeBytes,
+        input.docFileName ?? null,
+        input.docMimeType ?? null,
         input.parserConfidence ?? 1.0,
         input.coTravellerConsent ? new Date().toISOString() : null,
       ]
@@ -1593,6 +2131,113 @@ export class PostgresTripStore implements TripStore {
       [tripId, bookingId]
     );
     return res.rows[0] ? this.mapBookingRedacted(res.rows[0]) : null;
+  }
+
+  public async getBookingVaultMeta(
+    tripId: string,
+    bookingId: string
+  ): Promise<BookingVaultMeta | null> {
+    const res = await this.pool.query(
+      'SELECT id, trip_id, raw_doc_s3_key, doc_size_bytes, doc_file_name, doc_mime_type FROM bookings WHERE trip_id = $1 AND id = $2 LIMIT 1',
+      [tripId, bookingId]
+    );
+    if (!res.rows[0]) return null;
+    const r = res.rows[0];
+    return {
+      id: String(r.id),
+      tripId: String(r.trip_id),
+      rawDocS3Key: r.raw_doc_s3_key ? String(r.raw_doc_s3_key) : null,
+      docSizeBytes: Number(r.doc_size_bytes ?? 0),
+      docFileName: r.doc_file_name ? String(r.doc_file_name) : null,
+      docMimeType: r.doc_mime_type ? String(r.doc_mime_type) : null,
+    };
+  }
+
+  public async deleteBooking(
+    tripId: string,
+    bookingId: string
+  ): Promise<{ rawDocS3Key: string | null } | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const delRes = await client.query(
+        'DELETE FROM bookings WHERE trip_id = $1 AND id = $2 RETURNING raw_doc_s3_key, doc_size_bytes',
+        [tripId, bookingId]
+      );
+      if (!delRes.rows[0]) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const rawDocS3Key = delRes.rows[0].raw_doc_s3_key
+        ? String(delRes.rows[0].raw_doc_s3_key)
+        : null;
+      const docSizeBytes = Number(delRes.rows[0].doc_size_bytes ?? 0);
+
+      if (docSizeBytes > 0) {
+        await client.query(
+          'UPDATE trips SET vault_bytes_used = GREATEST(0, vault_bytes_used - $2), updated_at = NOW() WHERE id = $1',
+          [tripId, docSizeBytes]
+        );
+      } else {
+        await client.query('UPDATE trips SET updated_at = NOW() WHERE id = $1', [
+          tripId,
+        ]);
+      }
+
+      if (rawDocS3Key) {
+        await client.query('DELETE FROM vault_blobs WHERE s3_key = $1', [
+          rawDocS3Key,
+        ]);
+      }
+      await client.query('COMMIT');
+      return { rawDocS3Key };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async putVaultBlob(blob: VaultBlobRecord): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO vault_blobs (s3_key, trip_id, file_name, mime_type, size_bytes, encrypted_payload)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (s3_key) DO UPDATE SET
+         file_name = EXCLUDED.file_name,
+         mime_type = EXCLUDED.mime_type,
+         size_bytes = EXCLUDED.size_bytes,
+         encrypted_payload = EXCLUDED.encrypted_payload`,
+      [
+        blob.s3Key,
+        blob.tripId,
+        blob.fileName,
+        blob.mimeType,
+        blob.sizeBytes,
+        blob.encryptedPayload,
+      ]
+    );
+  }
+
+  public async getVaultBlob(s3Key: string): Promise<VaultBlobRecord | null> {
+    const res = await this.pool.query(
+      'SELECT * FROM vault_blobs WHERE s3_key = $1 LIMIT 1',
+      [s3Key]
+    );
+    if (!res.rows[0]) return null;
+    const r = res.rows[0];
+    return {
+      s3Key: String(r.s3_key),
+      tripId: String(r.trip_id),
+      fileName: String(r.file_name),
+      mimeType: String(r.mime_type),
+      sizeBytes: Number(r.size_bytes),
+      encryptedPayload: Buffer.from(r.encrypted_payload as Buffer),
+    };
+  }
+
+  public async deleteVaultBlob(s3Key: string): Promise<void> {
+    await this.pool.query('DELETE FROM vault_blobs WHERE s3_key = $1', [s3Key]);
   }
 
   public async createPoll(input: CreatePollInput): Promise<PollView> {
@@ -1838,6 +2483,38 @@ export class PostgresTripStore implements TripStore {
     return this.mapExpenseRow(inserted.rows[0]!);
   }
 
+  public async deleteExpense(
+    tripId: string,
+    expenseId: string
+  ): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'DELETE FROM expenses WHERE trip_id = $1 AND reverses_expense_id = $2',
+        [tripId, expenseId]
+      );
+      const res = await client.query(
+        'DELETE FROM expenses WHERE trip_id = $1 AND id = $2',
+        [tripId, expenseId]
+      );
+      if (!res.rowCount || res.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      await client.query('UPDATE trips SET updated_at = NOW() WHERE id = $1', [
+        tripId,
+      ]);
+      await client.query('COMMIT');
+      return true;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   public async getSettlements(tripId: string): Promise<{
     tripId: string;
     shortId: string;
@@ -1877,6 +2554,8 @@ export class PostgresTripStore implements TripStore {
   }
 
   public async close(): Promise<void> {
-    await this.pool.end();
+    if (this.closed) return;
+    this.closed = true;
+    await releaseSharedPgPool(this.connectionString, this.role);
   }
 }

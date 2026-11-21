@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { CURATED_OPEN_POIS, type OpenPoiRecord } from '../geo/curated-india-pois.js';
 import type { PlacesRepository } from './repository.js';
+import { STARTER_OPEN_POIS, type StarterOpenPoi } from './seed/starter-pois.js';
 import type {
   DestinationKind,
   DestinationSeed,
@@ -120,8 +121,50 @@ export function curatedPoiToPlace(
   };
 }
 
+export function starterPoiToPlace(
+  poi: StarterOpenPoi,
+  destinationId: string,
+  retrievedAt: string
+): PlaceInput {
+  return {
+    refId: poi.refId,
+    destinationId,
+    name: poi.name,
+    nameLocal: {},
+    category: poi.category,
+    subtype: poi.subtype,
+    lat: poi.lat,
+    lng: poi.lng,
+    address: poi.address,
+    website: null,
+    openingHours: null,
+    description: poi.description,
+    whyVisit: poi.whyVisit,
+    typicalDurationMins: poi.typicalDurationMins,
+    bestTime: null,
+    dietaryHints: poi.dietaryHints,
+    image: null,
+    popularity: poi.popularity,
+    rankScore: poi.popularity,
+    wikidataId: poi.wikidataId,
+    wikipediaTitle: poi.wikipediaTitle,
+    sources: [
+      {
+        provider: 'curated',
+        fields: ['name', 'location', 'address', 'description', 'why_visit', 'dietary_hints'],
+        license: 'Itinbee curated (underlying facts: OSM ODbL / Wikidata CC0 / Wikipedia CC BY-SA 4.0)',
+        url: poi.wikipediaTitle
+          ? `https://en.wikipedia.org/wiki/${encodeURIComponent(poi.wikipediaTitle.replace(/ /g, '_'))}`
+          : null,
+        ref: poi.refId,
+        retrievedAt,
+      },
+    ],
+  };
+}
+
 /**
- * Migrates the hand-typed curated POIs into `places` with provenance `curated`.
+ * Migrates the hand-typed curated POIs + 20-destination starter POIs into `places` with provenance `curated`.
  * Skips destinations that already have a built pack (the pack supersedes the hand-typed row).
  */
 export async function seedCuratedPlaces(
@@ -130,20 +173,38 @@ export async function seedCuratedPlaces(
 ): Promise<number> {
   const byDest = new Map<string, PlaceInput[]>();
   const slugCache = new Map<string, { id: string; built: boolean } | null>();
-  for (const poi of CURATED_OPEN_POIS) {
-    const slug = CURATED_CITY_TO_SLUG[poi.city.toLowerCase()];
-    if (!slug) continue;
+  const nowIso = now.toISOString();
+
+  const resolveDest = async (slug: string): Promise<{ id: string; built: boolean } | null> => {
     let dest = slugCache.get(slug);
     if (dest === undefined) {
       const rec = await repo.getDestinationBySlug(slug);
       dest = rec ? { id: rec.id, built: rec.packBuiltAt !== null } : null;
       slugCache.set(slug, dest);
     }
+    return dest;
+  };
+
+  for (const poi of CURATED_OPEN_POIS) {
+    const slug = CURATED_CITY_TO_SLUG[poi.city.toLowerCase()];
+    if (!slug) continue;
+    const dest = await resolveDest(slug);
     if (!dest || dest.built) continue;
     const list = byDest.get(dest.id) ?? [];
-    list.push(curatedPoiToPlace(poi, dest.id, now.toISOString()));
+    list.push(curatedPoiToPlace(poi, dest.id, nowIso));
     byDest.set(dest.id, list);
   }
+
+  for (const sp of STARTER_OPEN_POIS) {
+    const dest = await resolveDest(sp.destinationSlug);
+    if (!dest || dest.built) continue;
+    const list = byDest.get(dest.id) ?? [];
+    if (!list.some((existing) => existing.refId === sp.refId)) {
+      list.push(starterPoiToPlace(sp, dest.id, nowIso));
+      byDest.set(dest.id, list);
+    }
+  }
+
   let n = 0;
   for (const [destinationId, places] of byDest) {
     n += await repo.upsertPlaces(destinationId, places);

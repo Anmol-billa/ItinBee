@@ -36,6 +36,8 @@ import {
 import {
   buildOutboundChecklist,
   buildWhatsappDigestText,
+  syncDurationSummarySuffix,
+  type BookingVaultMeta,
   type CastPollVoteInput,
   type CreateBookingInput,
   type CreateExpenseInput,
@@ -43,7 +45,10 @@ import {
   type CreatePollInput,
   type CreateTripInput,
   type SandboxClaimInput,
+  type TripInviteStored,
   type TripStore,
+  type UpdateTripMetaInput,
+  type VaultBlobRecord,
 } from './repository.js';
 import type {
   BookingProvider,
@@ -55,6 +60,7 @@ import type {
   ExpenseEntryType,
   ExpenseView,
   GuestShareResponse,
+  InviteRole,
   ItineraryItem,
   KittyPoolView,
   MemberRole,
@@ -68,6 +74,7 @@ import type {
   TripWorkspaceResponse,
   UpiSettlementInstruction,
   UserPublic,
+  UserSelf,
 } from '../types/domain.js';
 
 interface InternalUserRecord {
@@ -75,7 +82,9 @@ interface InternalUserRecord {
   phoneHash: string | null;
   googleSubHash: string | null;
   emailHash: string | null;
+  authProvider: 'guest' | 'email' | 'google' | 'phone' | 'companion';
   isGuest: boolean;
+  isCompanion: boolean;
   phoneEnc: Buffer | null;
   emailEnc: Buffer | null;
   upiVpaEnc: Buffer | null;
@@ -107,6 +116,8 @@ interface InternalBookingRecord {
   status: BookingStatus;
   rawDocS3Key: string | null;
   docSizeBytes: number;
+  docFileName: string | null;
+  docMimeType: string | null;
   parserConfidence: number;
   coTravellerConsentAt: string | null;
   createdAt: string;
@@ -144,6 +155,18 @@ interface InternalKittyRecord {
   createdAt: string;
 }
 
+interface InternalInviteRecord {
+  token: string;
+  tripId: string;
+  createdBy: string;
+  role: InviteRole;
+  vaultAccess: boolean;
+  inviteeEmail: string | null;
+  expiresAt: string;
+  acceptedCount: number;
+  createdAt: string;
+}
+
 interface InternalTripRecord {
   meta: TripMeta;
   syncState: SyncStateSnapshot;
@@ -155,6 +178,13 @@ interface InternalTripRecord {
   expenses: ExpenseView[];
   expensesByClientOpId: Map<string, ExpenseView>;
 }
+
+const ROLE_PRECEDENCE: Record<MemberRole, number> = {
+  viewer: 1,
+  contributor: 2,
+  editor: 3,
+  owner: 4,
+};
 
 function generateShortId(title: string): string {
   const slug = title
@@ -177,6 +207,8 @@ export class LocalDevStore implements TripStore {
   private readonly userIdByEmailHash = new Map<string, string>();
   private readonly trips = new Map<string, InternalTripRecord>();
   private readonly tripIdByShortId = new Map<string, string>();
+  private readonly invites = new Map<string, InternalInviteRecord>();
+  private readonly vaultBlobs = new Map<string, VaultBlobRecord>();
   private initPromise: Promise<void> | null = null;
 
   constructor(options?: {
@@ -211,7 +243,9 @@ export class LocalDevStore implements TripStore {
         phoneHash,
         googleSubHash: null,
         emailHash: null,
+        authProvider: 'phone',
         isGuest: false,
+        isCompanion: false,
         phoneEnc,
         emailEnc: null,
         upiVpaEnc,
@@ -315,6 +349,8 @@ export class LocalDevStore implements TripStore {
           status: b.status,
           rawDocS3Key: b.rawDocS3Key,
           docSizeBytes: 124_000,
+          docFileName: null,
+          docMimeType: null,
           parserConfidence: b.parserConfidence,
           coTravellerConsentAt: null,
           createdAt: nowIso,
@@ -405,9 +441,31 @@ export class LocalDevStore implements TripStore {
     };
   }
 
+  private async toUserSelf(u: InternalUserRecord): Promise<UserSelf> {
+    const upiVpa = await this.decryptUserUpiVpa(u);
+    return {
+      ...this.toUserPublic(u),
+      upiVpa,
+    };
+  }
+
   private async decryptUserUpiVpa(u: InternalUserRecord): Promise<string | null> {
     if (!u.upiVpaEnc) return null;
     return this.kms.decryptString(u.upiVpaEnc, `user:${u.id}:upi`);
+  }
+
+  private toMemberPublic(m: InternalMemberRecord): TripMemberPublic {
+    const u = this.users.get(m.userId);
+    return {
+      userId: m.userId,
+      displayName: u?.displayName ?? 'Traveller',
+      role: m.role,
+      vaultAccess: m.vaultAccess,
+      dietaryTags: [...m.dietaryTags],
+      hasUpiVpa: Boolean(u?.upiVpaEnc),
+      isCompanion: Boolean(u?.isCompanion),
+      joinedAt: m.joinedAt,
+    };
   }
 
   public async checkHealth(): Promise<{ ok: boolean; detail: string }> {
@@ -430,6 +488,9 @@ export class LocalDevStore implements TripStore {
 
     if (existingId) {
       const existing = this.users.get(existingId)!;
+      existing.authProvider = 'phone';
+      existing.isGuest = false;
+      existing.isCompanion = false;
       if (displayName && displayName.trim()) {
         existing.displayName = displayName.trim();
       }
@@ -457,7 +518,9 @@ export class LocalDevStore implements TripStore {
       phoneHash,
       googleSubHash: null,
       emailHash: null,
+      authProvider: 'phone',
       isGuest: false,
+      isCompanion: false,
       phoneEnc,
       emailEnc: null,
       upiVpaEnc,
@@ -480,7 +543,9 @@ export class LocalDevStore implements TripStore {
       phoneHash: null,
       googleSubHash: null,
       emailHash: null,
+      authProvider: 'guest',
       isGuest: true,
+      isCompanion: false,
       phoneEnc: null,
       emailEnc: null,
       upiVpaEnc: null,
@@ -511,7 +576,9 @@ export class LocalDevStore implements TripStore {
 
     if (existingId) {
       const existing = this.users.get(existingId)!;
+      existing.authProvider = 'email';
       existing.isGuest = false;
+      existing.isCompanion = false;
       if (params.displayName?.trim()) {
         existing.displayName = params.displayName.trim();
       }
@@ -544,7 +611,9 @@ export class LocalDevStore implements TripStore {
       phoneHash: null,
       googleSubHash: null,
       emailHash,
+      authProvider: 'email',
       isGuest: false,
+      isCompanion: false,
       phoneEnc: null,
       emailEnc,
       upiVpaEnc,
@@ -577,7 +646,9 @@ export class LocalDevStore implements TripStore {
       const existing = this.users.get(existingId)!;
       existing.googleSubHash = googleSubHash;
       existing.emailHash = emailHash;
+      existing.authProvider = 'google';
       existing.isGuest = false;
+      existing.isCompanion = false;
       this.userIdByGoogleHash.set(googleSubHash, existing.id);
       this.userIdByEmailHash.set(emailHash, existing.id);
       if (params.displayName.trim()) {
@@ -607,7 +678,9 @@ export class LocalDevStore implements TripStore {
       phoneHash: null,
       googleSubHash,
       emailHash,
+      authProvider: 'google',
       isGuest: false,
+      isCompanion: false,
       phoneEnc: null,
       emailEnc,
       upiVpaEnc,
@@ -626,7 +699,7 @@ export class LocalDevStore implements TripStore {
   public async updateUserProfile(
     userId: string,
     patch: { displayName?: string; preferredLang?: string; upiVpa?: string | null }
-  ): Promise<UserPublic | null> {
+  ): Promise<UserSelf | null> {
     await this.ensureReady();
     const u = this.users.get(userId);
     if (!u) return null;
@@ -647,7 +720,7 @@ export class LocalDevStore implements TripStore {
       }
     }
     this.flushSnapshotIfConfigured();
-    return this.toUserPublic(u);
+    return this.toUserSelf(u);
   }
 
   public async mergeGuestIntoUser(
@@ -693,6 +766,12 @@ export class LocalDevStore implements TripStore {
     await this.ensureReady();
     const u = this.users.get(userId);
     return u ? this.toUserPublic(u) : null;
+  }
+
+  public async getUserSelfById(userId: string): Promise<UserSelf | null> {
+    await this.ensureReady();
+    const u = this.users.get(userId);
+    return u ? this.toUserSelf(u) : null;
   }
 
   public async deleteUser(userId: string): Promise<boolean> {
@@ -837,6 +916,52 @@ export class LocalDevStore implements TripStore {
     return ws!;
   }
 
+  public async updateTripMeta(
+    tripId: string,
+    patch: UpdateTripMetaInput
+  ): Promise<TripMeta | null> {
+    await this.ensureReady();
+    const trip = this.trips.get(tripId);
+    if (!trip) return null;
+
+    if (patch.title !== undefined && patch.title.trim()) {
+      trip.meta.title = patch.title.trim();
+    }
+    if (patch.destinationSummary !== undefined) {
+      trip.meta.destinationSummary = patch.destinationSummary.trim();
+    }
+    if (patch.elderModeEnabled !== undefined) {
+      trip.meta.elderModeEnabled = patch.elderModeEnabled;
+    }
+    if (patch.startDate !== undefined) {
+      trip.meta.startDate = patch.startDate;
+    }
+    if (patch.endDate !== undefined) {
+      trip.meta.endDate = patch.endDate;
+    }
+    if (patch.homeCurrency !== undefined) {
+      trip.meta.homeCurrency = patch.homeCurrency;
+    }
+    trip.meta.updatedAt = new Date().toISOString();
+    this.flushSnapshotIfConfigured();
+
+    return { ...trip.meta, latestSeq: trip.syncState.latestSeq };
+  }
+
+  public async getTripAccessInfo(
+    tripId: string,
+    userId?: string | null
+  ): Promise<{ trip: TripMeta; member: TripMemberPublic | null } | null> {
+    await this.ensureReady();
+    const trip = this.trips.get(tripId);
+    if (!trip) return null;
+    const memberRec = userId ? trip.members.get(userId) : undefined;
+    return {
+      trip: { ...trip.meta, latestSeq: trip.syncState.latestSeq },
+      member: memberRec ? this.toMemberPublic(memberRec) : null,
+    };
+  }
+
   public async addTripMember(params: {
     tripId: string;
     userId: string;
@@ -858,6 +983,251 @@ export class LocalDevStore implements TripStore {
       dietaryTags: params.dietaryTags ?? [],
       joinedAt: new Date().toISOString(),
     });
+  }
+
+  public async upsertTripMemberWithDetails(params: {
+    tripId: string;
+    userId?: string;
+    displayName?: string;
+    role: MemberRole;
+    vaultAccess?: boolean;
+    dietaryTags?: string[];
+    upiVpa?: string | null;
+    callerUserId?: string;
+  }): Promise<TripMemberPublic> {
+    await this.ensureReady();
+    const trip = this.trips.get(params.tripId);
+    if (!trip) {
+      throw new Error(`Trip not found: ${params.tripId}`);
+    }
+
+    let resolvedUser = params.userId ? this.users.get(params.userId) : undefined;
+    if (!resolvedUser) {
+      const uid = params.userId ?? crypto.randomUUID();
+      const upiVpaEnc =
+        params.upiVpa && params.upiVpa.trim()
+          ? await this.kms.encryptString(params.upiVpa.trim(), `user:${uid}:upi`)
+          : null;
+      resolvedUser = {
+        id: uid,
+        phoneHash: null,
+        googleSubHash: null,
+        emailHash: null,
+        authProvider: 'companion',
+        isGuest: false,
+        isCompanion: true,
+        phoneEnc: null,
+        emailEnc: null,
+        upiVpaEnc,
+        displayName: params.displayName?.trim() || 'Co-traveller',
+        preferredLang: 'en',
+        tier: 'free',
+        createdAt: new Date().toISOString(),
+      };
+      this.users.set(uid, resolvedUser);
+    } else if (
+      resolvedUser.isCompanion ||
+      (params.callerUserId && resolvedUser.id === params.callerUserId)
+    ) {
+      if (resolvedUser.isCompanion && params.displayName?.trim()) {
+        resolvedUser.displayName = params.displayName.trim().slice(0, 80);
+      }
+      if (params.upiVpa !== undefined) {
+        resolvedUser.upiVpaEnc =
+          params.upiVpa && params.upiVpa.trim()
+            ? await this.kms.encryptString(
+                params.upiVpa.trim(),
+                `user:${resolvedUser.id}:upi`
+              )
+            : null;
+      }
+    }
+
+    const existingMem = trip.members.get(resolvedUser.id);
+    const memberRec: InternalMemberRecord = {
+      tripId: params.tripId,
+      userId: resolvedUser.id,
+      role: params.role,
+      vaultAccess:
+        params.vaultAccess ?? (params.role === 'owner' || params.role === 'editor'),
+      dietaryTags: params.dietaryTags ?? existingMem?.dietaryTags ?? [],
+      joinedAt: existingMem?.joinedAt ?? new Date().toISOString(),
+    };
+    trip.members.set(resolvedUser.id, memberRec);
+    trip.meta.updatedAt = new Date().toISOString();
+    this.flushSnapshotIfConfigured();
+
+    return this.toMemberPublic(memberRec);
+  }
+
+  public async updateTripMemberDetails(params: {
+    tripId: string;
+    memberUserId: string;
+    callerUserId: string;
+    role?: MemberRole;
+    vaultAccess?: boolean;
+    dietaryTags?: string[];
+    displayName?: string;
+    upiVpa?: string | null;
+  }): Promise<TripMemberPublic | 'last_owner' | null> {
+    await this.ensureReady();
+    const trip = this.trips.get(params.tripId);
+    if (!trip) return null;
+    const mem = trip.members.get(params.memberUserId);
+    if (!mem) return null;
+
+    if (params.role !== undefined && params.role !== 'owner' && mem.role === 'owner') {
+      const ownerCount = [...trip.members.values()].filter(
+        (m) => m.role === 'owner'
+      ).length;
+      if (ownerCount <= 1) {
+        return 'last_owner';
+      }
+    }
+
+    if (params.role !== undefined) mem.role = params.role;
+    if (params.vaultAccess !== undefined) mem.vaultAccess = params.vaultAccess;
+    if (params.dietaryTags !== undefined) mem.dietaryTags = [...params.dietaryTags];
+
+    const u = this.users.get(params.memberUserId);
+    if (u && (u.isCompanion || u.id === params.callerUserId)) {
+      if (params.displayName !== undefined && params.displayName.trim()) {
+        u.displayName = params.displayName.trim().slice(0, 80);
+      }
+      if (params.upiVpa !== undefined) {
+        u.upiVpaEnc =
+          params.upiVpa && params.upiVpa.trim()
+            ? await this.kms.encryptString(params.upiVpa.trim(), `user:${u.id}:upi`)
+            : null;
+      }
+    }
+
+    trip.meta.updatedAt = new Date().toISOString();
+    this.flushSnapshotIfConfigured();
+    return this.toMemberPublic(mem);
+  }
+
+  public async removeTripMember(
+    tripId: string,
+    memberUserId: string
+  ): Promise<'removed' | 'not_found' | 'last_owner'> {
+    await this.ensureReady();
+    const trip = this.trips.get(tripId);
+    if (!trip) return 'not_found';
+    const mem = trip.members.get(memberUserId);
+    if (!mem) return 'not_found';
+
+    if (mem.role === 'owner') {
+      const ownerCount = [...trip.members.values()].filter(
+        (m) => m.role === 'owner'
+      ).length;
+      if (ownerCount <= 1) return 'last_owner';
+    }
+
+    trip.members.delete(memberUserId);
+    trip.meta.updatedAt = new Date().toISOString();
+    this.flushSnapshotIfConfigured();
+    return 'removed';
+  }
+
+  public async createTripInvite(params: {
+    tripId: string;
+    createdBy: string;
+    role: InviteRole;
+    vaultAccess: boolean;
+    inviteeEmail?: string | null;
+    ttlSeconds?: number;
+  }): Promise<TripInviteStored> {
+    await this.ensureReady();
+    const trip = this.trips.get(params.tripId);
+    if (!trip) {
+      throw new Error(`Trip not found: ${params.tripId}`);
+    }
+
+    const token = crypto.randomBytes(24).toString('base64url');
+    const ttl = params.ttlSeconds ?? 60 * 60 * 24 * 7;
+    const expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
+    const rec: InternalInviteRecord = {
+      token,
+      tripId: params.tripId,
+      createdBy: params.createdBy,
+      role: params.role,
+      vaultAccess: params.vaultAccess,
+      inviteeEmail: params.inviteeEmail?.trim().toLowerCase() || null,
+      expiresAt,
+      acceptedCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    this.invites.set(token, rec);
+    this.flushSnapshotIfConfigured();
+
+    return {
+      token,
+      tripId: trip.meta.id,
+      tripTitle: trip.meta.title,
+      destinationSummary: trip.meta.destinationSummary,
+      role: rec.role,
+      vaultAccess: rec.vaultAccess,
+      inviteeEmail: rec.inviteeEmail,
+      expiresAt: rec.expiresAt,
+      acceptedCount: rec.acceptedCount,
+    };
+  }
+
+  public async getTripInvite(token: string): Promise<TripInviteStored | null> {
+    await this.ensureReady();
+    const rec = this.invites.get(token);
+    if (!rec) return null;
+    const trip = this.trips.get(rec.tripId);
+    if (!trip) return null;
+    const inviter = this.users.get(rec.createdBy);
+    return {
+      token: rec.token,
+      tripId: rec.tripId,
+      tripTitle: trip.meta.title,
+      destinationSummary: trip.meta.destinationSummary,
+      role: rec.role,
+      vaultAccess: rec.vaultAccess,
+      inviterName: inviter?.displayName,
+      inviteeEmail: rec.inviteeEmail,
+      expiresAt: rec.expiresAt,
+      acceptedCount: rec.acceptedCount,
+    };
+  }
+
+  public async acceptTripInvite(
+    token: string,
+    userId: string
+  ): Promise<{ tripId: string; role: MemberRole } | 'not_found' | 'expired'> {
+    await this.ensureReady();
+    const rec = this.invites.get(token);
+    if (!rec) return 'not_found';
+    const trip = this.trips.get(rec.tripId);
+    if (!trip) return 'not_found';
+    if (new Date(rec.expiresAt).getTime() < Date.now()) {
+      return 'expired';
+    }
+
+    const existing = trip.members.get(userId);
+    const resolvedRole: MemberRole =
+      existing && ROLE_PRECEDENCE[existing.role] > ROLE_PRECEDENCE[rec.role]
+        ? existing.role
+        : rec.role;
+    const resolvedVault = Boolean(existing?.vaultAccess || rec.vaultAccess);
+
+    trip.members.set(userId, {
+      tripId: rec.tripId,
+      userId,
+      role: resolvedRole,
+      vaultAccess: resolvedVault,
+      dietaryTags: existing?.dietaryTags ?? [],
+      joinedAt: existing?.joinedAt ?? new Date().toISOString(),
+    });
+    rec.acceptedCount += 1;
+    trip.meta.updatedAt = new Date().toISOString();
+    this.flushSnapshotIfConfigured();
+
+    return { tripId: rec.tripId, role: resolvedRole };
   }
 
   public async claimSandboxTrip(
@@ -1101,15 +1471,7 @@ export class LocalDevStore implements TripStore {
 
     const members: TripMemberPublic[] = [];
     for (const m of trip.members.values()) {
-      const u = this.users.get(m.userId);
-      members.push({
-        userId: m.userId,
-        displayName: u?.displayName ?? 'Traveller',
-        role: m.role,
-        vaultAccess: m.vaultAccess,
-        dietaryTags: [...m.dietaryTags],
-        joinedAt: m.joinedAt,
-      });
+      members.push(this.toMemberPublic(m));
     }
 
     const days = [...trip.syncState.days.values()]
@@ -1151,9 +1513,6 @@ export class LocalDevStore implements TripStore {
     const trip = this.trips.get(tripId);
     if (!trip) return null;
 
-    // Public WhatsApp share endpoint ALWAYS enforces `redactPii = true`:
-    // Full PNRs (`pnrEnc` / `pnrPlain`), `rawDocS3Key`, and unconsented co-traveller ages/genders
-    // are strictly omitted—returning ONLY `••••••<last3>`.
     const days = [...trip.syncState.days.values()]
       .filter((d) => !d.deletedAt)
       .sort((a, b) => a.dayNumber - b.dayNumber);
@@ -1235,6 +1594,10 @@ export class LocalDevStore implements TripStore {
       throw new Error(`Trip not found: ${params.tripId}`);
     }
 
+    const prevDayCount = [...trip.syncState.days.values()].filter(
+      (d) => !d.deletedAt
+    ).length;
+
     const appliedOps = applySyncMutationsToState(
       trip.syncState,
       params.mutations
@@ -1249,6 +1612,13 @@ export class LocalDevStore implements TripStore {
     const activeDays = [...trip.syncState.days.values()]
       .filter((d) => !d.deletedAt)
       .sort((a, b) => a.dayNumber - b.dayNumber);
+
+    if (activeDays.length !== prevDayCount && activeDays.length >= 1) {
+      trip.meta.destinationSummary = syncDurationSummarySuffix(
+        trip.meta.destinationSummary,
+        activeDays.length
+      );
+    }
 
     const { activeItems, shortlistItems } = projectOrderedItems(
       trip.syncState.items.values()
@@ -1308,6 +1678,8 @@ export class LocalDevStore implements TripStore {
       status: input.status ?? 'confirmed',
       rawDocS3Key: input.rawDocS3Key ?? null,
       docSizeBytes,
+      docFileName: input.docFileName ?? null,
+      docMimeType: input.docMimeType ?? null,
       parserConfidence: input.parserConfidence ?? 1.0,
       coTravellerConsentAt: input.coTravellerConsent ? nowIso : null,
       createdAt: nowIso,
@@ -1389,6 +1761,72 @@ export class LocalDevStore implements TripStore {
     return b ? this.toRedactedBookingView(b) : null;
   }
 
+  public async getBookingVaultMeta(
+    tripId: string,
+    bookingId: string
+  ): Promise<BookingVaultMeta | null> {
+    await this.ensureReady();
+    const trip = this.trips.get(tripId);
+    if (!trip) return null;
+    const b = trip.bookings.get(bookingId);
+    if (!b) return null;
+    return {
+      id: b.id,
+      tripId: b.tripId,
+      rawDocS3Key: b.rawDocS3Key,
+      docSizeBytes: b.docSizeBytes,
+      docFileName: b.docFileName,
+      docMimeType: b.docMimeType,
+    };
+  }
+
+  public async deleteBooking(
+    tripId: string,
+    bookingId: string
+  ): Promise<{ rawDocS3Key: string | null } | null> {
+    await this.ensureReady();
+    const trip = this.trips.get(tripId);
+    if (!trip) return null;
+    const b = trip.bookings.get(bookingId);
+    if (!b) return null;
+
+    trip.bookings.delete(bookingId);
+    trip.meta.vaultBytesUsed = Math.max(
+      0,
+      trip.meta.vaultBytesUsed - b.docSizeBytes
+    );
+    trip.meta.updatedAt = new Date().toISOString();
+    if (b.rawDocS3Key) {
+      this.vaultBlobs.delete(b.rawDocS3Key);
+    }
+    this.flushSnapshotIfConfigured();
+
+    return { rawDocS3Key: b.rawDocS3Key };
+  }
+
+  public async putVaultBlob(blob: VaultBlobRecord): Promise<void> {
+    await this.ensureReady();
+    this.vaultBlobs.set(blob.s3Key, {
+      ...blob,
+      encryptedPayload: Buffer.from(blob.encryptedPayload),
+    });
+  }
+
+  public async getVaultBlob(s3Key: string): Promise<VaultBlobRecord | null> {
+    await this.ensureReady();
+    const rec = this.vaultBlobs.get(s3Key);
+    if (!rec) return null;
+    return {
+      ...rec,
+      encryptedPayload: Buffer.from(rec.encryptedPayload),
+    };
+  }
+
+  public async deleteVaultBlob(s3Key: string): Promise<void> {
+    await this.ensureReady();
+    this.vaultBlobs.delete(s3Key);
+  }
+
   public async createPoll(input: CreatePollInput): Promise<PollView> {
     await this.ensureReady();
     const trip = this.trips.get(input.tripId);
@@ -1433,7 +1871,6 @@ export class LocalDevStore implements TripStore {
       throw new Error(`Invalid poll option: ${input.optionId}`);
     }
 
-    // Deduplicate vote on (pollId, voterId, optionId) or (pollId, guestSessionHash, optionId)
     const duplicate = trip.pollVotes.find((v) => {
       if (v.pollId !== input.pollId || v.optionId !== input.optionId) return false;
       if (input.voterId && v.voterId === input.voterId) return true;
@@ -1444,7 +1881,6 @@ export class LocalDevStore implements TripStore {
     });
 
     if (!duplicate) {
-      // Replace any previous single-choice selection by the same voter on this poll, or record vote
       trip.pollVotes = trip.pollVotes.filter((v) => {
         if (v.pollId !== input.pollId) return true;
         if (input.voterId && v.voterId === input.voterId) return false;
@@ -1521,7 +1957,6 @@ export class LocalDevStore implements TripStore {
       throw new Error(`Trip not found: ${input.tripId}`);
     }
 
-    // Idempotency on `client_op_id`
     const existing = trip.expensesByClientOpId.get(input.clientOpId);
     if (existing) {
       return existing;
@@ -1531,7 +1966,6 @@ export class LocalDevStore implements TripStore {
     const currency: CurrencyCode = input.currency ?? 'INR';
     const splitMode: SplitMode = input.splitMode ?? 'equal';
 
-    // Handle compensating adjustments (`entry_type = 'adjustment'`) referencing `reverses_expense_id`
     let resolvedAmountMinor = input.amountMinor;
     let resolvedPaidBy = input.paidBy;
     let resolvedKittyPoolId = input.kittyPoolId ?? null;
@@ -1548,7 +1982,6 @@ export class LocalDevStore implements TripStore {
       }
 
       if (resolvedAmountMinor === undefined) {
-        // Full compensating reversal of `target`
         resolvedAmountMinor = -target.amountMinor;
         resolvedInrMinor = -target.inrEquivalentMinor;
         resolvedFxRate = target.fxRate;
@@ -1585,7 +2018,6 @@ export class LocalDevStore implements TripStore {
       });
     }
 
-    // If paid from Kitty Pool, ensure `paidBy` credits the Kitty custodian
     if (resolvedKittyPoolId) {
       const pool = trip.kittyPools.get(resolvedKittyPoolId);
       if (!pool) {
@@ -1615,7 +2047,6 @@ export class LocalDevStore implements TripStore {
       createdAt: new Date().toISOString(),
     };
 
-    // Immutable append-only push
     Object.freeze(expenseView.splitsInrMinor);
     Object.freeze(expenseView);
     trip.expenses.push(expenseView);
@@ -1623,6 +2054,30 @@ export class LocalDevStore implements TripStore {
     this.flushSnapshotIfConfigured();
 
     return expenseView;
+  }
+
+  public async deleteExpense(
+    tripId: string,
+    expenseId: string
+  ): Promise<boolean> {
+    await this.ensureReady();
+    const trip = this.trips.get(tripId);
+    if (!trip) return false;
+
+    const toDelete = trip.expenses.filter(
+      (e) => e.id === expenseId || e.reversesExpenseId === expenseId
+    );
+    if (toDelete.length === 0) return false;
+
+    for (const exp of toDelete) {
+      trip.expensesByClientOpId.delete(exp.clientOpId);
+    }
+    trip.expenses = trip.expenses.filter(
+      (e) => e.id !== expenseId && e.reversesExpenseId !== expenseId
+    );
+    trip.meta.updatedAt = new Date().toISOString();
+    this.flushSnapshotIfConfigured();
+    return true;
   }
 
   public async getSettlements(tripId: string): Promise<{

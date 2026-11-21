@@ -22,7 +22,14 @@ import {
   promoteShortlistItemToDay,
   reorderStopsInDay,
 } from '../src/features/editor/editor-helpers';
-import { inferTripDestinations } from '../src/features/editor/places-discovery';
+import {
+  inferTripDestinations,
+  resolveInitialTripCenter,
+} from '../src/features/editor/places-discovery';
+import {
+  formatDietaryTag,
+  syncDestinationSummaryDays,
+} from '../src/lib/formatters';
 import type { ItineraryItem } from '../src/lib/types';
 
 function makeStop(overrides: Partial<ItineraryItem> & { id: string; title: string }): ItineraryItem {
@@ -259,6 +266,40 @@ describe('Trip Editor v2 & Map v2 Helpers', () => {
       expect(parsed.searchParams.get('destination')).toBe('30.456900,78.099700');
       expect(parsed.searchParams.get('waypoints')).toBe('30.103300,78.294800');
       expect(parsed.searchParams.get('travelmode')).toBe('driving');
+    });
+  });
+
+  describe('Dietary badge formatter, destination day count sync & initial map center', () => {
+    it('maps enum tags to clean labels, updates (ND) counts, and centers new Munnar/Kyoto trips accurately', () => {
+      expect(formatDietaryTag('pure_veg')).toBe('Pure Veg');
+      expect(formatDietaryTag('satvik')).toBe('Satvik');
+      expect(formatDietaryTag('veg_friendly')).toBe('Veg Friendly');
+      expect(formatDietaryTag('eggless_options')).toBe('Eggless');
+      expect(formatDietaryTag('non_drinker')).toBe('No Alcohol');
+      expect(formatDietaryTag('jain')).toBe('Jain');
+      expect(formatDietaryTag('wheelchair')).toBe('Wheelchair Friendly');
+      expect(formatDietaryTag('low_stairs')).toBe('Low Stairs');
+
+      expect(syncDestinationSummaryDays('Munnar (3D)', 4)).toBe('Munnar (4D)');
+      expect(syncDestinationSummaryDays('Kyoto · Nara (5D)', 2)).toBe('Kyoto · Nara (2D)');
+      expect(syncDestinationSummaryDays('Jaipur Heritage', 3)).toBe('Jaipur Heritage');
+
+      const baseTrip = SAMPLE_WORKSPACES['rishi-lnd-4d']!.trip;
+      const munnarCenter = resolveInitialTripCenter(
+        { ...baseTrip, title: 'Munnar Tea Hills', destinationSummary: 'Munnar (3D)' },
+        []
+      );
+      expect(munnarCenter).not.toBeNull();
+      expect(munnarCenter!.lat).toBeCloseTo(10.0889, 2);
+      expect(munnarCenter!.lng).toBeCloseTo(77.0595, 2);
+
+      const kyotoCenter = resolveInitialTripCenter(
+        { ...baseTrip, title: 'Autumn in Kyoto', destinationSummary: 'Kyoto (5D)' },
+        []
+      );
+      expect(kyotoCenter).not.toBeNull();
+      expect(kyotoCenter!.lat).toBeCloseTo(35.0116, 2);
+      expect(kyotoCenter!.lng).toBeCloseTo(135.7681, 2);
     });
   });
 });

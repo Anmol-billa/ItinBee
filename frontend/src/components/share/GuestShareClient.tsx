@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Check,
@@ -11,9 +11,11 @@ import {
   Vote,
 } from 'lucide-react';
 import { ScoutBeeMark } from '@/components/mascot/ScoutBeeMark';
+import { TurnstileWidget } from '@/components/security/TurnstileWidget';
 import { ElderCardView } from '@/components/share/ElderCardView';
 import { LazyRouteMap } from '@/components/map/LazyRouteMap';
 import { castGuestPollVote } from '@/lib/api-client';
+import { formatDietaryTag, redactSharedSummaryText } from '@/lib/formatters';
 import { exportItineraryWithLiveQrPdf } from '@/lib/pdf-export';
 import { runAccessibleViewTransition } from '@/lib/view-transition';
 import type { GuestShareProjection, PollView } from '@/lib/types';
@@ -28,9 +30,29 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
   );
   const [polls, setPolls] = useState<PollView[]>(projection.polls);
   const [guestName, setGuestName] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState('');
   const [copiedDigest, setCopiedDigest] = useState(false);
+
+  // Sanitize all stop notes & bilingual Elder Card strings against any PNR/Coach/Seat leaks
+  const sanitizedItems = useMemo(
+    () =>
+      projection.items.map((item) => ({
+        ...item,
+        notes: redactSharedSummaryText(item.notes),
+        elderSummaryI18n: {
+          en: item.elderSummaryI18n?.en
+            ? redactSharedSummaryText(item.elderSummaryI18n.en)
+            : undefined,
+          hi: item.elderSummaryI18n?.hi
+            ? redactSharedSummaryText(item.elderSummaryI18n.hi)
+            : undefined,
+        },
+      })),
+    [projection.items]
+  );
+
   const [highlightedId, setHighlightedId] = useState<string | null>(
-    projection.items[0]?.id ?? null
+    sanitizedItems[0]?.id ?? null
   );
 
   const activeDays = projection.days
@@ -49,6 +71,7 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
         pollId,
         optionId,
         guestDisplayName: name,
+        turnstileToken: turnstileToken || undefined,
       });
       setPolls((prev) => prev.map((p) => (p.id === pollId ? updated : p)));
     } catch {
@@ -137,7 +160,7 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
 
           <button
             type="button"
-            onClick={handleCopyDigest}
+            onClick={() => void handleCopyDigest()}
             className="inline-flex items-center gap-1 rounded-md border border-line bg-canvas-elevated px-2.5 py-1 text-compact text-ink hover:bg-canvas-subtle"
           >
             {copiedDigest ? (
@@ -145,16 +168,19 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
             ) : (
               <Copy className="h-3.5 w-3.5" strokeWidth={1.6} aria-hidden="true" />
             )}
-            {copiedDigest ? 'Copied' : 'WhatsApp text'}
+            <span>{copiedDigest ? 'Copied' : 'WhatsApp text'}</span>
           </button>
+          <span role="status" aria-live="polite" className="sr-only">
+            {copiedDigest ? 'Copied WhatsApp itinerary summary to clipboard.' : ''}
+          </span>
 
           <button
             type="button"
             onClick={() =>
-              exportItineraryWithLiveQrPdf({
+              void exportItineraryWithLiveQrPdf({
                 trip: projection.trip,
                 days: projection.days,
-                items: projection.items,
+                items: sanitizedItems,
                 liveShareUrl: liveUrl,
               })
             }
@@ -172,7 +198,7 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
             <ElderCardView
               trip={projection.trip}
               days={projection.days}
-              items={projection.items}
+              items={sanitizedItems}
               bookings={projection.bookings}
             />
           </div>
@@ -192,12 +218,12 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
                 </p>
                 <div className="inline-flex items-center gap-1.5 pt-1 text-micro text-jade">
                   <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.7} aria-hidden="true" />
-                  <span>Zero-login view · Sensitive PNRs &amp; IDs automatically masked</span>
+                  <span>Zero-login view · Sensitive PNRs, seats &amp; IDs automatically masked</span>
                 </div>
               </div>
 
               {activeDays.map((day) => {
-                const dayStops = projection.items
+                const dayStops = sanitizedItems
                   .filter((i) => i.dayId === day.id && !i.deletedAt)
                   .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 
@@ -241,6 +267,18 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
                               {stop.notes && (
                                 <p className="text-ink-secondary">{stop.notes}</p>
                               )}
+                              {stop.dietaryFlags.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                  {stop.dietaryFlags.map((flag) => (
+                                    <span
+                                      key={flag}
+                                      className="rounded border border-jade/30 bg-jade-wash px-2 py-0.5 text-micro font-medium text-jade"
+                                    >
+                                      {formatDietaryTag(flag)}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             {stop.googleMapsUrl && (
                               <a
@@ -278,6 +316,9 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
                       className="w-40 rounded-md border border-line bg-canvas-elevated px-2.5 py-1 text-compact text-ink"
                     />
                   </div>
+
+                  <TurnstileWidget onToken={setTurnstileToken} />
+
                   {polls.map((poll) => (
                     <div
                       key={poll.id}
@@ -289,7 +330,7 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
                           <button
                             key={opt.id}
                             type="button"
-                            onClick={() => handleVote(poll.id, opt.id)}
+                            onClick={() => void handleVote(poll.id, opt.id)}
                             className="flex w-full items-center justify-between rounded-md border border-line bg-canvas px-3 py-2 text-left text-compact hover:border-ink"
                           >
                             <span>{opt.label}</span>
@@ -307,7 +348,7 @@ export function GuestShareClient({ projection }: GuestShareClientProps) {
 
             <aside className="h-[380px] rounded-xl border border-line bg-canvas-subtle p-4 lg:sticky lg:top-16">
               <LazyRouteMap
-                items={projection.items}
+                items={sanitizedItems}
                 highlightedItemId={highlightedId}
                 onSelectStop={(id) => setHighlightedId(id)}
                 attribution={projection.trip.mapAttribution}

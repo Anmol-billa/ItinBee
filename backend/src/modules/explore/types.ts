@@ -46,6 +46,12 @@ export const ExploreDetailItemSchema = z.object({
   startTime: z.string().nullable(),
   durationMins: z.number().int().nullable(),
   placeRefId: z.string().nullable(),
+  elderSummaryI18n: z
+    .object({
+      en: z.string().optional(),
+      hi: z.string().optional(),
+    })
+    .optional(),
   image: ImageCreditSchema.optional(),
 });
 export type ExploreDetailItem = z.infer<typeof ExploreDetailItemSchema>;

@@ -1,11 +1,17 @@
 import { z } from 'zod';
 import { CURATED_OPEN_POIS } from '../geo/curated-india-pois.js';
-import { estimateIndiaTransit } from '../geo/transit-estimator.js';
 import { getTemplatePoiCatalog } from '../explore/template-catalog.js';
 import type { PlacesServices } from '../places/places-module.js';
+import { estimateLegTransit } from '../places/providers/openrouteservice.js';
+import { STARTER_OPEN_POIS } from '../places/seed/starter-pois.js';
 import type { PlaceCategory } from '../places/types.js';
 import { haversineMeters } from '../places/util/geo.js';
-import { namesSimilar, normalizeName } from '../places/util/text.js';
+import {
+  namesSimilar,
+  normalizeName,
+  sliceAtWordBoundary,
+  toTitleCasePlaceName,
+} from '../places/util/text.js';
 import type {
   ItemKind,
   PacingLevel,
@@ -277,12 +283,22 @@ export async function buildCandidatePoolForDestination(
   dest: IntentDestination,
   intent: TripIntent,
   places: PlacesServices,
-  minNeeded = 12
+  minNeeded = 16
 ): Promise<CandidatePlace[]> {
+  const MAX_DEST_RADIUS_M = 45_000;
   const byRef = new Map<string, CandidatePlace>();
   const seenNames: string[] = [];
   const avoidLower = intent.avoid.map((a) => a.toLowerCase());
   const wantsVeg = intent.diet.some((d) => /veg|jain|satvik/i.test(d));
+  const destTitle = toTitleCasePlaceName(dest.name);
+
+  const withinDestRadius = (lat: number, lng: number): boolean => {
+    if (dest.lat === undefined || dest.lng === undefined) return true;
+    return (
+      haversineMeters({ lat: dest.lat, lng: dest.lng }, { lat, lng }) <=
+      MAX_DEST_RADIUS_M
+    );
+  };
 
   const isAvoided = (title: string, cat: string): boolean =>
     avoidLower.some(
@@ -292,26 +308,27 @@ export async function buildCandidatePoolForDestination(
     );
 
   const addCandidate = (cand: CandidatePlace): void => {
+    if (!withinDestRadius(cand.lat, cand.lng)) return;
     if (byRef.has(cand.placeRefId)) return;
     if (!cand.mustInclude && isAvoided(cand.title, cand.category)) return;
     const dupName = seenNames.some((n) => namesSimilar(n, cand.title));
     if (dupName && !cand.mustInclude) return;
     seenNames.push(cand.title);
-    byRef.set(cand.placeRefId, cand);
+    byRef.set(cand.placeRefId, {
+      ...cand,
+      title: toTitleCasePlaceName(cand.title),
+    });
   };
 
-  // 1. MustInclude resolved places near this destination first
+  // 1. MustInclude resolved places within <= 45 km of this destination first
   for (const m of intent.mustInclude) {
     if (!m.resolved || !m.placeRefId || m.lat === undefined || m.lng === undefined) {
       continue;
     }
-    if (
-      dest.lat !== undefined &&
-      dest.lng !== undefined &&
-      haversineMeters({ lat: dest.lat, lng: dest.lng }, { lat: m.lat, lng: m.lng }) > 90_000
-    ) {
+    if (!withinDestRadius(m.lat, m.lng)) {
       continue;
     }
+    const cleanQuote = m.sourceQuote ? sliceAtWordBoundary(m.sourceQuote, 90) : '';
     addCandidate({
       placeRefId: m.placeRefId,
       title: m.name,
@@ -320,7 +337,9 @@ export async function buildCandidatePoolForDestination(
       lat: m.lat,
       lng: m.lng,
       durationMins: 90,
-      notes: `Requested in your notes ("${m.sourceQuote.slice(0, 80)}").`,
+      notes: cleanQuote
+        ? `Requested in your notes ("${cleanQuote}").`
+        : 'Requested in your notes.',
       dietaryFlags: wantsVeg ? ['veg_friendly'] : [],
       accessibilityNotes: '',
       popularity: 1.5,
@@ -328,18 +347,22 @@ export async function buildCandidatePoolForDestination(
     });
   }
 
-  // 2. Stored Destination Pack & seeded places from PlacesRepository
+  // 2. Stored Destination Pack & seeded places from PlacesRepository (filtered to destinationSlug & <= 45 km)
   if (dest.destinationSlug) {
     const destRec = await places.repo.getDestinationBySlug(dest.destinationSlug);
     if (destRec) {
-      const sub = await places.places.subtreeIds(destRec);
+      const targetDestIds =
+        destRec.kind === 'city' || destRec.kind === 'area'
+          ? [destRec.id]
+          : (await places.places.subtreeIds(destRec)).ids;
       const stored = await places.repo.queryPlaces({
-        destinationIds: sub.ids,
+        destinationIds: targetDestIds,
         limit: 80,
         offset: 0,
       });
       for (const { place } of stored.rows) {
         if (place.category === 'transport' || place.category === 'stay') continue;
+        if (!withinDestRadius(place.lat, place.lng)) continue;
         addCandidate({
           placeRefId: place.refId,
           title: place.name,
@@ -368,17 +391,45 @@ export async function buildCandidatePoolForDestination(
     }
   }
 
-  // 3. Curated India & Vietnam Open POIs
+  // 2b. Starter Open POIs (strictly matching destinationSlug or <= 45 km)
+  for (const sp of STARTER_OPEN_POIS) {
+    if (dest.destinationSlug && dest.destinationSlug !== 'india') {
+      if (sp.destinationSlug !== dest.destinationSlug && !withinDestRadius(sp.lat, sp.lng)) {
+        continue;
+      }
+    }
+    if (!withinDestRadius(sp.lat, sp.lng)) continue;
+    addCandidate({
+      placeRefId: sp.refId,
+      title: sp.name,
+      kind: categoryToItemKind(sp.category),
+      category: sp.category,
+      lat: sp.lat,
+      lng: sp.lng,
+      durationMins: sp.typicalDurationMins,
+      notes: sp.whyVisit || sp.description,
+      dietaryFlags:
+        sp.dietaryHints.length > 0
+          ? sp.dietaryHints
+          : wantsVeg && (sp.category === 'food' || sp.category === 'cafe')
+            ? ['veg_friendly']
+            : [],
+      accessibilityNotes: '',
+      popularity: sp.popularity,
+      mustInclude: false,
+    });
+  }
+
+  // 3. Curated India & Vietnam Open POIs (strictly <= 45 km)
   for (const cp of CURATED_OPEN_POIS) {
     if (cp.category === 'transit_hub') continue;
-    const closeByCoord =
-      dest.lat !== undefined &&
-      dest.lng !== undefined &&
-      haversineMeters({ lat: dest.lat, lng: dest.lng }, { lat: cp.lat, lng: cp.lng }) <= 55_000;
-    const matchByCity =
-      normalizeName(cp.city) === normalizeName(dest.name) ||
-      normalizeName(cp.region) === normalizeName(dest.name);
-    if (!closeByCoord && !matchByCity) continue;
+    if (!withinDestRadius(cp.lat, cp.lng)) continue;
+    if (
+      dest.lat === undefined &&
+      normalizeName(cp.city) !== normalizeName(dest.name)
+    ) {
+      continue;
+    }
 
     addCandidate({
       placeRefId: cp.placeRefId,
@@ -396,17 +447,16 @@ export async function buildCandidatePoolForDestination(
     });
   }
 
-  // 4. Verified Curated Template POI Catalog (~550+ real-world landmarks & dining spots)
+  // 4. Verified Curated Template POI Catalog (strictly <= 45 km so neighboring cities never leak!)
   for (const tp of getTemplatePoiCatalog()) {
-    const closeByCoord =
-      dest.lat !== undefined &&
-      dest.lng !== undefined &&
-      haversineMeters({ lat: dest.lat, lng: dest.lng }, { lat: tp.lat, lng: tp.lng }) <= 55_000;
-    const matchSlug =
-      dest.destinationSlug !== undefined &&
-      dest.destinationSlug !== 'india' &&
-      tp.destinationSlugs.includes(dest.destinationSlug);
-    if (!closeByCoord && !matchSlug) continue;
+    if (!withinDestRadius(tp.lat, tp.lng)) continue;
+    if (dest.lat === undefined) {
+      const matchSlug =
+        dest.destinationSlug !== undefined &&
+        dest.destinationSlug !== 'india' &&
+        tp.destinationSlugs.includes(dest.destinationSlug);
+      if (!matchSlug) continue;
+    }
 
     addCandidate({
       placeRefId: tp.placeRefId,
@@ -438,6 +488,7 @@ export async function buildCandidatePoolForDestination(
         new Promise<never[]>((r) => setTimeout(() => r([]), 2000)),
       ]).catch(() => []);
       for (const lp of live) {
+        if (!withinDestRadius(lp.lat, lp.lng)) continue;
         addCandidate({
           placeRefId: lp.id,
           title: lp.name,
@@ -460,7 +511,7 @@ export async function buildCandidatePoolForDestination(
   if (byRef.size < minNeeded && dest.lat !== undefined && dest.lng !== undefined) {
     const baseRef = dest.destinationSlug
       ? `dest:${dest.destinationSlug}`
-      : `dest:${slugKey(dest.name)}`;
+      : `dest:${slugKey(destTitle)}`;
     const archetypes: Array<{
       suffix: string;
       kind: ItemKind;
@@ -475,63 +526,125 @@ export async function buildCandidatePoolForDestination(
         suffix: 'heritage-walk',
         kind: 'activity',
         cat: 'sights',
-        title: `${dest.name} Old Quarter & Heritage Walk`,
+        title: `${destTitle} Old Quarter & Heritage Walk`,
         dLat: 0.002,
         dLng: 0.002,
         dur: 90,
-        notes: `Morning orientation walk through historic ${dest.name}.`,
+        notes: `Morning orientation walk through historic ${destTitle}.`,
       },
       {
         suffix: 'local-kitchen',
         kind: 'meal',
         cat: 'food',
-        title: `${dest.name} Regional Thali & Local Kitchen`,
+        title: `${destTitle} Regional Kitchen & Lunch`,
         dLat: -0.002,
         dLng: 0.003,
         dur: 60,
         notes: wantsVeg
-          ? `Pure-vegetarian regional lunch in ${dest.name}.`
-          : `Traditional local lunch in central ${dest.name}.`,
+          ? `Pure-vegetarian regional lunch in ${destTitle}.`
+          : `Traditional local lunch in central ${destTitle}.`,
       },
       {
         suffix: 'scenic-viewpoint',
         kind: 'activity',
         cat: 'nature',
-        title: `${dest.name} Promenade & Sunset Viewpoint`,
+        title: `${destTitle} Promenade & Sunset Viewpoint`,
         dLat: 0.004,
         dLng: -0.003,
         dur: 75,
-        notes: `Golden-hour viewpoint overlooking ${dest.name}.`,
+        notes: `Golden-hour viewpoint overlooking ${destTitle}.`,
       },
       {
         suffix: 'craft-bazaar',
         kind: 'activity',
         cat: 'culture',
-        title: `${dest.name} Craft Bazaar & Evening Market`,
+        title: `${destTitle} Craft Bazaar & Evening Market`,
         dLat: -0.003,
         dLng: -0.002,
         dur: 75,
-        notes: `Handloom, spice, and local craft market stroll.`,
+        notes: `Handloom, spice, and local craft market stroll in ${destTitle}.`,
       },
       {
         suffix: 'morning-cafe',
         kind: 'meal',
         cat: 'cafe',
-        title: `${dest.name} Morning Bakery & Chai House`,
+        title: `${destTitle} Morning Bakery & Tea House`,
         dLat: 0.001,
         dLng: -0.004,
         dur: 50,
-        notes: `Slow morning coffee/chai and breakfast.`,
+        notes: `Slow morning coffee, tea, and fresh breakfast.`,
       },
       {
         suffix: 'cultural-centre',
         kind: 'activity',
         cat: 'culture',
-        title: `${dest.name} Cultural Museum & Gardens`,
+        title: `${destTitle} Cultural Museum & Gardens`,
         dLat: -0.004,
         dLng: 0.001,
         dur: 90,
-        notes: `Local history galleries and shaded gardens.`,
+        notes: `Local history galleries and shaded courtyard gardens.`,
+      },
+      {
+        suffix: 'botanical-park',
+        kind: 'activity',
+        cat: 'nature',
+        title: `${destTitle} Botanical Park & Lakeside Trail`,
+        dLat: 0.005,
+        dLng: 0.004,
+        dur: 80,
+        notes: `Peaceful morning nature walk around ${destTitle}.`,
+      },
+      {
+        suffix: 'courtyard-supper',
+        kind: 'meal',
+        cat: 'food',
+        title: `${destTitle} Courtyard Dining Room`,
+        dLat: -0.001,
+        dLng: 0.005,
+        dur: 70,
+        notes: wantsVeg
+          ? `Vegetarian evening dining in ${destTitle}.`
+          : `Seasonal regional dinner in ${destTitle}.`,
+      },
+      {
+        suffix: 'artisan-quarter',
+        kind: 'activity',
+        cat: 'culture',
+        title: `${destTitle} Artisan Weaving & Pottery Quarter`,
+        dLat: 0.003,
+        dLng: 0.005,
+        dur: 75,
+        notes: `Meet local craftspeople and browse traditional workshops.`,
+      },
+      {
+        suffix: 'historic-shrine',
+        kind: 'activity',
+        cat: 'spiritual',
+        title: `${destTitle} Historic Temple & Courtyard`,
+        dLat: -0.005,
+        dLng: -0.003,
+        dur: 60,
+        notes: `Quiet architectural and spiritual landmark visit.`,
+      },
+      {
+        suffix: 'ridge-lookout',
+        kind: 'activity',
+        cat: 'sights',
+        title: `${destTitle} Ridge Panorama Lookout`,
+        dLat: 0.006,
+        dLng: -0.002,
+        dur: 75,
+        notes: `Elevated scenic overlook with wide valley vistas.`,
+      },
+      {
+        suffix: 'terrace-bistro',
+        kind: 'meal',
+        cat: 'cafe',
+        title: `${destTitle} Rooftop Cafe & Refreshments`,
+        dLat: 0.002,
+        dLng: -0.005,
+        dur: 60,
+        notes: `Relaxed midday cafe stop with open-air seating.`,
       },
     ];
     for (const arch of archetypes) {
@@ -616,7 +729,21 @@ function buildDeterministicDays(params: {
         ? 5
         : 4;
 
-  const usedRefs = new Set<string>();
+  const usedPlaceIds = new Set<string>();
+  const usedNormTitles = new Set<string>();
+
+  const canSchedule = (c: CandidatePlace): boolean => {
+    if (usedPlaceIds.has(c.placeRefId)) return false;
+    const nt = normalizeName(c.title);
+    if (nt && usedNormTitles.has(nt)) return false;
+    return true;
+  };
+
+  const markScheduled = (c: CandidatePlace): void => {
+    usedPlaceIds.add(c.placeRefId);
+    const nt = normalizeName(c.title);
+    if (nt) usedNormTitles.add(nt);
+  };
 
   // Group day indices by destination so we can geographically cluster multi-day stays
   const daysByDestKey = new Map<string, number[]>();
@@ -634,9 +761,8 @@ function buildDeterministicDays(params: {
 
   for (const [destKey, dayNums] of daysByDestKey.entries()) {
     const dest = dayDestinations[dayNums[0]! - 1]!;
-    const pool = (poolsByDestKey.get(destKey) ?? []).filter(
-      (c) => !usedRefs.has(c.placeRefId)
-    );
+    const destLabel = toTitleCasePlaceName(dest.name);
+    const pool = (poolsByDestKey.get(destKey) ?? []).filter(canSchedule);
 
     const sights = pool.filter((c) => c.kind !== 'meal' && c.kind !== 'stay');
     const meals = pool.filter((c) => c.kind === 'meal');
@@ -660,7 +786,7 @@ function buildDeterministicDays(params: {
     let sightCursor = 0;
     let mealCursor = 0;
 
-    dayNums.forEach((dayNum, localIdx) => {
+    dayNums.forEach((dayNum) => {
       const isFirstDay = dayNum === 1;
       const isLastDay = dayNum === totalDays && totalDays > 1;
       const targetCount =
@@ -673,20 +799,27 @@ function buildDeterministicDays(params: {
       const dayCands: CandidatePlace[] = [];
       while (dayCands.length < sightQuota && sightCursor < orderedPoolSights.length) {
         const c = orderedPoolSights[sightCursor++]!;
-        if (!usedRefs.has(c.placeRefId)) {
-          usedRefs.add(c.placeRefId);
+        if (canSchedule(c)) {
+          markScheduled(c);
           dayCands.push(c);
         }
       }
-      if (mealQuota > 0 && mealCursor < meals.length) {
+      while (mealQuota > 0 && mealCursor < meals.length) {
         const m = meals[mealCursor++]!;
-        usedRefs.add(m.placeRefId);
-        dayCands.push(m);
+        if (canSchedule(m)) {
+          markScheduled(m);
+          dayCands.push(m);
+          break;
+        }
       }
 
-      // If pool ran low on multi-day trips, recycle popular spots not yet on this day
-      if (dayCands.length === 0 && pool.length > 0) {
-        dayCands.push(pool[localIdx % pool.length]!);
+      // If sights ran out before meals or vice versa, fill from any remaining unused candidate in this city
+      if (dayCands.length === 0) {
+        const fallbackUnused = pool.find(canSchedule);
+        if (fallbackUnused) {
+          markScheduled(fallbackUnused);
+          dayCands.push(fallbackUnused);
+        }
       }
 
       const ordered = orderDayStopsGeographically(dayCands);
@@ -698,11 +831,11 @@ function buildDeterministicDays(params: {
             ? 'Morning Highlights & Departure'
             : leadSight
               ? leadSight.title.split(/[(&,]/)[0]!.trim()
-              : `Explore ${dest.name}`;
+              : `Explore ${destLabel}`;
 
       plannedByDayNum.set(dayNum, {
         dayNumber: dayNum,
-        title: `${dest.name}: ${suffix}`.slice(0, 100),
+        title: `${destLabel}: ${suffix}`.slice(0, 100),
         candidates: ordered,
       });
     });
@@ -826,22 +959,17 @@ function attachBookingsAndScheduleTimes(params: {
       let legMins = 20;
 
       if (prevCoord) {
-        const est = estimateIndiaTransit({
+        const est = estimateLegTransit({
           origin: { lat: prevCoord.lat, lng: prevCoord.lng, name: prevCoord.title },
           destination: { lat: cand.lat, lng: cand.lng, name: cand.title },
           departureTimeHHMM: formatHHMM(cursorMins),
         });
         legMins = Math.min(90, est.estimatedDurationMins);
         transitMeta = {
-          mode:
-            est.profile === 'hill_switchback'
-              ? 'hill_cab'
-              : est.profile === 'walk'
-                ? 'walk'
-                : 'metro_cab',
-          distanceKm: est.estimatedRoadKm,
+          mode: est.mode,
+          distanceKm: est.distanceKm,
           estimatedDurationMins: est.estimatedDurationMins,
-          advisory: est.advisories[0],
+          advisory: est.advisory,
           googleMapsUrl: est.googleMapsUrl,
         };
         cursorMins += legMins;
@@ -953,7 +1081,7 @@ export async function buildGroundedItinerary(params: {
       dest,
       groundedIntent,
       params.places,
-      Math.max(12, daysHere * 5)
+      Math.max(16, daysHere * 6)
     );
     poolsByDestKey.set(key, pool);
     for (const c of pool) {
@@ -1062,24 +1190,62 @@ export async function buildGroundedItinerary(params: {
         (a, b) => a.dayNumber - b.dayNumber
       );
 
+      // Enforce per-day destination geo isolation (<= 45 km) & zero cross-day duplicates even on AI outputs
+      const aiUsedRefs = new Set<string>();
+      const aiUsedTitles = new Set<string>();
+
       rawDays = sortedModelDays.map((md, idx) => {
-        const pickedCands = md.stops
-          .map((st) => ({
-            cand: allCandidatesByRef.get(st.placeRefId)!,
+        const dayDest = dayDestinations[idx]!;
+        const destKey = dayDest.destinationSlug ?? dayDest.name.toLowerCase();
+        const destPool = poolsByDestKey.get(destKey) ?? [];
+        const destRefSet = new Set(destPool.map((c) => c.placeRefId));
+
+        const pickedCands: Array<{
+          cand: CandidatePlace;
+          overrideStartTime?: string | null;
+          overrideDuration?: number | null;
+          overrideNotes?: string | null;
+        }> = [];
+
+        for (const st of md.stops) {
+          const cand = allCandidatesByRef.get(st.placeRefId);
+          if (!cand) continue;
+          if (!destRefSet.has(cand.placeRefId)) continue;
+          const nt = normalizeName(cand.title);
+          if (aiUsedRefs.has(cand.placeRefId) || (nt && aiUsedTitles.has(nt))) {
+            continue;
+          }
+          aiUsedRefs.add(cand.placeRefId);
+          if (nt) aiUsedTitles.add(nt);
+          pickedCands.push({
+            cand,
             overrideStartTime: st.startTime,
             overrideDuration: st.durationMins,
-            overrideNotes: st.notes,
-          }))
-          .filter((x) => Boolean(x.cand));
+            overrideNotes: st.notes ? sliceAtWordBoundary(st.notes, 240) : null,
+          });
+        }
 
-        // Apply geographic nearest-neighbour polish if stops have no custom times
+        // Backfill from this city's unused pool if deduplication/isolation emptied or thinned the day
+        if (pickedCands.length === 0) {
+          for (const fallback of destPool) {
+            const nt = normalizeName(fallback.title);
+            if (!aiUsedRefs.has(fallback.placeRefId) && (!nt || !aiUsedTitles.has(nt))) {
+              aiUsedRefs.add(fallback.placeRefId);
+              if (nt) aiUsedTitles.add(nt);
+              pickedCands.push({ cand: fallback });
+              if (pickedCands.length >= 3) break;
+            }
+          }
+        }
+
+        // Apply geographic nearest-neighbour polish
         const ordered = orderDayStopsGeographically(
           pickedCands.map((p) => p.cand)
         ).map((c) => pickedCands.find((p) => p.cand.placeRefId === c.placeRefId)!);
 
         return {
           dayNumber: idx + 1,
-          title: md.title || `Day ${idx + 1}`,
+          title: md.title || `${toTitleCasePlaceName(dayDest.name)}: Day ${idx + 1}`,
           candidates: ordered,
         };
       });

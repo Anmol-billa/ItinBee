@@ -50,6 +50,35 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "ok" | "degraded";
+                            /** @enum {string} */
+                            service: "itinbee-backend";
+                            /** @enum {string} */
+                            storeBackend: "postgres" | "local-memory";
+                            /** @enum {string} */
+                            pubsubMode: "redis" | "memory";
+                            checks: {
+                                database: {
+                                    ok: boolean;
+                                    detail: string;
+                                };
+                                pubsub: {
+                                    ok: boolean;
+                                    detail: string;
+                                };
+                            };
+                            timestamp: string;
+                        };
+                    };
+                };
             };
         };
         put?: never;
@@ -118,7 +147,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request an email magic code / sign-in link (Resend in prod; includes dev preview in non-prod) */
+        /** Request an email magic code / sign-in link (Resend or SMTP in prod; includes dev preview in non-prod) */
         post: {
             parameters: {
                 query?: never;
@@ -132,6 +161,7 @@ export interface paths {
                         /** Format: email */
                         email: string;
                         redirectPath?: string;
+                        turnstileToken?: string;
                     };
                 };
             };
@@ -151,6 +181,30 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 502: {
                     headers: {
                         [name: string]: unknown;
@@ -158,6 +212,19 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -227,6 +294,19 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -296,6 +376,19 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -314,7 +407,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Current session status (unauthenticated, guest, or signed-in user) */
+        /** Current session status (unauthenticated, guest, or signed-in user with owner UPI VPA) */
         get: {
             parameters: {
                 query?: never;
@@ -342,6 +435,7 @@ export interface paths {
                                 tier: "free" | "trip_pass" | "pro";
                                 hasUpiVpa: boolean;
                                 createdAt: string;
+                                upiVpa: string | null;
                             } | null;
                         };
                     };
@@ -388,6 +482,7 @@ export interface paths {
                                 tier: "free" | "trip_pass" | "pro";
                                 hasUpiVpa: boolean;
                                 createdAt: string;
+                                upiVpa: string | null;
                             };
                         };
                     };
@@ -400,6 +495,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -416,7 +512,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Clear session cookie and sign out */
+        /** Clear session cookie, instruct browser to clear site storage, and sign out */
         post: {
             parameters: {
                 query?: never;
@@ -500,6 +596,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -539,6 +636,7 @@ export interface paths {
                          * @enum {string}
                          */
                         channel?: "whatsapp" | "sms";
+                        turnstileToken?: string;
                     };
                 };
             };
@@ -553,6 +651,30 @@ export interface paths {
                             sent: boolean;
                             expiresInSeconds: number;
                             devOtpPreview?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -621,6 +743,19 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -641,7 +776,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sign in or claim workspace via Google One-Tap */
+        /** Removed legacy endpoint — use POST /v1/auth/google/verify with OIDC idToken */
         post: {
             parameters: {
                 query?: never;
@@ -651,34 +786,21 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        idTokenOrSub: string;
-                        /** Format: email */
-                        email: string;
-                        displayName: string;
-                        upiVpa?: string;
+                    "application/json": unknown | {
+                        [key: string]: unknown;
                     };
                 };
             };
             responses: {
                 /** @description Default Response */
-                200: {
+                410: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": {
-                            token: string;
-                            user: {
-                                /** Format: uuid */
-                                id: string;
-                                displayName: string;
-                                preferredLang: string;
-                                /** @enum {string} */
-                                tier: "free" | "trip_pass" | "pro";
-                                hasUpiVpa: boolean;
-                                createdAt: string;
-                            };
+                            error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -729,6 +851,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -789,7 +912,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Create a new collaborative trip workspace */
+        /** Create a new collaborative trip workspace (auto-provisions guest session if unauthenticated) */
         post: {
             parameters: {
                 query?: never;
@@ -856,6 +979,8 @@ export interface paths {
                                 role: "owner" | "editor" | "contributor" | "viewer";
                                 vaultAccess: boolean;
                                 dietaryTags: string[];
+                                hasUpiVpa?: boolean;
+                                isCompanion?: boolean;
                                 joinedAt: string;
                             }[];
                             days: {
@@ -1211,6 +1336,8 @@ export interface paths {
                                 role: "owner" | "editor" | "contributor" | "viewer";
                                 vaultAccess: boolean;
                                 dietaryTags: string[];
+                                hasUpiVpa?: boolean;
+                                isCompanion?: boolean;
                                 joinedAt: string;
                             }[];
                             days: {
@@ -1512,6 +1639,8 @@ export interface paths {
                                 role: "owner" | "editor" | "contributor" | "viewer";
                                 vaultAccess: boolean;
                                 dietaryTags: string[];
+                                hasUpiVpa?: boolean;
+                                isCompanion?: boolean;
                                 joinedAt: string;
                             }[];
                             days: {
@@ -1752,6 +1881,713 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update trip title, destination summary, dates, or Elder comfort mode */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        title?: string;
+                        destinationSummary?: string;
+                        elderModeEnabled?: boolean;
+                        startDate?: string | null;
+                        endDate?: string | null;
+                        /** @enum {string} */
+                        homeCurrency?: "INR" | "THB" | "VND" | "AED" | "JPY" | "EUR" | "USD";
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            trip: {
+                                /** Format: uuid */
+                                id: string;
+                                shortId: string;
+                                title: string;
+                                destinationSummary: string;
+                                startDate: string | null;
+                                endDate: string | null;
+                                /** @enum {string} */
+                                homeCurrency: "INR" | "THB" | "VND" | "AED" | "JPY" | "EUR" | "USD";
+                                isPublicTemplate: boolean;
+                                isSample: boolean;
+                                elderModeEnabled: boolean;
+                                vaultBytesUsed: number;
+                                vaultQuotaBytes: number;
+                                latestSeq: number;
+                                mapAttribution: string;
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/trips/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a co-traveller or companion member (with optional dietary tags & encrypted UPI VPA) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        userId?: string;
+                        displayName?: string;
+                        /**
+                         * @default contributor
+                         * @enum {string}
+                         */
+                        role?: "owner" | "editor" | "contributor" | "viewer";
+                        vaultAccess?: boolean;
+                        /** @default [] */
+                        dietaryTags?: string[];
+                        upiVpa?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            member: {
+                                /** Format: uuid */
+                                userId: string;
+                                displayName: string;
+                                /** @enum {string} */
+                                role: "owner" | "editor" | "contributor" | "viewer";
+                                vaultAccess: boolean;
+                                dietaryTags: string[];
+                                hasUpiVpa?: boolean;
+                                isCompanion?: boolean;
+                                joinedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trips/{id}/members/{memberUserId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a co-traveller from the trip (cannot remove the last owner) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    memberUserId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": "null";
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update a co-traveller role, vault access, dietary tags, display name, or UPI VPA */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    memberUserId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        role?: "owner" | "editor" | "contributor" | "viewer";
+                        vaultAccess?: boolean;
+                        dietaryTags?: string[];
+                        displayName?: string;
+                        upiVpa?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            member: {
+                                /** Format: uuid */
+                                userId: string;
+                                displayName: string;
+                                /** @enum {string} */
+                                role: "owner" | "editor" | "contributor" | "viewer";
+                                vaultAccess: boolean;
+                                dietaryTags: string[];
+                                hasUpiVpa?: boolean;
+                                isCompanion?: boolean;
+                                joinedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/trips/{id}/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a 7-day co-editor / viewer invitation link (with optional email delivery) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @default editor
+                         * @enum {string}
+                         */
+                        role?: "editor" | "contributor" | "viewer";
+                        /** @default false */
+                        vaultAccess?: boolean;
+                        /** Format: email */
+                        email?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            inviteUrl: string;
+                            /** @enum {string} */
+                            role: "editor" | "contributor" | "viewer";
+                            vaultAccess: boolean;
+                            expiresAt: string;
+                            emailed: boolean;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview a co-editor trip invitation token */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            tripId: string;
+                            tripTitle: string;
+                            destinationSummary: string;
+                            /** @enum {string} */
+                            role: "editor" | "contributor" | "viewer";
+                            vaultAccess: boolean;
+                            inviterName?: string;
+                            expiresAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept a co-editor trip invite (reuses signed-in session or provisions guest) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": unknown | {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            tripId: string;
+                            /** @enum {string} */
+                            role: "owner" | "editor" | "contributor" | "viewer";
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trips/{id}/bookings/{bookingId}/attachment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download decrypted ticket attachment (requires vault_access = true) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            fileName: string;
+                            mimeType: string;
+                            dataBase64: string;
+                            sizeBytes: number;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -1772,7 +2608,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/trips/{id}/members": {
+    "/v1/trips/{id}/bookings/{bookingId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1781,47 +2617,64 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add or update a co-traveller membership & dietary tags */
-        post: {
+        post?: never;
+        /** Delete a booking and purge its encrypted document from the vault */
+        delete: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
                     id: string;
+                    bookingId: string;
                 };
                 cookie?: never;
             };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        userId: string;
-                        /**
-                         * @default contributor
-                         * @enum {string}
-                         */
-                        role?: "owner" | "editor" | "contributor" | "viewer";
-                        vaultAccess?: boolean;
-                        /** @default [] */
-                        dietaryTags?: string[];
-                    };
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description Default Response */
-                200: {
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": "null";
+                    };
+                };
+                /** @description Default Response */
+                401: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": {
-                            ok: boolean;
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };
             };
         };
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2119,6 +2972,8 @@ export interface paths {
                                     role: "owner" | "editor" | "contributor" | "viewer";
                                     vaultAccess: boolean;
                                     dietaryTags: string[];
+                                    hasUpiVpa?: boolean;
+                                    isCompanion?: boolean;
                                     joinedAt: string;
                                 }[];
                                 days: {
@@ -2360,6 +3215,28 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -2420,6 +3297,28 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -2451,6 +3350,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/trips/{id}/ws-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Issue a 2-minute signed WebSocket ticket for live co-editing rooms */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: string;
+                            wsUrl: string;
+                            expiresAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/trips/{id}/sync": {
         parameters: {
             query?: never;
@@ -2463,7 +3437,10 @@ export interface paths {
         /** HLC + fractional-index delta-sync batch push/pull (idempotent client_op_id, monotonic server_seq, orphan-to-shortlist rule) */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    not?: unknown;
+                    ticket?: string;
+                };
                 header?: never;
                 path: {
                     id: string;
@@ -2642,6 +3619,28 @@ export interface paths {
                                 deletedAt: string | null;
                                 googleMapsUrl: string | null;
                             }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };
@@ -2834,6 +3833,42 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
             };
         };
         delete?: never;
@@ -2851,7 +3886,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload compressed booking PDF/image: masks Aadhaar, KMS-encrypts into AWS S3 ap-south-1 (Mumbai), and parses booking */
+        /** Upload compressed booking PDF/image: masks Aadhaar, AES-256-GCM envelope-encrypts into R2/S3 or PostgreSQL vault, and parses booking */
         post: {
             parameters: {
                 query?: never;
@@ -2867,7 +3902,8 @@ export interface paths {
                         fileName: string;
                         /** @default application/pdf */
                         mimeType?: string;
-                        contentBase64: string;
+                        contentBase64?: string;
+                        fileBase64?: string;
                         extractedTextHint?: string;
                         /** @default false */
                         coTravellerConsent?: boolean;
@@ -3020,6 +4056,42 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -3027,6 +4099,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -3038,6 +4111,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -3151,6 +4225,42 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
             };
         };
         delete?: never;
@@ -3168,7 +4278,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stateless Cloudflare Email Routing webhook for forwarded confirmations to trips@itinbee.com */
+        /** HMAC-verified Cloudflare Email Routing webhook for forwarded confirmations to trips@itinbee.com */
         post: {
             parameters: {
                 query?: never;
@@ -3206,6 +4316,30 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
             };
         };
         delete?: never;
@@ -3223,7 +4357,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WhatsApp Cloud API webhook for forwarded tickets & social links */
+        /** HMAC-verified WhatsApp Cloud API webhook for forwarded tickets & social links */
         post: {
             parameters: {
                 query?: never;
@@ -3252,6 +4386,30 @@ export interface paths {
                             replyMessage: string;
                             aadhaarRedactions: number;
                             requiresVerification: boolean;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
                         };
                     };
                 };
@@ -4161,6 +5319,7 @@ export interface paths {
                             /** @enum {string} */
                             source: "openrouteservice" | "estimate";
                             cached: boolean;
+                            advisory?: string;
                             attribution: string;
                         };
                     };
@@ -4332,6 +5491,10 @@ export interface paths {
                                     startTime: string | null;
                                     durationMins: number | null;
                                     placeRefId: string | null;
+                                    elderSummaryI18n?: {
+                                        en?: string;
+                                        hi?: string;
+                                    };
                                     image?: {
                                         url: string;
                                         author: string;
@@ -4492,6 +5655,17 @@ export interface paths {
                 };
                 /** @description Default Response */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -4744,6 +5918,32 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                            error: string;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                            error: string;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -4928,6 +6128,32 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                            error: string;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                            error: string;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -4970,9 +6196,11 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        instruction: string;
+                        instruction?: string;
+                        prompt?: string;
                         /** Format: uuid */
                         dayId?: string;
+                        dayNumber?: number;
                     };
                 };
             };
@@ -5004,6 +6232,28 @@ export interface paths {
                                     placeRefId?: string | null;
                                 }[];
                             };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };
@@ -5097,6 +6347,28 @@ export interface paths {
                             closesAt: string | null;
                             totalVotes: number;
                             createdAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };
@@ -5282,6 +6554,28 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -5309,7 +6603,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Append an immutable expense, compensating adjustment, or UPI settlement to the trip ledger */
+        /** Append an expense, compensating adjustment, or UPI settlement to the trip ledger */
         post: {
             parameters: {
                 query?: never;
@@ -5414,6 +6708,28 @@ export interface paths {
                     };
                 };
                 /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -5432,6 +6748,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/trips/{id}/expenses/{expenseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an expense from the trip ledger and recompute kitty pool balances */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    expenseId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": "null";
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/trips/{id}/settlements": {
         parameters: {
             query?: never;
@@ -5439,7 +6827,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Compute min-cash-flow simplified debts and NPCI-aware UPI settlement payloads (<= ₹2,000 upi://pay vs > ₹2,000 COPY_VPA_FALLBACK) */
+        /** Compute min-cash-flow simplified debts and NPCI-aware UPI settlement payloads (restricted to trip members) */
         get: {
             parameters: {
                 query?: never;
@@ -5502,6 +6890,28 @@ export interface paths {
                                 createdAt: string;
                             }[];
                             expenseCount: number;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
                         };
                     };
                 };

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { env } from '../config/env.js';
+import { env, type AppEnv } from '../config/env.js';
 
 export interface AuthTokenClaims {
   sub: string;
@@ -10,34 +10,36 @@ export interface AuthTokenClaims {
   exp: number;
 }
 
-export function hashIdentifier(rawValue: string): string {
+export interface WsTicketClaims {
+  sub: string;
+  tripId: string;
+  purpose: 'ws_live';
+  iat: number;
+  exp: number;
+}
+
+export function hashIdentifier(rawValue: string, secret: string = env.JWT_SECRET): string {
   return crypto
-    .createHmac('sha256', env.JWT_SECRET)
+    .createHmac('sha256', secret)
     .update(rawValue.trim().toLowerCase())
     .digest('hex');
 }
 
-export function signAuthToken(
-  claims: Omit<AuthTokenClaims, 'iat' | 'exp'>,
-  ttlSeconds = 60 * 60 * 24 * 30
-): string {
-  const now = Math.floor(Date.now() / 1000);
-  const payload: AuthTokenClaims = {
-    ...claims,
-    iat: now,
-    exp: now + ttlSeconds,
-  };
+function signHmacToken(payload: object, secret: string): string {
   const encodedPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString(
     'base64url'
   );
   const sig = crypto
-    .createHmac('sha256', env.JWT_SECRET)
+    .createHmac('sha256', secret)
     .update(encodedPayload)
     .digest('base64url');
   return `${encodedPayload}.${sig}`;
 }
 
-export function verifyAuthToken(token: string | undefined | null): AuthTokenClaims | null {
+function verifyHmacTokenPayload<T extends { exp: number }>(
+  token: string | undefined | null,
+  secret: string
+): T | null {
   if (!token) return null;
   const cleaned = token.startsWith('Bearer ') ? token.slice(7).trim() : token.trim();
   const parts = cleaned.split('.');
@@ -46,7 +48,7 @@ export function verifyAuthToken(token: string | undefined | null): AuthTokenClai
   if (!encodedPayload || !sig) return null;
 
   const expectedSig = crypto
-    .createHmac('sha256', env.JWT_SECRET)
+    .createHmac('sha256', secret)
     .update(encodedPayload)
     .digest('base64url');
 
@@ -62,7 +64,7 @@ export function verifyAuthToken(token: string | undefined | null): AuthTokenClai
   try {
     const decoded = JSON.parse(
       Buffer.from(encodedPayload, 'base64url').toString('utf8')
-    ) as AuthTokenClaims;
+    ) as T;
     const now = Math.floor(Date.now() / 1000);
     if (decoded.exp < now) return null;
     return decoded;
@@ -71,21 +73,89 @@ export function verifyAuthToken(token: string | undefined | null): AuthTokenClai
   }
 }
 
-export function deriveGuestSessionHash(sessionSeed: string): string {
+export function signAuthToken(
+  claims: Omit<AuthTokenClaims, 'iat' | 'exp'>,
+  ttlSeconds = 60 * 60 * 24 * 30,
+  secret: string = env.JWT_SECRET
+): string {
+  const now = Math.floor(Date.now() / 1000);
+  const payload: AuthTokenClaims = {
+    ...claims,
+    iat: now,
+    exp: now + ttlSeconds,
+  };
+  return signHmacToken(payload, secret);
+}
+
+export const signAccessToken = signAuthToken;
+
+export function verifyAuthToken(
+  token: string | undefined | null,
+  secret: string = env.JWT_SECRET
+): AuthTokenClaims | null {
+  const decoded = verifyHmacTokenPayload<AuthTokenClaims & { purpose?: string }>(
+    token,
+    secret
+  );
+  if (!decoded || decoded.purpose === 'ws_live' || !decoded.sub) return null;
+  return decoded;
+}
+
+/**
+ * Signs a short-lived (2-minute) room-scoped WebSocket ticket for `/v1/trips/:id/live`.
+ */
+export function signWsTicket(
+  params: { tripId: string; userId: string },
+  secret: string = env.JWT_SECRET,
+  ttlSeconds = 120
+): string {
+  const now = Math.floor(Date.now() / 1000);
+  const payload: WsTicketClaims = {
+    sub: params.userId,
+    tripId: params.tripId,
+    purpose: 'ws_live',
+    iat: now,
+    exp: now + ttlSeconds,
+  };
+  return signHmacToken(payload, secret);
+}
+
+export function verifyWsTicket(
+  ticket: string | undefined | null,
+  secret: string = env.JWT_SECRET
+): { tripId: string; userId: string; iat: number; exp: number } | null {
+  const decoded = verifyHmacTokenPayload<WsTicketClaims>(ticket, secret);
+  if (!decoded || decoded.purpose !== 'ws_live' || !decoded.sub || !decoded.tripId) {
+    return null;
+  }
+  return {
+    tripId: decoded.tripId,
+    userId: decoded.sub,
+    iat: decoded.iat,
+    exp: decoded.exp,
+  };
+}
+
+export function deriveGuestSessionHash(
+  sessionSeed: string,
+  secret: string = env.JWT_SECRET
+): string {
   return crypto
-    .createHmac('sha256', env.JWT_SECRET)
+    .createHmac('sha256', secret)
     .update(`guest-voter:${sessionSeed}`)
     .digest('hex');
 }
 
 /**
- * Verifies a Cloudflare Turnstile token for zero-OTP guest poll voting.
- * Calls Cloudflare siteverify when TURNSTILE_SECRET_KEY is configured in production;
- * uses deterministic local validation in local dev / tests.
+ * Verifies a Cloudflare Turnstile token for bot-protected endpoints.
+ * Calls Cloudflare siteverify whenever TURNSTILE_SECRET_KEY is configured;
+ * uses deterministic local validation in local dev / tests when unset.
  */
 export async function verifyTurnstileToken(
   turnstileToken: string,
-  remoteIp?: string
+  remoteIp?: string,
+  config: Pick<AppEnv, 'TURNSTILE_SECRET_KEY' | 'NODE_ENV'> = env,
+  fetchImpl: typeof fetch = fetch
 ): Promise<{ valid: boolean; reason?: string }> {
   const trimmed = turnstileToken.trim();
   if (!trimmed || trimmed.length < 6) {
@@ -99,18 +169,20 @@ export async function verifyTurnstileToken(
     return { valid: false, reason: 'Turnstile challenge failed' };
   }
 
-  if (env.TURNSTILE_SECRET_KEY && env.NODE_ENV === 'production') {
+  const secretKey = config.TURNSTILE_SECRET_KEY?.trim();
+  if (secretKey) {
     try {
       const form = new URLSearchParams();
-      form.set('secret', env.TURNSTILE_SECRET_KEY);
+      form.set('secret', secretKey);
       form.set('response', trimmed);
       if (remoteIp) form.set('remoteip', remoteIp);
 
-      const res = await fetch(
+      const res = await fetchImpl(
         'https://challenges.cloudflare.com/turnstile/v0/siteverify',
         {
           method: 'POST',
           body: form,
+          signal: AbortSignal.timeout(8000),
         }
       );
       if (!res.ok) {

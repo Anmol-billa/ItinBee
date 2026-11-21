@@ -10,6 +10,8 @@ export interface TripMember {
   role: MemberRole;
   vaultAccess: boolean;
   dietaryTags: string[];
+  upiVpa?: string | null;
+  hasUpiVpa?: boolean;
   joinedAt: string;
 }
 
@@ -66,6 +68,17 @@ export interface ItineraryItem {
   googleMapsUrl: string | null;
 }
 
+export interface BookingPassenger {
+  name: string;
+  age?: number | null;
+  gender?: string | null;
+  seatOrBerth?: string | null;
+  coach?: string | null;
+  bookingStatus?: string | null;
+  idType?: string | null;
+  idNumberMasked?: string | null;
+}
+
 export interface BookingView {
   id: string;
   tripId: string;
@@ -74,15 +87,21 @@ export interface BookingView {
   pnrMasked: string | null;
   pnrLast3: string | null;
   pnrPlain?: string | null;
+  passengers?: BookingPassenger[];
+  hasEncryptedDocument?: boolean;
+  docSizeBytes?: number;
   status: 'confirmed' | 'rac' | 'wl' | 'cancelled' | 'pending';
   summary: {
     headline: string;
     routeLabel?: string;
     vehicleNumber?: string;
+    vehicleName?: string;
+    operatorName?: string;
     coach?: string;
     seatOrBerth?: string;
     terminalOrPlatform?: string;
     boardingPoint?: string;
+    propertyName?: string;
   };
   lowConfidenceFields: string[];
   parserConfidence: number;

@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { env } from '../config/env.js';
+import { env, type AppEnv } from '../config/env.js';
 import {
   deriveGuestSessionHash,
   verifyTurnstileToken,
 } from '../security/auth-tokens.js';
+import { requireTripAccess } from '../security/permissions.js';
 import {
   CurrencyCodeSchema,
   ExpenseEntryTypeSchema,
@@ -22,10 +23,15 @@ import { extractAuthClaims } from './auth-helper.js';
 export interface PollsLedgerPluginOpts {
   store: TripStore;
   bus: RealtimeAndQueueBus;
+  config?: AppEnv;
 }
+
+const ErrorSchema = z.object({ error: z.string() });
 
 export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
   async (app, opts) => {
+    const cfg = opts.config ?? env;
+
     app.post(
       '/v1/trips/:id/polls',
       {
@@ -51,16 +57,26 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
           }),
           response: {
             201: PollViewSchema,
-            404: z.object({ error: z.string() }),
+            401: ErrorSchema,
+            403: ErrorSchema,
+            404: ErrorSchema,
           },
         },
       },
       async (req, reply) => {
-        const claims = extractAuthClaims(req);
+        const access = await requireTripAccess(
+          req,
+          reply,
+          opts.store,
+          req.params.id,
+          { write: true, config: cfg }
+        );
+        if (!access) return;
+
         try {
           const poll = await opts.store.createPoll({
             tripId: req.params.id,
-            createdBy: claims?.sub ?? null,
+            createdBy: access.userId,
             question: req.body.question,
             options: req.body.options,
             closesAt: req.body.closesAt,
@@ -102,20 +118,20 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
           }),
           response: {
             200: PollViewSchema,
-            400: z.object({ error: z.string() }),
-            403: z.object({ error: z.string() }),
-            404: z.object({ error: z.string() }),
+            400: ErrorSchema,
+            403: ErrorSchema,
+            404: ErrorSchema,
           },
         },
       },
       async (req, reply) => {
-        const claims = extractAuthClaims(req);
+        const claims = extractAuthClaims(req, cfg.JWT_SECRET);
 
-        // Verify Cloudflare Turnstile challenge if not authenticated via bearer/session
         if (!claims) {
           const turnstile = await verifyTurnstileToken(
             req.body.turnstileToken,
-            req.ip
+            req.ip,
+            cfg
           );
           if (!turnstile.valid) {
             return reply.code(403).send({
@@ -124,7 +140,7 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
           }
         }
 
-        let rawGuestSeed =
+        const rawGuestSeed =
           req.cookies?.itinbee_voter_sid ??
           req.body.guestSessionId ??
           crypto.randomUUID();
@@ -133,7 +149,7 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
           reply.setCookie('itinbee_voter_sid', rawGuestSeed, {
             httpOnly: true,
             sameSite: 'lax',
-            secure: env.NODE_ENV === 'production',
+            secure: cfg.NODE_ENV === 'production',
             path: '/',
             maxAge: 60 * 60 * 24 * 90,
           });
@@ -141,7 +157,7 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
 
         const guestSessionHash = claims
           ? null
-          : deriveGuestSessionHash(rawGuestSeed);
+          : deriveGuestSessionHash(rawGuestSeed, cfg.JWT_SECRET);
 
         try {
           const poll = await opts.store.castPollVote({
@@ -193,11 +209,22 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
           }),
           response: {
             201: KittyPoolSchema,
-            404: z.object({ error: z.string() }),
+            401: ErrorSchema,
+            403: ErrorSchema,
+            404: ErrorSchema,
           },
         },
       },
       async (req, reply) => {
+        const access = await requireTripAccess(
+          req,
+          reply,
+          opts.store,
+          req.params.id,
+          { write: true, config: cfg }
+        );
+        if (!access) return;
+
         try {
           const pool = await opts.store.createKittyPool({
             tripId: req.params.id,
@@ -222,7 +249,7 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
         schema: {
           tags: ['Ledger'],
           summary:
-            'Append an immutable expense, compensating adjustment, or UPI settlement to the trip ledger',
+            'Append an expense, compensating adjustment, or UPI settlement to the trip ledger',
           params: z.object({
             id: z.string().uuid(),
           }),
@@ -250,12 +277,23 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
           }),
           response: {
             201: ExpenseViewSchema,
-            400: z.object({ error: z.string() }),
-            404: z.object({ error: z.string() }),
+            400: ErrorSchema,
+            401: ErrorSchema,
+            403: ErrorSchema,
+            404: ErrorSchema,
           },
         },
       },
       async (req, reply) => {
+        const access = await requireTripAccess(
+          req,
+          reply,
+          opts.store,
+          req.params.id,
+          { write: true, config: cfg }
+        );
+        if (!access) return;
+
         try {
           const expense = await opts.store.appendExpense({
             tripId: req.params.id,
@@ -282,13 +320,60 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
       }
     );
 
+    app.delete(
+      '/v1/trips/:id/expenses/:expenseId',
+      {
+        schema: {
+          tags: ['Ledger'],
+          summary: 'Delete an expense from the trip ledger and recompute kitty pool balances',
+          params: z.object({
+            id: z.string().uuid(),
+            expenseId: z.string().uuid(),
+          }),
+          response: {
+            204: z.null(),
+            401: ErrorSchema,
+            403: ErrorSchema,
+            404: ErrorSchema,
+          },
+        },
+      },
+      async (req, reply) => {
+        const access = await requireTripAccess(
+          req,
+          reply,
+          opts.store,
+          req.params.id,
+          { write: true, config: cfg }
+        );
+        if (!access) return;
+
+        const deleted = await opts.store.deleteExpense(
+          req.params.id,
+          req.params.expenseId
+        );
+        if (!deleted) {
+          return reply.code(404).send({ error: 'Expense not found' });
+        }
+
+        await opts.bus.publishTripEvent({
+          type: 'expense_deleted',
+          tripId: req.params.id,
+          timestamp: new Date().toISOString(),
+          payload: { expenseId: req.params.expenseId },
+        });
+
+        return reply.code(204).send(null);
+      }
+    );
+
     app.get(
       '/v1/trips/:id/settlements',
       {
         schema: {
           tags: ['Ledger'],
           summary:
-            'Compute min-cash-flow simplified debts and NPCI-aware UPI settlement payloads (<= ₹2,000 upi://pay vs > ₹2,000 COPY_VPA_FALLBACK)',
+            'Compute min-cash-flow simplified debts and NPCI-aware UPI settlement payloads (restricted to trip members)',
           params: z.object({
             id: z.string().uuid(),
           }),
@@ -301,11 +386,22 @@ export const pollsLedgerRoutes: FastifyPluginAsyncZod<PollsLedgerPluginOpts> =
               kittyPools: z.array(KittyPoolSchema),
               expenseCount: z.number().int().nonnegative(),
             }),
-            404: z.object({ error: z.string() }),
+            401: ErrorSchema,
+            403: ErrorSchema,
+            404: ErrorSchema,
           },
         },
       },
       async (req, reply) => {
+        const access = await requireTripAccess(
+          req,
+          reply,
+          opts.store,
+          req.params.id,
+          { config: cfg }
+        );
+        if (!access) return;
+
         try {
           return await opts.store.getSettlements(req.params.id);
         } catch (err) {

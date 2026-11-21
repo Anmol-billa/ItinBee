@@ -36,6 +36,85 @@ const HIGH_CONFIDENCE_HISTORIC = new Set([
 
 const WORSHIP_HISTORIC = new Set(['temple', 'monastery', 'church', 'shrine']);
 
+const EXPLICIT_VISITABLE_PARK_OR_VIEWPOINT =
+  /\b(viewpoint|scenic point|observation deck|observatory|national park|wildlife sanctuary|tiger reserve|biosphere reserve|bird sanctuary|botanical garden|waterfall|falls)\b/i;
+
+const MACRO_GEO_DESCRIPTION =
+  /\b(mountain range|mountain system|hill range|subrange|state of india|state in india|union territory|province of|province in|\bprovince\b|prefecture of|prefecture in|\bprefecture\b|country in|sovereign state|\bcountry\b|\bcontinent\b|subcontinent|archipelago|administrative division|district of|district in|taluk|tehsil|mandal|metropolitan area|hill station in|city in|town in|municipality in)\b/i;
+
+const MACRO_GEO_TITLES = new Set([
+  'western ghats',
+  'eastern ghats',
+  'himalayas',
+  'the himalayas',
+  'aravalli range',
+  'vindhya range',
+  'satpura range',
+  'nilgiri mountains',
+  'nilgiri hills',
+  'anaimalai hills',
+  'anamalai hills',
+  'cardamom hills',
+  'palani hills',
+  'pir panjal',
+  'pir panjal range',
+  'zanskar range',
+  'karakoram',
+  'deccan plateau',
+  'indo-gangetic plain',
+]);
+
+/**
+ * Filters out broad macro-geographic regions (mountain ranges, states, provinces, countries, continents,
+ * e.g. "Western Ghats", "Anaimalai Hills") when building city-level POI lists, unless explicitly a
+ * visitable viewpoint, waterfall, or national park / wildlife sanctuary.
+ */
+export function isMacroGeographicEntity(
+  description: string | null | undefined,
+  title: string,
+  osmTags?: Record<string, string> | null
+): boolean {
+  const combined = `${description ?? ''} ${title}`.trim();
+  if (
+    EXPLICIT_VISITABLE_PARK_OR_VIEWPOINT.test(combined) ||
+    osmTags?.tourism === 'viewpoint' ||
+    osmTags?.boundary === 'national_park'
+  ) {
+    return false;
+  }
+
+  if (osmTags) {
+    if (osmTags.natural === 'mountain_range' || osmTags.natural === 'continent') {
+      return true;
+    }
+    if (
+      osmTags.place &&
+      ['continent', 'country', 'state', 'province', 'region', 'county', 'district'].includes(
+        osmTags.place
+      )
+    ) {
+      return true;
+    }
+  }
+
+  const normTitle = title
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (MACRO_GEO_TITLES.has(normTitle)) {
+    return true;
+  }
+  if (/\b(?:mountain range|hill range)\b/i.test(normTitle)) {
+    return true;
+  }
+  if (description && MACRO_GEO_DESCRIPTION.test(description)) {
+    return true;
+  }
+
+  return false;
+}
+
 /** Tags that make a minor-looking object worth listing. */
 export function hasNotabilitySignal(tags: Record<string, string>): boolean {
   return Boolean(
@@ -51,6 +130,11 @@ export function hasNotabilitySignal(tags: Record<string, string>): boolean {
 
 /** Classifies an OpenStreetMap element. Returns null for junk (minor objects without any notability signal). */
 export function categorizeOsm(tags: Record<string, string>): Categorization | null {
+  const name = tags['name:en'] ?? tags.name ?? '';
+  if (isMacroGeographicEntity(tags.description ?? null, name, tags)) {
+    return null;
+  }
+
   const amenity = tags.amenity;
   const tourism = tags.tourism;
   const historic = tags.historic;
@@ -96,6 +180,9 @@ export function categorizeOsm(tags: Record<string, string>): Categorization | nu
     return hasNotabilitySignal(tags) ? { category: 'sights', subtype: 'artwork' } : null;
   }
   if (natural) {
+    if (natural === 'mountain_range' || natural === 'ridge' || natural === 'arete') {
+      return null;
+    }
     return { category: 'nature', subtype: natural };
   }
   if (leisure && ['park', 'garden', 'nature_reserve'].includes(leisure)) {
@@ -122,13 +209,17 @@ const NON_PLACE = /\b(school|college|university|institute|hospital|clinic|bank|c
 
 /**
  * Classifies a Wikipedia article from its short description ("Fort in Jaipur, India") and title.
- * Returns null for things that are not visitable places.
+ * Returns null for things that are not visitable places or are broad macro-geographic regions.
  */
 export function categorizeWikipedia(description: string | null, title: string): Categorization | null {
   const text = `${description ?? ''}`.trim();
   if (!text) return null;
+  if (isMacroGeographicEntity(text, title)) return null;
+
   // Short descriptions such as "Hindu temple in Kyoto" begin with the place type: test it first
   const head = text.split(/\b(?:in|at|near|on|of|located)\b/i)[0] ?? text;
+  if (NON_PLACE.test(head)) return null;
+
   // the head noun is the last place-type word ("Hill fort" is a fort, not a hill)
   let best: { k: (typeof KEYWORDS)[number]; end: number; len: number } | null = null;
   for (const k of KEYWORDS) {
@@ -176,6 +267,9 @@ const WV_COFFEE = /\b(cafe|café|coffee|tea|bakery|chai|espresso|roaster)\b/i;
 
 /** Wikivoyage listing type + keywords -> category. */
 export function categorizeWikivoyage(listing: WikivoyageListing): Categorization | null {
+  if (isMacroGeographicEntity(listing.content ?? null, listing.name)) {
+    return null;
+  }
   const hay = `${listing.name} ${listing.section ?? ''}`;
   const nameOnly = listing.name;
   switch (listing.type) {

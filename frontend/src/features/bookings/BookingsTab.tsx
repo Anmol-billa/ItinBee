@@ -6,20 +6,32 @@ import {
   Bed,
   Bus,
   Check,
+  Download,
   FolderLock,
   ListChecks,
   Plane,
   ShieldCheck,
   Sparkles,
   Train,
+  Trash2,
   Upload,
 } from 'lucide-react';
-import { ingestTicketOrReelText } from '@/lib/api-client';
 import {
+  deleteCloudBooking,
+  downloadBookingAttachment,
+  ingestBookingFile,
+  ingestTicketOrReelText,
+  type SyncClientMutationInput,
+} from '@/lib/api-client';
+import { formatBookingSummary } from '@/lib/import-types';
+import {
+  decryptOfflineTicket,
+  deleteOfflineTicket,
   encryptAndCacheTicketOffline,
   localDb,
   midpointSortKey,
   nextClientHlc,
+  uint8ToBase64,
 } from '@/lib/offline-db';
 import type { BookingView, ItineraryItem, TripDay, TripWorkspace } from '@/lib/types';
 
@@ -28,14 +40,33 @@ interface BookingsTabProps {
   currentDay: TripDay | null;
   isCloudSynced: boolean;
   onUpdateWorkspace: (updater: (prev: TripWorkspace) => TripWorkspace) => void;
+  onQueueSync?: (
+    tripId: string,
+    baseSeq: number,
+    mutations: SyncClientMutationInput[]
+  ) => void;
   onNotify: (msg: string) => void;
 }
+
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
 const SAMPLE_IRCTC_SNIPPET =
   'IRCTC PNR: 2849105842 Train: 12017 DEHRADUN SHTBDI DOJ: 12-12-2026 NDLS 06:45 to HW 11:15CNF/C4/25/WS Passenger: R Sharma Aadhaar 4912 8834 9021';
 
 const SAMPLE_REEL_SNIPPET =
   'Instagram Reel: Morning bun omelette at Chaar Dukan Landour, sunset walk to Lal Tibba Mussoorie & dinner at Cafe Ivy Landour #uttarakhand';
+
+function triggerBrowserDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
 
 function ProviderIcon({ provider }: { provider: string }) {
   const p = provider.toLowerCase();
@@ -56,10 +87,13 @@ export function BookingsTab({
   currentDay,
   isCloudSynced,
   onUpdateWorkspace,
+  onQueueSync,
   onNotify,
 }: BookingsTabProps) {
   const [scoutText, setScoutText] = useState('');
   const [scoutBusy, setScoutBusy] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [scoutBanner, setScoutBanner] = useState<{
     headline: string;
     amberWarning: boolean;
@@ -120,43 +154,59 @@ export function BookingsTab({
           .filter((i) => i.dayId === targetDay?.id && !i.deletedAt)
           .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
         const lastKey = dayStops[dayStops.length - 1]?.sortKey ?? null;
-        const newStopId = crypto.randomUUID();
 
-        const newItem: ItineraryItem = {
-          id: newStopId,
-          tripId: workspace.trip.id,
-          dayId: targetDay?.id ?? null,
-          kind: pb.provider === 'airbnb' || pb.provider === 'mmt' ? 'stay' : 'transit',
-          title: pb.suggestedTitle,
-          notes: String(pb.summary.headline ?? 'Parsed booking confirmation'),
-          lat: null,
-          lng: null,
-          placeRefId: null,
-          addressLocalScript: null,
-          sortKey: midpointSortKey(lastKey, null),
-          startTime: pb.suggestedStartTime ?? '08:00',
-          durationMins: 180,
-          transitMeta: {
-            mode:
-              pb.provider === 'irctc'
-                ? 'rail'
-                : pb.provider === 'redbus'
-                  ? 'bus'
-                  : 'flight',
-            coachOrTerminal: String(
-              pb.summary.coach ?? pb.summary.terminalOrPlatform ?? ''
-            ),
-            seatOrBerth: String(pb.summary.seatOrBerth ?? ''),
-          },
-          dietaryFlags: [],
-          accessibilityNotes: '',
-          elderSummaryI18n: { en: pb.suggestedTitle },
-          isShortlist: false,
-          serverSeq: workspace.trip.latestSeq + 1,
-          hlcTimestamp: nextClientHlc(),
-          deletedAt: null,
-          googleMapsUrl: null,
-        };
+        // Use backend's savedBooking & savedShortlistItems IDs when cloud-synced!
+        const serverItem = isCloudSynced ? result.savedShortlistItems?.[0] : undefined;
+        const serverBooking = isCloudSynced ? result.savedBooking : undefined;
+
+        const stopId = serverItem?.id ?? serverBooking?.itemId ?? crypto.randomUUID();
+        const hlc = nextClientHlc();
+
+        const newItem: ItineraryItem = serverItem
+          ? {
+              ...serverItem,
+              dayId: targetDay?.id ?? null,
+              isShortlist: false,
+              sortKey: midpointSortKey(lastKey, null),
+              startTime: pb.suggestedStartTime ?? serverItem.startTime ?? '08:00',
+              durationMins: serverItem.durationMins ?? 180,
+              hlcTimestamp: hlc,
+            }
+          : {
+              id: stopId,
+              tripId: workspace.trip.id,
+              dayId: targetDay?.id ?? null,
+              kind: pb.provider === 'airbnb' || pb.provider === 'mmt' ? 'stay' : 'transit',
+              title: pb.suggestedTitle,
+              notes: String(pb.summary.headline ?? 'Parsed booking confirmation'),
+              lat: null,
+              lng: null,
+              placeRefId: null,
+              addressLocalScript: null,
+              sortKey: midpointSortKey(lastKey, null),
+              startTime: pb.suggestedStartTime ?? '08:00',
+              durationMins: 180,
+              transitMeta: {
+                mode:
+                  pb.provider === 'irctc'
+                    ? 'rail'
+                    : pb.provider === 'redbus'
+                      ? 'bus'
+                      : 'flight',
+                coachOrTerminal: String(
+                  pb.summary.coach ?? pb.summary.terminalOrPlatform ?? ''
+                ),
+                seatOrBerth: String(pb.summary.seatOrBerth ?? ''),
+              },
+              dietaryFlags: [],
+              accessibilityNotes: '',
+              elderSummaryI18n: { en: pb.suggestedTitle },
+              isShortlist: false,
+              serverSeq: workspace.trip.latestSeq + 1,
+              hlcTimestamp: hlc,
+              deletedAt: null,
+              googleMapsUrl: null,
+            };
 
         const normalizedStatus: BookingView['status'] =
           pb.status === 'rac' ||
@@ -166,31 +216,60 @@ export function BookingsTab({
             ? pb.status
             : 'confirmed';
 
-        const newBooking: BookingView = {
-          id: crypto.randomUUID(),
-          tripId: workspace.trip.id,
-          itemId: newStopId,
-          provider: pb.provider,
-          pnrMasked: pb.pnrMasked,
-          pnrLast3: pb.pnrMasked ? pb.pnrMasked.slice(-3) : null,
-          status: normalizedStatus,
-          summary: {
-            headline: String(pb.summary.headline ?? pb.suggestedTitle),
-            coach: pb.summary.coach ? String(pb.summary.coach) : undefined,
-            seatOrBerth: pb.summary.seatOrBerth
-              ? String(pb.summary.seatOrBerth)
-              : undefined,
-          },
-          lowConfidenceFields: pb.lowConfidenceFields,
-          parserConfidence: pb.parserConfidence,
-          createdAt: new Date().toISOString(),
-        };
+        const newBooking: BookingView = serverBooking
+          ? serverBooking
+          : {
+              id: crypto.randomUUID(),
+              tripId: workspace.trip.id,
+              itemId: stopId,
+              provider: pb.provider,
+              pnrMasked: pb.pnrMasked,
+              pnrLast3: pb.pnrMasked ? pb.pnrMasked.slice(-3) : null,
+              status: normalizedStatus,
+              summary: {
+                headline: String(pb.summary.headline ?? pb.suggestedTitle),
+                coach: pb.summary.coach ? String(pb.summary.coach) : undefined,
+                seatOrBerth: pb.summary.seatOrBerth
+                  ? String(pb.summary.seatOrBerth)
+                  : undefined,
+              },
+              lowConfidenceFields: pb.lowConfidenceFields,
+              parserConfidence: pb.parserConfidence,
+              createdAt: new Date().toISOString(),
+            };
 
         onUpdateWorkspace((prev) => ({
           ...prev,
-          items: [...prev.items, newItem],
-          bookings: [newBooking, ...prev.bookings],
+          items: [...prev.items.filter((i) => i.id !== newItem.id), newItem],
+          bookings: [
+            newBooking,
+            ...prev.bookings.filter((b) => b.id !== newBooking.id),
+          ],
         }));
+
+        // Promote server shortlist item onto targetDay in cloud sync
+        if (isCloudSynced && onQueueSync) {
+          onQueueSync(workspace.trip.id, workspace.trip.latestSeq, [
+            {
+              clientOpId: crypto.randomUUID(),
+              hlcTimestamp: hlc,
+              baseSeq: workspace.trip.latestSeq,
+              entityType: 'itinerary_item',
+              entityId: newItem.id,
+              action: 'upsert',
+              payload: {
+                dayId: newItem.dayId,
+                kind: newItem.kind,
+                title: newItem.title,
+                notes: newItem.notes,
+                sortKey: newItem.sortKey,
+                startTime: newItem.startTime,
+                durationMins: newItem.durationMins,
+                isShortlist: false,
+              },
+            },
+          ]);
+        }
 
         setScoutBanner({
           headline: `Added ${pb.suggestedTitle}${pb.pnrMasked ? ` (${pb.pnrMasked})` : ''}`,
@@ -199,35 +278,44 @@ export function BookingsTab({
         });
         onNotify(`Parsed ${pb.provider.toUpperCase()} booking onto Day ${targetDay?.dayNumber ?? 1}.`);
       } else if (result.extractedSocialStops.length > 0) {
-        const added: ItineraryItem[] = result.extractedSocialStops.map((s, idx) => ({
-          id: crypto.randomUUID(),
-          tripId: workspace.trip.id,
-          dayId: null,
-          kind: s.kind,
-          title: s.title,
-          notes: 'Extracted from social caption · Ready to slot into a day',
-          lat: s.lat,
-          lng: s.lng,
-          placeRefId: s.placeRefId,
-          addressLocalScript: s.addressLocalScript,
-          sortKey: `s${idx}`,
-          startTime: null,
-          durationMins: 60,
-          transitMeta: {},
-          dietaryFlags: s.dietaryFlags,
-          accessibilityNotes: s.accessibilityNotes,
-          elderSummaryI18n: { en: s.title },
-          isShortlist: true,
-          serverSeq: workspace.trip.latestSeq + 1,
-          hlcTimestamp: nextClientHlc(),
-          deletedAt: null,
-          googleMapsUrl: s.googleMapsUrl,
-        }));
+        const added: ItineraryItem[] =
+          isCloudSynced && result.savedShortlistItems && result.savedShortlistItems.length > 0
+            ? result.savedShortlistItems
+            : result.extractedSocialStops.map((s, idx) => ({
+                id: crypto.randomUUID(),
+                tripId: workspace.trip.id,
+                dayId: null,
+                kind: s.kind,
+                title: s.title,
+                notes: 'Extracted from social caption · Ready to slot into a day',
+                lat: s.lat,
+                lng: s.lng,
+                placeRefId: s.placeRefId,
+                addressLocalScript: s.addressLocalScript,
+                sortKey: `s${idx}`,
+                startTime: null,
+                durationMins: 60,
+                transitMeta: {},
+                dietaryFlags: s.dietaryFlags,
+                accessibilityNotes: s.accessibilityNotes,
+                elderSummaryI18n: { en: s.title },
+                isShortlist: true,
+                serverSeq: workspace.trip.latestSeq + 1,
+                hlcTimestamp: nextClientHlc(),
+                deletedAt: null,
+                googleMapsUrl: s.googleMapsUrl,
+              }));
 
-        onUpdateWorkspace((prev) => ({
-          ...prev,
-          shortlist: [...prev.shortlist, ...added],
-        }));
+        onUpdateWorkspace((prev) => {
+          const existingIds = new Set(prev.shortlist.map((i) => i.id));
+          return {
+            ...prev,
+            shortlist: [
+              ...prev.shortlist,
+              ...added.filter((a) => !existingIds.has(a.id)),
+            ],
+          };
+        });
 
         setScoutBanner({
           headline: `Pinned ${added.length} places from link into Shortlist`,
@@ -258,7 +346,7 @@ export function BookingsTab({
           id: crypto.randomUUID(),
           tripId: workspace.trip.id,
           itemId: newStopId,
-          provider: /irctc|shtbdi|vande/i.test(text) ? 'irctc' : 'transit',
+          provider: /irctc|shtbdi|vande/i.test(text) ? 'irctc' : 'manual',
           pnrMasked: masked,
           pnrLast3: rawPnr.slice(-3),
           status,
@@ -342,11 +430,22 @@ export function BookingsTab({
   const handleVaultUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      onNotify('Ticket file exceeds 8 MB limit — please compress or crop screenshot first.');
+      e.target.value = '';
+      return;
+    }
+
+    setUploadBusy(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
+      const mimeType = file.type || 'application/pdf';
+
+      // Always cache encrypted copy in IndexedDB for zero-signal gate access
       const encrypted = await encryptAndCacheTicketOffline({
         tripId: workspace.trip.id,
         fileName: file.name,
+        mimeType,
         plainBytes: bytes,
         passphrase: vaultPassphrase || '1234',
       });
@@ -359,12 +458,116 @@ export function BookingsTab({
         },
         ...prev,
       ]);
-      onNotify(`Encrypted "${file.name}" in local AES-256-GCM vault.`);
+
+      // For cloud trips, upload to KMS-encrypted Cloud Vault + parse booking
+      if (isCloudSynced) {
+        try {
+          const fileBase64 = uint8ToBase64(bytes);
+          const cloudRes = await ingestBookingFile({
+            tripId: workspace.trip.id,
+            fileName: file.name,
+            mimeType,
+            fileBase64,
+          });
+          onUpdateWorkspace((prev) => {
+            const addedShortlist = cloudRes.savedShortlistItems ?? [];
+            const existingShortlistIds = new Set(prev.shortlist.map((s) => s.id));
+            return {
+              ...prev,
+              trip: {
+                ...prev.trip,
+                vaultBytesUsed:
+                  (prev.trip.vaultBytesUsed ?? 0) +
+                  (cloudRes.encryptedBytesStored ?? bytes.byteLength),
+              },
+              bookings: cloudRes.savedBooking
+                ? [
+                    cloudRes.savedBooking,
+                    ...prev.bookings.filter(
+                      (b) => b.id !== cloudRes.savedBooking!.id
+                    ),
+                  ]
+                : prev.bookings,
+              shortlist: [
+                ...prev.shortlist,
+                ...addedShortlist.filter((s) => !existingShortlistIds.has(s.id)),
+              ],
+            };
+          });
+          onNotify(`Encrypted & stored "${file.name}" in cloud + offline ticket vault.`);
+        } catch (cloudErr) {
+          onNotify(
+            cloudErr instanceof Error
+              ? `${cloudErr.message} (Cached encrypted copy offline.)`
+              : `Encrypted "${file.name}" in local offline vault.`
+          );
+        }
+      } else {
+        onNotify(`Encrypted "${file.name}" in local AES-256-GCM vault.`);
+      }
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Could not encrypt ticket.');
     } finally {
+      setUploadBusy(false);
       e.target.value = '';
     }
+  };
+
+  const handleDownloadCloudAttachment = async (booking: BookingView) => {
+    setDownloadingId(booking.id);
+    try {
+      const { blob, fileName } = await downloadBookingAttachment(
+        workspace.trip.id,
+        booking.id
+      );
+      triggerBrowserDownload(blob, fileName);
+      onNotify(`Downloaded "${fileName}".`);
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Could not download attachment.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleRemoveBooking = async (booking: BookingView) => {
+    if (isCloudSynced) {
+      try {
+        await deleteCloudBooking(workspace.trip.id, booking.id);
+      } catch (err) {
+        onNotify(err instanceof Error ? err.message : 'Could not remove booking.');
+        return;
+      }
+    }
+    onUpdateWorkspace((prev) => ({
+      ...prev,
+      bookings: prev.bookings.filter((b) => b.id !== booking.id),
+    }));
+    onNotify('Removed booking from vault.');
+  };
+
+  const handleDecryptOfflineFile = async (id: string) => {
+    setDownloadingId(id);
+    try {
+      const { fileName, mimeType, bytes } = await decryptOfflineTicket({
+        id,
+        passphrase: vaultPassphrase || '1234',
+      });
+      triggerBrowserDownload(
+        new Blob([bytes as BlobPart], { type: mimeType }),
+        fileName
+      );
+      onNotify(`Decrypted "${fileName}".`);
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Could not decrypt offline ticket.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDeleteOfflineFile = async (id: string, fileName: string) => {
+    await deleteOfflineTicket(id);
+    setVaultFiles((prev) => prev.filter((f) => f.id !== id));
+    onNotify(`Removed "${fileName}" from offline vault.`);
   };
 
   const statusBadgeStyle = (status: BookingView['status']) => {
@@ -484,47 +687,90 @@ export function BookingsTab({
           </div>
         ) : (
           <ul className="divide-y divide-navy/15 rounded-xl border border-navy/20 bg-[#FFFDF8] shadow-panel">
-            {workspace.bookings.map((bk) => (
-              <li
-                key={bk.id}
-                className="flex flex-wrap items-center justify-between gap-3 p-4"
-              >
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="mt-0.5 inline-grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-paper">
-                    <ProviderIcon provider={bk.provider} />
-                  </span>
-                  <div className="min-w-0 space-y-1">
-                    <div className="text-[15px] font-bold text-navy">
-                      {bk.summary.headline}
-                    </div>
-                    <div className="font-mono text-[12px] tabular-nums text-paper-ink">
-                      {bk.provider.toUpperCase()}
-                      {bk.pnrMasked ? ` · PNR ${bk.pnrMasked}` : ''}
-                      {bk.summary.coach ? ` · Coach ${bk.summary.coach}` : ''}
-                      {bk.summary.seatOrBerth ? ` · Seat ${bk.summary.seatOrBerth}` : ''}
+            {workspace.bookings.map((bk) => {
+              const displayPnr = bk.pnrPlain || bk.pnrMasked;
+              const summaryText = formatBookingSummary(bk.summary);
+              return (
+                <li
+                  key={bk.id}
+                  className="flex flex-wrap items-center justify-between gap-3 p-4"
+                >
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <span className="mt-0.5 inline-grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-paper">
+                      <ProviderIcon provider={bk.provider} />
+                    </span>
+                    <div className="min-w-0 space-y-1">
+                      <div className="text-[15px] font-bold text-navy">
+                        {summaryText || bk.summary.headline}
+                      </div>
+                      <div className="font-mono text-[12px] tabular-nums text-paper-ink">
+                        {bk.provider.toUpperCase()}
+                        {displayPnr ? ` · PNR ${displayPnr}` : ''}
+                        {bk.pnrPlain ? ' (Vault unlocked)' : ''}
+                      </div>
+                      {bk.passengers && bk.passengers.length > 0 && (
+                        <div className="text-[12px] text-paper-ink">
+                          Passengers:{' '}
+                          {bk.passengers
+                            .map((p) =>
+                              [p.name, p.coach, p.seatOrBerth]
+                                .filter(Boolean)
+                                .join(' ')
+                            )
+                            .join(', ')}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
 
-                <span
-                  className={`rounded-full border px-2.5 py-1 font-mono text-[12px] font-bold tabular-nums ${statusBadgeStyle(
-                    bk.status
-                  )}`}
-                >
-                  {statusShort(bk.status)}
-                </span>
-              </li>
-            ))}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full border px-2.5 py-1 font-mono text-[12px] font-bold tabular-nums ${statusBadgeStyle(
+                        bk.status
+                      )}`}
+                    >
+                      {statusShort(bk.status)}
+                    </span>
+
+                    {bk.hasEncryptedDocument && (
+                      <button
+                        type="button"
+                        disabled={downloadingId === bk.id}
+                        onClick={() => void handleDownloadCloudAttachment(bk)}
+                        className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-navy/35 bg-[#FFFDF8] px-2.5 py-1 text-[12.5px] font-semibold text-navy hover:bg-paper"
+                      >
+                        <Download className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+                        <span>
+                          {downloadingId === bk.id
+                            ? 'Decrypting…'
+                            : 'View / Download Ticket'}
+                        </span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveBooking(bk)}
+                      aria-label={`Remove booking ${bk.summary.headline}`}
+                      className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-navy/25 bg-[#FFFDF8] px-2.5 py-1 text-[12.5px] font-semibold text-vermilion-deep hover:bg-paper"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
 
-      {/* WebCrypto AES-256-GCM Offline Ticket Vault */}
+      {/* Cloud + WebCrypto AES-256-GCM Encrypted Ticket Vault */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="inline-flex items-center gap-2 text-[17px] font-bold text-navy">
             <FolderLock className="h-4 w-4 text-trunk" strokeWidth={1.8} aria-hidden="true" />
-            <span>Offline Encrypted Ticket Vault (AES-256-GCM)</span>
+            <span>Encrypted Ticket Vault (Cloud KMS + Offline AES-256-GCM)</span>
           </h3>
           <span className="font-mono text-[12px] tabular-nums text-paper-ink">
             {Math.round(((workspace.trip.vaultBytesUsed ?? 0) / 1024 / 1024) * 10) / 10} / 50 MB
@@ -533,7 +779,7 @@ export function BookingsTab({
 
         <div className="space-y-3 rounded-xl border border-navy/20 bg-[#FFFDF8] p-4 shadow-panel sm:p-5">
           <p className="text-[13.5px] text-paper-ink">
-            Store ticket PDFs, boarding passes, and e-visas encrypted in your browser’s IndexedDB with PBKDF2 + WebCrypto AES-GCM so they work with zero cell signal at railway gates or immigration desks.
+            Upload ticket PDFs, boarding passes, and e-visas (up to 8 MB). Cloud trips encrypt &amp; back up to the vault while keeping a PIN-encrypted IndexedDB copy for zero-signal railway gates and airports.
           </p>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -541,7 +787,7 @@ export function BookingsTab({
               htmlFor="vault-passphrase-field"
               className="inline-flex items-center gap-2 text-[13.5px] font-semibold text-navy"
             >
-              <span>Vault PIN:</span>
+              <span>Offline Vault PIN:</span>
               <input
                 id="vault-passphrase-field"
                 type="password"
@@ -553,10 +799,11 @@ export function BookingsTab({
 
             <label className="inline-flex min-h-[42px] cursor-pointer items-center gap-1.5 rounded-lg border-2 border-navy bg-trunk px-4 py-2 text-[13.5px] font-bold text-[#FFFDF8] transition-colors hover:bg-trunk-deep">
               <Upload className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
-              <span>Encrypt &amp; cache ticket</span>
+              <span>{uploadBusy ? 'Encrypting…' : 'Upload & encrypt ticket'}</span>
               <input
                 type="file"
-                accept=".pdf,image/*"
+                disabled={uploadBusy}
+                accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
                 onChange={handleVaultUpload}
                 className="sr-only"
               />
@@ -568,10 +815,34 @@ export function BookingsTab({
               {vaultFiles.map((f) => (
                 <li
                   key={f.id}
-                  className="flex items-center justify-between gap-2 py-2 font-mono text-[12.5px] text-jade"
+                  className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[13px]"
                 >
-                  <span>Encrypted offline: {f.fileName}</span>
-                  <span>{Math.max(1, Math.ceil(f.byteLength / 1024))} KB</span>
+                  <div className="min-w-0 font-mono text-[12.5px] text-jade">
+                    <span className="font-semibold">{f.fileName}</span>
+                    <span className="ml-2 text-paper-ink">
+                      ({Math.max(1, Math.ceil(f.byteLength / 1024))} KB · AES-256-GCM)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={downloadingId === f.id}
+                      onClick={() => void handleDecryptOfflineFile(f.id)}
+                      className="inline-flex min-h-[34px] items-center gap-1 rounded-md border border-navy/30 bg-[#FFFDF8] px-2.5 py-1 text-[12px] font-semibold text-navy hover:bg-paper"
+                    >
+                      <Download className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+                      <span>View / Download Ticket</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteOfflineFile(f.id, f.fileName)}
+                      aria-label={`Remove offline ticket ${f.fileName}`}
+                      className="inline-flex min-h-[34px] items-center gap-1 rounded-md border border-navy/25 bg-[#FFFDF8] px-2.5 py-1 text-[12px] font-semibold text-vermilion-deep hover:bg-paper"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

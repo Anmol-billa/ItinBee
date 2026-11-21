@@ -2,12 +2,23 @@
 
 import React, { useState } from 'react';
 import { Check, Sparkles, Wand2, X } from 'lucide-react';
-import { browserApiBase } from '@/lib/api-base';
+import {
+  requestTripAssist,
+  type BackendAssistOperation,
+  type SyncClientMutationInput,
+} from '@/lib/api-client';
 import { midpointSortKey, nextClientHlc } from '@/lib/offline-db';
 import type { ItemKind, ItineraryItem, PacingLevel, TripDay, TripWorkspace } from '@/lib/types';
 import type { CandidateMapPlace } from '@/features/map/map-utils';
-import { getOrderedStopsForDay, mapPlaceCategoryToItemKind } from './editor-helpers';
+import {
+  getOrderedStopsForDay,
+  mapPlaceCategoryToItemKind,
+  moveStopToDay,
+} from './editor-helpers';
 import { fetchGeoAutocomplete } from './places-discovery';
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type AssistOperation =
   | {
@@ -33,6 +44,24 @@ export type AssistOperation =
       summary: string;
     }
   | {
+      type: 'move_stop';
+      stopId: string;
+      targetDayId: string;
+      dayNumber: number;
+      title: string;
+      summary: string;
+    }
+  | {
+      type: 'update_stop';
+      stopId: string;
+      dayNumber: number;
+      title: string;
+      startTime?: string | null;
+      durationMins?: number;
+      notes?: string;
+      summary: string;
+    }
+  | {
       type: 'move_to_shortlist';
       stopId: string;
       dayNumber: number;
@@ -49,7 +78,7 @@ export type AssistOperation =
 
 export interface AssistProposal {
   headline: string;
-  mode: 'ai' | 'local';
+  mode: 'ai' | 'basic' | 'local';
   operations: AssistOperation[];
 }
 
@@ -57,7 +86,11 @@ interface AskItinbeeBarProps {
   workspace: TripWorkspace;
   activeDay: TripDay | null;
   candidates: CandidateMapPlace[];
-  onApplyProposal: (nextWorkspace: TripWorkspace, summaryMsg: string) => void;
+  onApplyProposal: (
+    nextWorkspace: TripWorkspace,
+    summaryMsg: string,
+    mutations: SyncClientMutationInput[]
+  ) => void;
 }
 
 const EXAMPLE_PROMPTS = [
@@ -65,6 +98,95 @@ const EXAMPLE_PROMPTS = [
   'Add a vegetarian dinner',
   'Add a morning café stop',
 ] as const;
+
+function mapBackendOpsToClientOps(
+  rawOps: BackendAssistOperation[],
+  workspace: TripWorkspace,
+  fallbackDay: TripDay | null
+): AssistOperation[] {
+  const activeDays = workspace.days
+    .filter((d) => !d.deletedAt)
+    .sort((a, b) => a.dayNumber - b.dayNumber);
+  const allItems = [...workspace.items, ...workspace.shortlist].filter((i) => !i.deletedAt);
+
+  const resolveDay = (dayNum?: number): TripDay | undefined => {
+    if (dayNum) {
+      const hit = activeDays.find((d) => d.dayNumber === dayNum);
+      if (hit) return hit;
+    }
+    return fallbackDay ?? activeDays[0];
+  };
+
+  const out: AssistOperation[] = [];
+  for (const op of rawOps) {
+    if (op.op === 'add') {
+      const day = resolveDay(op.dayNumber);
+      if (!day) continue;
+      const title = op.title?.trim() || 'Suggested stop';
+      out.push({
+        type: 'add_stop',
+        dayId: day.id,
+        dayNumber: day.dayNumber,
+        title,
+        kind: op.kind ?? 'activity',
+        startTime: op.startTime ?? null,
+        durationMins: op.durationMins ?? 60,
+        lat: typeof op.lat === 'number' ? op.lat : null,
+        lng: typeof op.lng === 'number' ? op.lng : null,
+        placeRefId: op.placeRefId ?? null,
+        notes: op.notes ?? '',
+        dietaryFlags: [],
+        summary: `Add "${title}"${op.startTime ? ` (${op.startTime})` : ''} to Day ${day.dayNumber}`,
+      });
+    } else if (op.op === 'move' && op.itemId) {
+      const item = allItems.find((i) => i.id === op.itemId);
+      const day = resolveDay(op.dayNumber);
+      if (!item || !day) continue;
+      out.push({
+        type: 'move_stop',
+        stopId: item.id,
+        targetDayId: day.id,
+        dayNumber: day.dayNumber,
+        title: item.title,
+        summary: `Move "${item.title}" to Day ${day.dayNumber}`,
+      });
+    } else if (op.op === 'remove' && op.itemId) {
+      const item = allItems.find((i) => i.id === op.itemId);
+      const dayNum =
+        op.dayNumber ??
+        activeDays.find((d) => d.id === item?.dayId)?.dayNumber ??
+        fallbackDay?.dayNumber ??
+        1;
+      const title = op.title || item?.title || 'stop';
+      out.push({
+        type: 'remove_stop',
+        stopId: op.itemId,
+        dayNumber: dayNum,
+        title,
+        summary: `Remove "${title}" from Day ${dayNum}`,
+      });
+    } else if (op.op === 'update' && op.itemId) {
+      const item = allItems.find((i) => i.id === op.itemId);
+      if (!item) continue;
+      const dayNum =
+        op.dayNumber ??
+        activeDays.find((d) => d.id === item.dayId)?.dayNumber ??
+        fallbackDay?.dayNumber ??
+        1;
+      out.push({
+        type: 'update_stop',
+        stopId: item.id,
+        dayNumber: dayNum,
+        title: op.title?.trim() || item.title,
+        ...(op.startTime !== undefined ? { startTime: op.startTime } : {}),
+        ...(op.durationMins !== undefined ? { durationMins: op.durationMins } : {}),
+        ...(op.notes !== undefined ? { notes: op.notes } : {}),
+        summary: `Update "${item.title}" on Day ${dayNum}`,
+      });
+    }
+  }
+  return out;
+}
 
 async function buildClientFallbackProposal(params: {
   prompt: string;
@@ -98,7 +220,7 @@ async function buildClientFallbackProposal(params: {
   const operations: AssistOperation[] = [];
   const dayStops = getOrderedStopsForDay(workspace.items, targetDay.id);
 
-  // 1. Pacing adjustments ("Make Day 2 more relaxed", "lighter pace", "packed")
+  // 1. Pacing adjustments ("Make Day 2 more relaxed", "lighter pace")
   if (/\b(relax|relaxed|slower|lighter|easy|rest|calm)\b/i.test(lower)) {
     if (targetDay.pacingLevel !== 'relaxed') {
       operations.push({
@@ -152,13 +274,14 @@ async function buildClientFallbackProposal(params: {
     const mealWord = isBreakfast ? 'Morning café' : isLunch ? 'Lunch' : 'Dinner';
     const wantsVeg = /\b(veg|vegetarian|jain|satvik)\b/i.test(lower);
 
-    const foodCandidate = candidates.find(
-      (c) =>
-        (c.category === 'food' || c.category === 'cafe') &&
-        (!wantsVeg ||
-          c.dietaryHints.some((h) => /veg|jain|vegan/i.test(h)) ||
-          /veg|cafe|bakehouse|bhandar/i.test(c.name))
-    ) ?? candidates.find((c) => c.category === 'food' || c.category === 'cafe');
+    const foodCandidate =
+      candidates.find(
+        (c) =>
+          (c.category === 'food' || c.category === 'cafe') &&
+          (!wantsVeg ||
+            c.dietaryHints.some((h) => /veg|jain|vegan/i.test(h)) ||
+            /veg|cafe|bakehouse|bhandar/i.test(c.name))
+      ) ?? candidates.find((c) => c.category === 'food' || c.category === 'cafe');
 
     if (foodCandidate) {
       operations.push({
@@ -264,27 +387,45 @@ async function buildClientFallbackProposal(params: {
   };
 }
 
-export function applyAssistProposalToWorkspace(
+export function applyAssistProposalWithMutations(
   workspace: TripWorkspace,
   proposal: AssistProposal
-): TripWorkspace {
+): { nextWorkspace: TripWorkspace; mutations: SyncClientMutationInput[] } {
   let nextDays = [...workspace.days];
   let nextItems = [...workspace.items];
   let nextShortlist = [...workspace.shortlist];
+  const mutations: SyncClientMutationInput[] = [];
+  const baseSeq = workspace.trip.latestSeq;
 
   for (const op of proposal.operations) {
     if (op.type === 'set_pacing') {
-      nextDays = nextDays.map((d) =>
-        d.id === op.dayId
-          ? { ...d, pacingLevel: op.pacingLevel, hlcTimestamp: nextClientHlc() }
-          : d
-      );
+      const hlc = nextClientHlc();
+      nextDays = nextDays.map((d) => {
+        if (d.id !== op.dayId) return d;
+        const updated = { ...d, pacingLevel: op.pacingLevel, hlcTimestamp: hlc };
+        mutations.push({
+          clientOpId: crypto.randomUUID(),
+          hlcTimestamp: hlc,
+          baseSeq,
+          entityType: 'trip_day',
+          entityId: d.id,
+          action: 'upsert',
+          payload: {
+            dayNumber: updated.dayNumber,
+            themeTitle: updated.themeTitle,
+            pacingLevel: updated.pacingLevel,
+            date: updated.date,
+          },
+        });
+        return updated;
+      });
     } else if (op.type === 'add_stop') {
       const existingInDay = getOrderedStopsForDay(nextItems, op.dayId);
       const lastKey =
         existingInDay.length > 0
           ? existingInDay[existingInDay.length - 1]!.sortKey
           : null;
+      const hlc = nextClientHlc();
       const added: ItineraryItem = {
         id: crypto.randomUUID(),
         tripId: workspace.trip.id,
@@ -306,8 +447,8 @@ export function applyAssistProposalToWorkspace(
           en: `${op.startTime ? `${op.startTime} — ` : ''}${op.title}`,
         },
         isShortlist: false,
-        serverSeq: workspace.trip.latestSeq + 1,
-        hlcTimestamp: nextClientHlc(),
+        serverSeq: baseSeq + 1,
+        hlcTimestamp: hlc,
         deletedAt: null,
         googleMapsUrl:
           op.lat !== null && op.lng !== null
@@ -315,34 +456,163 @@ export function applyAssistProposalToWorkspace(
             : null,
       };
       nextItems = [...nextItems, added];
+      mutations.push({
+        clientOpId: crypto.randomUUID(),
+        hlcTimestamp: hlc,
+        baseSeq,
+        entityType: 'itinerary_item',
+        entityId: added.id,
+        action: 'upsert',
+        payload: {
+          dayId: added.dayId,
+          kind: added.kind,
+          title: added.title,
+          notes: added.notes,
+          lat: added.lat,
+          lng: added.lng,
+          placeRefId: added.placeRefId,
+          sortKey: added.sortKey,
+          startTime: added.startTime,
+          durationMins: added.durationMins,
+          dietaryFlags: added.dietaryFlags,
+          isShortlist: false,
+        },
+      });
+    } else if (op.type === 'move_stop') {
+      nextItems = moveStopToDay(nextItems, op.stopId, op.targetDayId);
+      const moved = nextItems.find((i) => i.id === op.stopId);
+      if (moved) {
+        mutations.push({
+          clientOpId: crypto.randomUUID(),
+          hlcTimestamp: moved.hlcTimestamp,
+          baseSeq,
+          entityType: 'itinerary_item',
+          entityId: moved.id,
+          action: 'upsert',
+          payload: {
+            dayId: moved.dayId,
+            kind: moved.kind,
+            title: moved.title,
+            notes: moved.notes,
+            lat: moved.lat,
+            lng: moved.lng,
+            placeRefId: moved.placeRefId,
+            sortKey: moved.sortKey,
+            startTime: moved.startTime,
+            durationMins: moved.durationMins,
+            dietaryFlags: moved.dietaryFlags,
+            accessibilityNotes: moved.accessibilityNotes,
+            isShortlist: false,
+          },
+        });
+      }
+    } else if (op.type === 'update_stop') {
+      const hlc = nextClientHlc();
+      nextItems = nextItems.map((i) => {
+        if (i.id !== op.stopId) return i;
+        const updated: ItineraryItem = {
+          ...i,
+          title: op.title || i.title,
+          ...(op.startTime !== undefined ? { startTime: op.startTime } : {}),
+          ...(op.durationMins !== undefined ? { durationMins: op.durationMins } : {}),
+          ...(op.notes !== undefined ? { notes: op.notes } : {}),
+          hlcTimestamp: hlc,
+        };
+        mutations.push({
+          clientOpId: crypto.randomUUID(),
+          hlcTimestamp: hlc,
+          baseSeq,
+          entityType: 'itinerary_item',
+          entityId: updated.id,
+          action: 'upsert',
+          payload: {
+            dayId: updated.dayId,
+            kind: updated.kind,
+            title: updated.title,
+            notes: updated.notes,
+            lat: updated.lat,
+            lng: updated.lng,
+            placeRefId: updated.placeRefId,
+            sortKey: updated.sortKey,
+            startTime: updated.startTime,
+            durationMins: updated.durationMins,
+            dietaryFlags: updated.dietaryFlags,
+            accessibilityNotes: updated.accessibilityNotes,
+            isShortlist: updated.isShortlist,
+          },
+        });
+        return updated;
+      });
     } else if (op.type === 'move_to_shortlist') {
       const found = nextItems.find((i) => i.id === op.stopId && !i.deletedAt);
       if (found) {
+        const hlc = nextClientHlc();
         nextItems = nextItems.filter((i) => i.id !== op.stopId);
-        nextShortlist = [
-          ...nextShortlist,
-          {
-            ...found,
+        const shortlisted: ItineraryItem = {
+          ...found,
+          dayId: null,
+          isShortlist: true,
+          hlcTimestamp: hlc,
+        };
+        nextShortlist = [...nextShortlist, shortlisted];
+        mutations.push({
+          clientOpId: crypto.randomUUID(),
+          hlcTimestamp: hlc,
+          baseSeq,
+          entityType: 'itinerary_item',
+          entityId: shortlisted.id,
+          action: 'upsert',
+          payload: {
             dayId: null,
+            kind: shortlisted.kind,
+            title: shortlisted.title,
+            notes: shortlisted.notes,
+            lat: shortlisted.lat,
+            lng: shortlisted.lng,
+            placeRefId: shortlisted.placeRefId,
+            sortKey: shortlisted.sortKey,
+            startTime: shortlisted.startTime,
+            durationMins: shortlisted.durationMins,
+            dietaryFlags: shortlisted.dietaryFlags,
+            accessibilityNotes: shortlisted.accessibilityNotes,
             isShortlist: true,
-            hlcTimestamp: nextClientHlc(),
           },
-        ];
+        });
       }
     } else if (op.type === 'remove_stop') {
       const nowIso = new Date().toISOString();
+      const hlc = nextClientHlc();
       nextItems = nextItems.map((i) =>
-        i.id === op.stopId ? { ...i, deletedAt: nowIso, hlcTimestamp: nextClientHlc() } : i
+        i.id === op.stopId ? { ...i, deletedAt: nowIso, hlcTimestamp: hlc } : i
       );
+      mutations.push({
+        clientOpId: crypto.randomUUID(),
+        hlcTimestamp: hlc,
+        baseSeq,
+        entityType: 'itinerary_item',
+        entityId: op.stopId,
+        action: 'delete',
+        payload: {},
+      });
     }
   }
 
   return {
-    ...workspace,
-    days: nextDays,
-    items: nextItems,
-    shortlist: nextShortlist,
+    nextWorkspace: {
+      ...workspace,
+      days: nextDays,
+      items: nextItems,
+      shortlist: nextShortlist,
+    },
+    mutations,
   };
+}
+
+export function applyAssistProposalToWorkspace(
+  workspace: TripWorkspace,
+  proposal: AssistProposal
+): TripWorkspace {
+  return applyAssistProposalWithMutations(workspace, proposal).nextWorkspace;
 }
 
 export function AskItinbeeBar({
@@ -360,34 +630,26 @@ export function AskItinbeeBar({
     if (!text) return;
     setBusy(true);
     try {
-      const res = await fetch(
-        `${browserApiBase()}/v1/trips/${encodeURIComponent(workspace.trip.id)}/assist`,
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: text,
-            dayNumber: activeDay?.dayNumber ?? 1,
-          }),
-          signal: AbortSignal.timeout(5000),
-        }
-      );
-
-      if (res.ok) {
-        const data = (await res.json()) as {
-          headline?: string;
-          summary?: string;
-          operations?: AssistOperation[];
-        };
-        if (Array.isArray(data.operations) && data.operations.length > 0) {
-          setProposal({
-            headline: data.headline || data.summary || 'Proposed itinerary changes',
-            mode: 'ai',
-            operations: data.operations,
-          });
-          setBusy(false);
-          return;
+      if (UUID_RE.test(workspace.trip.id)) {
+        const res = await requestTripAssist(workspace.trip.id, {
+          instruction: text,
+          dayId: activeDay && UUID_RE.test(activeDay.id) ? activeDay.id : undefined,
+        });
+        if (res.proposal && Array.isArray(res.proposal.operations)) {
+          const mappedOps = mapBackendOpsToClientOps(
+            res.proposal.operations,
+            workspace,
+            activeDay
+          );
+          if (mappedOps.length > 0) {
+            setProposal({
+              headline: res.proposal.summary || 'Proposed itinerary changes',
+              mode: res.mode,
+              operations: mappedOps,
+            });
+            setBusy(false);
+            return;
+          }
         }
       }
     } catch {
@@ -414,8 +676,11 @@ export function AskItinbeeBar({
       setProposal(null);
       return;
     }
-    const updated = applyAssistProposalToWorkspace(workspace, proposal);
-    onApplyProposal(updated, proposal.headline);
+    const { nextWorkspace, mutations } = applyAssistProposalWithMutations(
+      workspace,
+      proposal
+    );
+    onApplyProposal(nextWorkspace, proposal.headline, mutations);
     setProposal(null);
     setPrompt('');
   };
@@ -484,7 +749,7 @@ export function AskItinbeeBar({
           <div className="flex items-start justify-between gap-2">
             <div className="font-bold text-navy">{proposal.headline}</div>
             <span className="rounded-full bg-paper px-2 py-0.5 text-[11px] font-semibold text-navy">
-              Proposed diff
+              {proposal.mode === 'ai' ? 'AI grounded diff' : 'Proposed diff'}
             </span>
           </div>
 

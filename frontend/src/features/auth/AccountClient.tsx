@@ -73,6 +73,9 @@ export function AccountClient() {
         preferredLang,
         upiVpa: upiVpa.trim() || null,
       });
+      setDisplayName(updated.displayName);
+      setPreferredLang(updated.preferredLang);
+      setUpiVpa(updated.upiVpa ?? '');
       setSession((prev) => (prev ? { ...prev, user: updated } : { user: updated, guest: updated.guest, offline: false }));
       setSavedMsg('Account preferences saved.');
     } catch (err) {
@@ -217,7 +220,7 @@ export function AccountClient() {
           </label>
           <p id={`${uid}-upi-hint`} className="mb-2 text-[14px] text-paper-ink">
             Pre-fills one-tap <code>upi://pay</code> links and QR codes when friends owe you on a trip (e.g.{' '}
-            <code>name@okicici</code>).
+            <code>yourname@okaxis</code>).
           </p>
           <input
             id={`${uid}-upi`}

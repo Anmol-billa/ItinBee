@@ -7,6 +7,7 @@ import { Calendar, ChevronRight, Clock, Compass, MapPin, Sparkles } from 'lucide
 import { DieCutLabel } from '@/components/world/DieCutLabel';
 import { MONTH_NAMES } from '@/data/showcase';
 import { DestinationStamp } from '@/features/destinations/DestinationStamp';
+import { PlaceCardImage } from '@/features/destinations/PlaceCardImage';
 import { ItineraryCard } from '@/features/explore/ItineraryCard';
 import {
   fetchDestinationDetail,
@@ -16,6 +17,7 @@ import {
   PLACE_CATEGORIES,
   shapeForSlug,
 } from '@/lib/destinations-client';
+import { formatDietaryTag, isNonEmptyImageUrl } from '@/lib/formatters';
 
 type Params = Promise<{ slug: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -153,11 +155,11 @@ export default async function DestinationDetailPage({
                   sizes="320px"
                   className="aspect-[1/1.05] rotate-[2deg]"
                 />
-              ) : destination.heroImage?.url ? (
+              ) : isNonEmptyImageUrl(destination.heroImage?.url) ? (
                 <figure className="on-paper overflow-hidden rounded-[16px] border-2 border-navy bg-paper p-2 text-navy shadow-label">
                   <div className="relative aspect-[4/3] overflow-hidden rounded-[10px]">
                     <Image
-                      src={destination.heroImage.url}
+                      src={destination.heroImage!.url.trim()}
                       alt={destination.name}
                       fill
                       priority
@@ -165,7 +167,7 @@ export default async function DestinationDetailPage({
                       className="object-cover"
                     />
                   </div>
-                  {destination.heroImage.author ? (
+                  {destination.heroImage?.author ? (
                     <figcaption className="agate mt-2 px-1 text-paper-ink">
                       Photo: {destination.heroImage.author}
                       {destination.heroImage.license ? ` · ${destination.heroImage.license}` : ''}
@@ -282,23 +284,11 @@ export default async function DestinationDetailPage({
                     key={place.id}
                     className="flex flex-col overflow-hidden rounded-[14px] border-[1.5px] border-navy/40 bg-[#fffdf8] shadow-label"
                   >
-                    {place.image?.url ? (
-                      <div className="relative aspect-[16/10] overflow-hidden border-b border-navy/25 bg-trunk-dark">
-                        <Image
-                          src={place.image.url}
-                          alt={place.name}
-                          fill
-                          sizes="(min-width:1024px) 30vw, (min-width:640px) 46vw, 92vw"
-                          className="object-cover"
-                        />
-                        {place.image.author || place.image.license ? (
-                          <span className="agate absolute bottom-1.5 right-1.5 rounded bg-paper/90 px-2 py-0.5 text-navy">
-                            {place.image.author ? `Photo: ${place.image.author}` : 'Commons'}
-                            {place.image.license ? ` · ${place.image.license}` : ''}
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
+                    <PlaceCardImage
+                      image={place.image}
+                      alt={place.name}
+                      category={place.category}
+                    />
 
                     <div className="flex flex-1 flex-col justify-between p-5">
                       <div>
@@ -337,7 +327,7 @@ export default async function DestinationDetailPage({
                                 key={hint}
                                 className="rounded-full border border-[#0F766E]/45 bg-[#F0FDFA] px-2.5 py-0.5 text-[12px] font-bold text-[#0F766E]"
                               >
-                                {hint}
+                                {formatDietaryTag(hint)}
                               </span>
                             ))}
                           </div>

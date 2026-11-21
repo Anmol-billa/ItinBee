@@ -11,9 +11,19 @@ export interface AttachedFile<F extends FileLike = File> {
   file: F;
 }
 
-export const ACCEPT = 'application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif';
-const OK_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']);
-const OK_EXT = /\.(pdf|png|jpe?g|webp|heic|heif)$/i;
+export const ACCEPT =
+  'application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif,text/plain,message/rfc822,.txt,.eml';
+const OK_TYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'text/plain',
+  'message/rfc822',
+]);
+const OK_EXT = /\.(pdf|png|jpe?g|webp|heic|heif|txt|eml)$/i;
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -22,7 +32,7 @@ export function formatBytes(n: number): string {
 }
 
 export function isSupportedFile(f: FileLike): boolean {
-  return OK_TYPES.has(f.type) || (f.type === '' && OK_EXT.test(f.name));
+  return OK_TYPES.has(f.type) || OK_EXT.test(f.name);
 }
 
 export interface AddFilesResult<F extends FileLike> {
@@ -38,7 +48,7 @@ export function checkNewFiles<F extends FileLike>(existing: F[], incoming: F[]):
   let bytes = existing.reduce((n, f) => n + f.size, 0);
   for (const f of incoming) {
     if (!isSupportedFile(f)) {
-      errors.push(`"${f.name}" isn't supported. Use a PDF, PNG, JPG or WebP file.`);
+      errors.push(`"${f.name}" isn't supported. Use a PDF, PNG, JPG, WebP, TXT or EML file.`);
       continue;
     }
     if (f.size === 0) {

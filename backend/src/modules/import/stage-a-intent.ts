@@ -1,13 +1,19 @@
 import { CURATED_OPEN_POIS } from '../geo/curated-india-pois.js';
 import { getTemplatePoiCatalog } from '../explore/template-catalog.js';
+import type { ParsedBookingCandidate } from '../ingest/parsers/irctc.js';
 import type { PlacesServices } from '../places/places-module.js';
+import { STARTER_OPEN_POIS } from '../places/seed/starter-pois.js';
 import type { DestinationRecord } from '../places/types.js';
+import { extractCleanQuote, normalizeName } from '../places/util/text.js';
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 import { groundIntent, TOWN_GAZETTEER } from './grounding.js';
 import {
+  canonicalizeDiet,
   cleanText,
+  dedupeMustInclude,
+  modelExtractedBookingToCandidate,
   ModelIntentSchema,
   modelIntentGeminiSchema,
   modelIntentToTripIntent,
@@ -17,6 +23,7 @@ import {
 } from './intent.js';
 import { LlmError, type LlmPart, type LlmProvider } from './llm/types.js';
 import {
+  candidateToAnchor,
   renderUserData,
   type DetectedEvent,
   type NormalizedInput,
@@ -42,6 +49,7 @@ export interface StageAResult {
   intent: TripIntent;
   mode: 'ai' | 'basic';
   detected: DetectedEvent[];
+  bookingCandidates: ParsedBookingCandidate[];
   repairs: number;
 }
 
@@ -56,9 +64,11 @@ const STAGE_A_SYSTEM_PROMPT = [
   '3. Origin vs Destination: Do NOT include the traveller departure home city (e.g. "from Delhi", "ex-Bengaluru", "flying out of Mumbai") in `destinations` unless they explicitly plan sightseeing days there.',
   '4. Confirmed Bookings: Align dates and destinations with any deterministic booking anchors supplied in context.',
   '5. Geography: Return real city/region/country names in `destinations`. Never invent fictional places.',
-  '6. `mustInclude`: Include specific named attractions, temples, beaches, cafes, or restaurants mentioned in USER_DATA, with a short verbatim `sourceQuote` from USER_DATA.',
-  '7. `assumptions`: Add one concise plain-English note for EVERY value you inferred rather than read explicitly.',
-  '8. `clarifyingQuestions`: Ask at most 3 high-impact questions (0 if destination, approximate dates/length, and group are already clear).',
+  '6. `mustInclude`: Include specific named attractions, temples, beaches, cafes, or restaurants mentioned in USER_DATA, with a short verbatim `sourceQuote` from USER_DATA. Never emit duplicate entries for the same place.',
+  '7. `diet`: Use canonical labels (`Vegetarian`, `Jain`, `Vegan`, `Halal`, `Gluten-free`) when dietary needs are mentioned.',
+  '8. `extractedBookings`: When an attached screenshot/image or scanned PDF shows a flight, train, bus, or hotel confirmation/ticket, populate `extractedBookings` with all visible fields (masking any 12-digit Aadhaar IDs as `XXXX-XXXX-last4`). Leave null/empty if no new visual ticket is attached.',
+  '9. `assumptions`: Add one concise plain-English note for EVERY value you inferred rather than read explicitly.',
+  '10. `clarifyingQuestions`: Ask at most 3 high-impact questions (0 if destination, approximate dates/length, and group are already clear).',
 ].join('\n');
 
 const TRANSPORT_CODE_TO_DEST: Record<string, string> = {
@@ -208,8 +218,8 @@ function parseDatesAndLength(
   let lengthDays: number | null = null;
   let flexibleMonth: number | null = null;
 
-  // 1. Explicit ISO dates YYYY-MM-DD
-  const isoHits = [...text.matchAll(/\b(202\d-\d{2}-\d{2})\b/g)].map((m) => m[1]!);
+  // 1. Explicit ISO dates YYYY-MM-DD (including YYYY-MM-DDTHH:mm timestamps on tickets)
+  const isoHits = [...text.matchAll(/\b(202\d-\d{2}-\d{2})(?=\b|T)/g)].map((m) => m[1]!);
   if (isoHits.length >= 2) {
     const sorted = [...isoHits].sort();
     start = sorted[0]!;
@@ -327,12 +337,15 @@ export async function extractBasicModelIntent(
   const assumptions: string[] = [];
   const avoid: string[] = [];
 
-  // Identify origin cities ("from Delhi", "ex-Bangalore", "out of Mumbai") so we don't confuse origin with destination
+  // Identify origin cities ("from Delhi", "From: Bengaluru", "ex-Bangalore", "out of Mumbai") so we don't confuse origin with destination
   const originNames = new Set<string>();
   for (const m of text.matchAll(
-    /\b(?:from|ex-|departing|leaving|flying\s+out\s+of|train\s+from)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/g
+    /\b(?:[Ff]rom|[Ee]x-|[Dd]eparting(?:\s+from)?|[Ll]eaving|[Ff]lying\s+out\s+of|[Tt]rain\s+from)\s*:?\s*([A-Z][a-zA-Z]+(?:\s+(?!(?:to|in|for|on|at|with|and)\b)[A-Z][a-zA-Z]+)?)/g
   )) {
-    originNames.add(m[1]!.trim().toLowerCase());
+    const candidateOrigin = m[1]!.trim().toLowerCase();
+    originNames.add(candidateOrigin);
+    if (candidateOrigin === 'new delhi') originNames.add('delhi');
+    if (candidateOrigin === 'bangalore') originNames.add('bengaluru');
   }
   for (const b of normalized.bookings) {
     if (b.summary.originName) originNames.add(b.summary.originName.toLowerCase());
@@ -412,10 +425,10 @@ export async function extractBasicModelIntent(
           return;
         }
 
-        // Ignore pure departure phrase "from <City> to ..."
+        // Ignore pure departure phrase "from <City> to ..." or ticket "From: <City>"
         if (
           originNames.has(termLower) &&
-          new RegExp(`\\b(?:from|ex-|out\\s+of)\\s+${escapeRegex(term)}\\b`, 'i').test(line) &&
+          new RegExp(`\\b(?:from|ex-|out\\s+of)\\s*:?\\s*${escapeRegex(term)}\\b`, 'i').test(line) &&
           !new RegExp(`\\b(?:in|visit|explore)\\s+${escapeRegex(term)}\\b`, 'i').test(line)
         ) {
           return;
@@ -728,12 +741,16 @@ export async function extractBasicModelIntent(
     tier = perDay <= 7000 ? 'budget' : perDay >= 25000 ? 'premium' : 'mid';
   }
 
-  // Diet
-  const diet: string[] = [];
-  if (/\b(pure\s*veg|vegetarian|veg\b|shakahari|satvik)\b/i.test(text)) diet.push('veg');
-  if (/\bjain\b/i.test(text)) diet.push('jain');
-  if (/\bvegan\b/i.test(text)) diet.push('vegan');
-  if (/\bhalal\b/i.test(text)) diet.push('halal');
+  // Diet (canonicalized to ReviewStep checkbox labels)
+  const rawDiet: string[] = [];
+  if (!/\bnon[\s-]*veg/i.test(text) && /\b(pure[\s-]*veg|vegetarian|veg\b|shakahari|satvik|sattvik)\b/i.test(text)) {
+    rawDiet.push('Vegetarian');
+  }
+  if (/\bjain\b/i.test(text)) rawDiet.push('Jain');
+  if (/\bvegan\b/i.test(text)) rawDiet.push('Vegan');
+  if (/\bhalal\b/i.test(text)) rawDiet.push('Halal');
+  if (/\b(gluten[\s-]*free|celiac)\b/i.test(text)) rawDiet.push('Gluten-free');
+  const diet = canonicalizeDiet(rawDiet);
 
   // Pace
   let pace: ModelIntent['pace'] = null;
@@ -770,39 +787,83 @@ export async function extractBasicModelIntent(
     if (!avoid.some((a) => a.toLowerCase() === item.toLowerCase())) avoid.push(item);
   }
 
-  // MustInclude landmarks mentioned verbatim in text
-  const mustInclude: ModelIntent['mustInclude'] = [];
+  // MustInclude landmarks mentioned verbatim in text (deduplicated & sliced at word/sentence boundaries)
+  const rawMustInclude: ModelIntent['mustInclude'] = [];
   const textLower = text.toLowerCase();
+  const activeDestNorms = new Set(rankedDests.map((d) => normalizeName(d.name)));
 
-  for (const cp of CURATED_OPEN_POIS) {
-    for (const alias of [cp.name, ...cp.aliases]) {
-      if (alias.length < 5) continue;
-      const idx = textLower.indexOf(alias.toLowerCase());
-      if (idx >= 0) {
-        if (!mustInclude.some((m) => m.name.toLowerCase() === cp.name.toLowerCase())) {
-          mustInclude.push({
-            name: cp.name,
-            sourceQuote: text.slice(Math.max(0, idx - 10), Math.min(text.length, idx + alias.length + 20)).trim(),
-          });
-        }
+  const findPhraseMatch = (phrase: string): { idx: number; len: number } | null => {
+    const cleanPhrase = phrase.trim();
+    if (cleanPhrase.length < 5) return null;
+    const re = new RegExp(`\\b${escapeRegex(cleanPhrase)}\\b`, 'i');
+    const m = re.exec(text);
+    return m ? { idx: m.index, len: m[0].length } : null;
+  };
+
+  // 1. Check 20-destination Starter Open POIs (prioritizing POIs in matched destinations)
+  const orderedStarterPois = [...STARTER_OPEN_POIS].sort((a, b) => {
+    const aInDest = activeDestNorms.has(normalizeName(a.destinationSlug.replace(/-/g, ' '))) ? 1 : 0;
+    const bInDest = activeDestNorms.has(normalizeName(b.destinationSlug.replace(/-/g, ' '))) ? 1 : 0;
+    return bInDest - aInDest || b.popularity - a.popularity;
+  });
+
+  for (const sp of orderedStarterPois) {
+    if (rawMustInclude.length >= 12) break;
+    const baseWithoutComma = sp.name.replace(/,/g, '');
+    const shortBeforeComma = sp.name.split(/[,(]/)[0]!.trim();
+    const spDestNorm = normalizeName(sp.destinationSlug.replace(/-/g, ' '));
+    const phrases = [
+      sp.name,
+      baseWithoutComma,
+      ...sp.aliases,
+      // Only match generic short names like "City Palace" when its city is in rankedDests
+      ...(activeDestNorms.has(spDestNorm) && shortBeforeComma.length >= 8 ? [shortBeforeComma] : []),
+    ];
+    for (const alias of phrases) {
+      const hit = findPhraseMatch(alias);
+      if (hit) {
+        rawMustInclude.push({
+          name: sp.name,
+          sourceQuote: extractCleanQuote(text, hit.idx, hit.len, 90),
+        });
         break;
       }
     }
   }
 
+  // 2. Check CURATED_OPEN_POIS
+  for (const cp of CURATED_OPEN_POIS) {
+    if (rawMustInclude.length >= 12) break;
+    for (const alias of [cp.name, ...cp.aliases]) {
+      if (alias.length < 5) continue;
+      // Avoid matching destination names themselves (e.g. alias "hanoi" or "mussoorie") as mustInclude POIs
+      if (activeDestNorms.has(normalizeName(alias))) continue;
+      const hit = findPhraseMatch(alias);
+      if (hit) {
+        rawMustInclude.push({
+          name: cp.name,
+          sourceQuote: extractCleanQuote(text, hit.idx, hit.len, 90),
+        });
+        break;
+      }
+    }
+  }
+
+  // 3. Check Template POI Catalog
   for (const tp of getTemplatePoiCatalog()) {
-    if (mustInclude.length >= 8) break;
-    // Match core landmark phrase (before '(' or ',')
+    if (rawMustInclude.length >= 12) break;
     const shortTitle = tp.title.split(/[(&,]/)[0]!.trim();
     if (shortTitle.length < 6) continue;
     const idx = textLower.indexOf(shortTitle.toLowerCase());
-    if (idx >= 0 && !mustInclude.some((m) => m.name.toLowerCase() === tp.title.toLowerCase())) {
-      mustInclude.push({
+    if (idx >= 0) {
+      rawMustInclude.push({
         name: tp.title,
-        sourceQuote: text.slice(Math.max(0, idx - 10), Math.min(text.length, idx + shortTitle.length + 20)).trim(),
+        sourceQuote: extractCleanQuote(text, idx, shortTitle.length, 90),
       });
     }
   }
+
+  const mustInclude = dedupeMustInclude(rawMustInclude).slice(0, 10);
 
   // Clarifying questions (max 2 in basic mode, only when missing)
   const clarifyingQuestions: ModelIntent['clarifyingQuestions'] = [];
@@ -976,6 +1037,35 @@ export async function extractTripIntent(
     }
   }
 
+  const mergedBookingCandidates: ParsedBookingCandidate[] = [
+    ...normalized.bookingCandidates,
+  ];
+  const mergedBookings = [...normalized.bookings];
+
+  if (modelIntent?.extractedBookings && modelIntent.extractedBookings.length > 0) {
+    for (const eb of modelIntent.extractedBookings) {
+      const cand = modelExtractedBookingToCandidate(eb);
+      if (!cand) continue;
+      const candPnr = cand.pnr?.trim().toUpperCase() ?? '';
+      const isDupe = mergedBookingCandidates.some((existing) => {
+        if (candPnr && existing.pnr?.trim().toUpperCase() === candPnr) return true;
+        const t1 = (existing.summary.departureIso ?? existing.summary.checkInIso ?? '').slice(0, 10);
+        const t2 = (cand.summary.departureIso ?? cand.summary.checkInIso ?? '').slice(0, 10);
+        return (
+          existing.provider === cand.provider &&
+          t1 === t2 &&
+          normalizeName(existing.suggestedTitle) === normalizeName(cand.suggestedTitle)
+        );
+      });
+      if (!isDupe) {
+        mergedBookingCandidates.push(cand);
+        mergedBookings.push(candidateToAnchor(cand));
+      }
+    }
+    normalized.bookingCandidates = mergedBookingCandidates;
+    normalized.bookings = mergedBookings;
+  }
+
   if (!modelIntent) {
     mode = 'basic';
     modelIntent = await extractBasicModelIntent(
@@ -997,7 +1087,7 @@ export async function extractTripIntent(
   }
 
   const ungrounded = modelIntentToTripIntent(modelIntent, {
-    bookings: normalized.bookings,
+    bookings: mergedBookings,
     extraAssumptions,
   });
 
@@ -1012,6 +1102,7 @@ export async function extractTripIntent(
     intent: validated,
     mode,
     detected,
+    bookingCandidates: mergedBookingCandidates,
     repairs,
   };
 }

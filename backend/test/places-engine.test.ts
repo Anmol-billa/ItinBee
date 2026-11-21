@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildApp } from '../src/app.js';
 import {
   categorizeOsm,
   categorizeWikipedia,
@@ -9,6 +10,7 @@ import {
   mergeCandidates,
   type PlaceCandidate,
 } from '../src/modules/places/dedupe.js';
+import { estimateRoute } from '../src/modules/places/providers/openrouteservice.js';
 import {
   computePopularity,
   rankWithDiversity,
@@ -17,8 +19,14 @@ import {
   type RankInput,
 } from '../src/modules/places/scoring.js';
 import type { WikivoyageListing } from '../src/modules/places/providers/types.js';
-import { namesSimilar, normalizeName } from '../src/modules/places/util/text.js';
+import {
+  namesSimilar,
+  normalizeName,
+  sanitizeImageObject,
+  toTitleCasePlaceName,
+} from '../src/modules/places/util/text.js';
 import { decodePolyline, encodePolyline, haversineMeters } from '../src/modules/places/util/geo.js';
+import { createSeededTestPlaces } from './helpers/places-env.js';
 
 function cand(over: Partial<PlaceCandidate> & { key: string; name: string }): PlaceCandidate {
   return {
@@ -269,5 +277,146 @@ describe('geo utilities', () => {
     });
     // reference vector from the polyline algorithm docs
     expect(encodePolyline([[-120.2, 38.5], [-120.95, 40.7], [-126.453, 43.252]])).toBe('_p~iF~ps|U_ulLnnqC_mqNvxq`@');
+  });
+});
+
+describe('routing estimator, macro-geo hygiene, and 0ms starter POIs', () => {
+  it('computes Kyoto walking distance (< 1.8km) and international road transit without India metro copy', async () => {
+    // 1. Kyoto short walk: Gion -> Kiyomizu-dera (~1.3 km straight-line)
+    const gion = { lat: 35.0037, lng: 135.7756 };
+    const kiyomizu = { lat: 34.9949, lng: 135.7850 };
+    const walkEst = estimateRoute('driving-car', [gion, kiyomizu]);
+    expect(walkEst.profile).toBe('foot-walking');
+    expect(walkEst.advisory).toBe('Estimated walking distance');
+    expect(walkEst.distanceM).toBeGreaterThan(1400);
+    expect(walkEst.distanceM).toBeLessThan(2100);
+
+    // 2. Kyoto urban drive: Fushimi Inari -> Kinkaku-ji (~9.2 km straight-line, outside India bbox)
+    const fushimi = { lat: 34.9671, lng: 135.7727 };
+    const kinkaku = { lat: 35.0394, lng: 135.7292 };
+    const kyotoRoad = estimateRoute('driving-car', [fushimi, kinkaku]);
+    expect(kyotoRoad.profile).toBe('driving-car');
+    expect(kyotoRoad.advisory).toBe('Estimated road transit');
+    expect(kyotoRoad.advisory).not.toContain('Indian');
+
+    // 3. Verify HTTP /v1/geo/route attribution for Kyoto never mentions India calibration
+    const bundle = await buildApp({ forceLocalStore: true, logger: false });
+    await bundle.app.ready();
+    try {
+      const routeRes = await bundle.app.inject({
+        method: 'POST',
+        url: '/v1/geo/route',
+        payload: {
+          profile: 'driving-car',
+          coordinates: [gion, kiyomizu],
+        },
+      });
+      expect(routeRes.statusCode).toBe(200);
+      const body = routeRes.json() as {
+        profile: string;
+        advisory?: string;
+        attribution: string;
+      };
+      expect(body.profile).toBe('foot-walking');
+      expect(body.advisory).toBe('Estimated walking distance');
+      expect(body.attribution).toContain('Estimated walking distance');
+      expect(body.attribution).not.toContain('India');
+
+      const kyotoDriveRes = await bundle.app.inject({
+        method: 'POST',
+        url: '/v1/geo/route',
+        payload: {
+          profile: 'driving-car',
+          coordinates: [fushimi, kinkaku],
+        },
+      });
+      expect(kyotoDriveRes.statusCode).toBe(200);
+      expect(kyotoDriveRes.json().advisory).toBe('Estimated road transit');
+      expect(kyotoDriveRes.body).not.toContain('Indian');
+    } finally {
+      await bundle.app.close();
+    }
+  });
+
+  it('filters out macro-geographic entities (Western Ghats, Anaimalai Hills, states, provinces) while keeping national parks & viewpoints', () => {
+    expect(categorizeWikipedia('Mountain range in India', 'Western Ghats')).toBeNull();
+    expect(
+      categorizeWikipedia('Mountain range in Kerala and Tamil Nadu, India', 'Anaimalai Hills')
+    ).toBeNull();
+    expect(categorizeWikipedia('State of India', 'Kerala')).toBeNull();
+    expect(categorizeWikipedia('Province of Indonesia', 'Bali')).toBeNull();
+    expect(categorizeWikipedia('Country in Southeast Asia', 'Vietnam')).toBeNull();
+    expect(categorizeWikipedia('Continent', 'Asia')).toBeNull();
+
+    // Visitable national parks and viewpoints remain classified
+    expect(
+      categorizeWikipedia('National park in Kerala, India', 'Eravikulam National Park')?.category
+    ).toBe('nature');
+    expect(
+      categorizeWikipedia('Tourist viewpoint in Munnar, Kerala', 'Top Station Viewpoint')?.category
+    ).toBe('nature');
+
+    // Title casing & empty image URL hygiene
+    expect(toTitleCasePlaceName('hanoi')).toBe('Hanoi');
+    expect(toTitleCasePlaceName('north goa')).toBe('North Goa');
+    expect(sanitizeImageObject({ url: '' })).toBeNull();
+    expect(sanitizeImageObject({ url: '   ' })).toBeNull();
+    expect(
+      sanitizeImageObject({ url: 'https://upload.wikimedia.org/wikipedia/commons/test.jpg' })?.url
+    ).toBe('https://upload.wikimedia.org/wikipedia/commons/test.jpg');
+  });
+
+  it('serves >= 6 verified starter POIs in 0ms (zero upstream HTTP calls) across all 20 high-traffic slugs', async () => {
+    const enqueuedSlugs: string[] = [];
+    const t = await createSeededTestPlaces(
+      {},
+      {
+        enqueuePackJob: async (payload) => {
+          enqueuedSlugs.push(payload.slug);
+          return `pack:${payload.slug}`;
+        },
+      }
+    );
+    const requiredSlugs = [
+      'jaipur',
+      'udaipur',
+      'jodhpur',
+      'munnar',
+      'kochi',
+      'alleppey',
+      'north-goa',
+      'kyoto',
+      'tokyo',
+      'bali',
+      'dubai',
+      'singapore',
+      'bangkok',
+      'shimla',
+      'darjeeling',
+      'gangtok',
+      'pondicherry',
+      'mysuru',
+      'ooty',
+      'coorg',
+    ];
+
+    try {
+      for (const slug of requiredSlugs) {
+        const dest = await t.repo.getDestinationBySlug(slug);
+        expect(dest, `missing destination seed for ${slug}`).not.toBeNull();
+        const res = await t.services.places.listPlaces(dest!, { limit: 20 });
+        expect(res.places.length, `expected >= 6 starter POIs for ${slug}`).toBeGreaterThanOrEqual(6);
+        for (const row of res.places) {
+          expect(row.place.name[0]).toBe(row.place.name[0]?.toUpperCase());
+          if (row.place.image !== null) {
+            expect(row.place.image.url).toMatch(/^https?:\/\/\S+/);
+          }
+        }
+      }
+      // Because every slug had >= 6 starter POIs, listPlaces did not block on Wikipedia liveNearby!
+      expect(t.fx.calls).toHaveLength(0);
+    } finally {
+      await t.services.close();
+    }
   });
 });
