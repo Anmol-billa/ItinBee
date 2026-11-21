@@ -74,6 +74,8 @@ interface InternalUserRecord {
   id: string;
   phoneHash: string | null;
   googleSubHash: string | null;
+  emailHash: string | null;
+  isGuest: boolean;
   phoneEnc: Buffer | null;
   emailEnc: Buffer | null;
   upiVpaEnc: Buffer | null;
@@ -172,6 +174,7 @@ export class LocalDevStore implements TripStore {
   private readonly users = new Map<string, InternalUserRecord>();
   private readonly userIdByPhoneHash = new Map<string, string>();
   private readonly userIdByGoogleHash = new Map<string, string>();
+  private readonly userIdByEmailHash = new Map<string, string>();
   private readonly trips = new Map<string, InternalTripRecord>();
   private readonly tripIdByShortId = new Map<string, string>();
   private initPromise: Promise<void> | null = null;
@@ -207,6 +210,8 @@ export class LocalDevStore implements TripStore {
         id: u.id,
         phoneHash,
         googleSubHash: null,
+        emailHash: null,
+        isGuest: false,
         phoneEnc,
         emailEnc: null,
         upiVpaEnc,
@@ -451,6 +456,8 @@ export class LocalDevStore implements TripStore {
       id,
       phoneHash,
       googleSubHash: null,
+      emailHash: null,
+      isGuest: false,
       phoneEnc,
       emailEnc: null,
       upiVpaEnc,
@@ -465,6 +472,93 @@ export class LocalDevStore implements TripStore {
     return this.toUserPublic(created);
   }
 
+  public async createGuestUser(displayName?: string): Promise<UserPublic> {
+    await this.ensureReady();
+    const id = crypto.randomUUID();
+    const created: InternalUserRecord = {
+      id,
+      phoneHash: null,
+      googleSubHash: null,
+      emailHash: null,
+      isGuest: true,
+      phoneEnc: null,
+      emailEnc: null,
+      upiVpaEnc: null,
+      displayName: displayName?.trim() || 'Traveller',
+      preferredLang: 'en',
+      tier: 'free',
+      createdAt: new Date().toISOString(),
+    };
+    this.users.set(id, created);
+    this.flushSnapshotIfConfigured();
+    return this.toUserPublic(created);
+  }
+
+  public async isGuestUser(userId: string): Promise<boolean> {
+    await this.ensureReady();
+    return Boolean(this.users.get(userId)?.isGuest);
+  }
+
+  public async upsertUserByEmail(params: {
+    email: string;
+    displayName?: string;
+    upiVpa?: string;
+  }): Promise<UserPublic> {
+    await this.ensureReady();
+    const normalizedEmail = params.email.trim().toLowerCase();
+    const emailHash = hashIdentifier(`email:${normalizedEmail}`);
+    const existingId = this.userIdByEmailHash.get(emailHash);
+
+    if (existingId) {
+      const existing = this.users.get(existingId)!;
+      existing.isGuest = false;
+      if (params.displayName?.trim()) {
+        existing.displayName = params.displayName.trim();
+      }
+      if (params.upiVpa?.trim()) {
+        existing.upiVpaEnc = await this.kms.encryptString(
+          params.upiVpa.trim(),
+          `user:${existing.id}:upi`
+        );
+      }
+      this.flushSnapshotIfConfigured();
+      return this.toUserPublic(existing);
+    }
+
+    const id = crypto.randomUUID();
+    const emailEnc = await this.kms.encryptString(normalizedEmail, `user:${id}:email`);
+    const upiVpaEnc = params.upiVpa?.trim()
+      ? await this.kms.encryptString(params.upiVpa.trim(), `user:${id}:upi`)
+      : null;
+    const inferredName =
+      params.displayName?.trim() ||
+      normalizedEmail
+        .split('@')[0]!
+        .replace(/[._-]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .trim() ||
+      'Traveller';
+
+    const created: InternalUserRecord = {
+      id,
+      phoneHash: null,
+      googleSubHash: null,
+      emailHash,
+      isGuest: false,
+      phoneEnc: null,
+      emailEnc,
+      upiVpaEnc,
+      displayName: inferredName.slice(0, 80),
+      preferredLang: 'en',
+      tier: 'free',
+      createdAt: new Date().toISOString(),
+    };
+    this.users.set(id, created);
+    this.userIdByEmailHash.set(emailHash, id);
+    this.flushSnapshotIfConfigured();
+    return this.toUserPublic(created);
+  }
+
   public async upsertUserByGoogle(params: {
     googleSub: string;
     email: string;
@@ -473,10 +567,19 @@ export class LocalDevStore implements TripStore {
   }): Promise<UserPublic> {
     await this.ensureReady();
     const googleSubHash = hashIdentifier(params.googleSub);
-    const existingId = this.userIdByGoogleHash.get(googleSubHash);
+    const normalizedEmail = params.email.trim().toLowerCase();
+    const emailHash = hashIdentifier(`email:${normalizedEmail}`);
+    const existingId =
+      this.userIdByGoogleHash.get(googleSubHash) ??
+      this.userIdByEmailHash.get(emailHash);
 
     if (existingId) {
       const existing = this.users.get(existingId)!;
+      existing.googleSubHash = googleSubHash;
+      existing.emailHash = emailHash;
+      existing.isGuest = false;
+      this.userIdByGoogleHash.set(googleSubHash, existing.id);
+      this.userIdByEmailHash.set(emailHash, existing.id);
       if (params.displayName.trim()) {
         existing.displayName = params.displayName.trim();
       }
@@ -486,12 +589,13 @@ export class LocalDevStore implements TripStore {
           `user:${existing.id}:upi`
         );
       }
+      this.flushSnapshotIfConfigured();
       return this.toUserPublic(existing);
     }
 
     const id = crypto.randomUUID();
     const emailEnc = await this.kms.encryptString(
-      params.email.trim().toLowerCase(),
+      normalizedEmail,
       `user:${id}:email`
     );
     const upiVpaEnc = params.upiVpa?.trim()
@@ -502,6 +606,8 @@ export class LocalDevStore implements TripStore {
       id,
       phoneHash: null,
       googleSubHash,
+      emailHash,
+      isGuest: false,
       phoneEnc: null,
       emailEnc,
       upiVpaEnc,
@@ -512,8 +618,75 @@ export class LocalDevStore implements TripStore {
     };
     this.users.set(id, created);
     this.userIdByGoogleHash.set(googleSubHash, id);
+    this.userIdByEmailHash.set(emailHash, id);
     this.flushSnapshotIfConfigured();
     return this.toUserPublic(created);
+  }
+
+  public async updateUserProfile(
+    userId: string,
+    patch: { displayName?: string; preferredLang?: string; upiVpa?: string | null }
+  ): Promise<UserPublic | null> {
+    await this.ensureReady();
+    const u = this.users.get(userId);
+    if (!u) return null;
+    if (patch.displayName !== undefined && patch.displayName.trim()) {
+      u.displayName = patch.displayName.trim().slice(0, 80);
+    }
+    if (patch.preferredLang !== undefined && patch.preferredLang.trim()) {
+      u.preferredLang = patch.preferredLang.trim().slice(0, 10);
+    }
+    if (patch.upiVpa !== undefined) {
+      if (patch.upiVpa === null || patch.upiVpa.trim() === '') {
+        u.upiVpaEnc = null;
+      } else {
+        u.upiVpaEnc = await this.kms.encryptString(
+          patch.upiVpa.trim(),
+          `user:${u.id}:upi`
+        );
+      }
+    }
+    this.flushSnapshotIfConfigured();
+    return this.toUserPublic(u);
+  }
+
+  public async mergeGuestIntoUser(
+    guestUserId: string,
+    targetUserId: string
+  ): Promise<number> {
+    await this.ensureReady();
+    if (!guestUserId || guestUserId === targetUserId) return 0;
+    const guest = this.users.get(guestUserId);
+    const target = this.users.get(targetUserId);
+    if (!target) return 0;
+    if (guest && !guest.isGuest) return 0;
+
+    let mergedCount = 0;
+    for (const trip of this.trips.values()) {
+      if (trip.meta.isSample) continue;
+      const guestMem = trip.members.get(guestUserId);
+      if (!guestMem) continue;
+
+      if (!trip.members.has(targetUserId)) {
+        trip.members.set(targetUserId, {
+          ...guestMem,
+          userId: targetUserId,
+        });
+      } else if (guestMem.role === 'owner') {
+        const cur = trip.members.get(targetUserId)!;
+        cur.role = 'owner';
+        cur.vaultAccess = true;
+      }
+      trip.members.delete(guestUserId);
+      trip.meta.updatedAt = new Date().toISOString();
+      mergedCount += 1;
+    }
+
+    if (guest) {
+      this.users.delete(guestUserId);
+    }
+    this.flushSnapshotIfConfigured();
+    return mergedCount;
   }
 
   public async getUserById(userId: string): Promise<UserPublic | null> {
@@ -528,6 +701,7 @@ export class LocalDevStore implements TripStore {
     if (!u) return false;
     if (u.phoneHash) this.userIdByPhoneHash.delete(u.phoneHash);
     if (u.googleSubHash) this.userIdByGoogleHash.delete(u.googleSubHash);
+    if (u.emailHash) this.userIdByEmailHash.delete(u.emailHash);
     this.users.delete(userId);
     return true;
   }
@@ -545,6 +719,18 @@ export class LocalDevStore implements TripStore {
       }
     }
     return list;
+  }
+
+  public async listUserTrips(userId: string): Promise<TripMeta[]> {
+    await this.ensureReady();
+    const list: TripMeta[] = [];
+    for (const trip of this.trips.values()) {
+      if (trip.meta.isSample) continue;
+      if (trip.members.has(userId)) {
+        list.push({ ...trip.meta });
+      }
+    }
+    return list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   private allocateUniqueShortId(title: string): string {
@@ -732,7 +918,7 @@ export class LocalDevStore implements TripStore {
         sortKey: rawIt.sortKey ?? defaultSortKeys[idx] ?? 'V0',
         startTime: rawIt.startTime ?? null,
         durationMins: rawIt.durationMins ?? null,
-        transitMeta: {},
+        transitMeta: rawIt.transitMeta ?? {},
         dietaryFlags: rawIt.dietaryFlags ?? [],
         accessibilityNotes: rawIt.accessibilityNotes ?? '',
         elderSummaryI18n: rawIt.elderSummaryI18n ?? {},

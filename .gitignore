@@ -31,3 +31,7 @@ test-results/
 .impeccable/questions/
 .impeccable/mocks/
 .impeccable/review/
+
+# Local dev runtime persistence
+backend/.data/
+

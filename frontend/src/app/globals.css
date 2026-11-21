@@ -38,6 +38,42 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+@font-face {
+  font-family: "Big Shoulders Display";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/big-shoulders-display-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Big Shoulders Display";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/big-shoulders-display-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/fonts/source-sans-3-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/fonts/source-sans-3-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   --font-public-sans: "Public Sans";
   --font-jetbrains-mono: "JetBrains Mono";
@@ -53,24 +89,24 @@
 }
 
 html {
-  background-color: #FCFCFA;
-  color: #18181B;
-  caret-color: #B45309;
+  background-color: #FAF4E6;
+  color: #14213D;
+  caret-color: #C7361F;
   scroll-padding-top: 3.5rem;
   scroll-padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 body {
-  background-color: #FCFCFA;
-  color: #18181B;
+  background-color: #FAF4E6;
+  color: #14213D;
   overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
 }
 
 /* Browser surface theming */
 ::selection {
-  background-color: #FEF3C7;
-  color: #18181B;
+  background-color: #F2A71B;
+  color: #14213D;
 }
 
 a {
@@ -82,7 +118,7 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid #B45309;
+  outline: 3px solid #14213D;
   outline-offset: 2px;
 }
 
@@ -92,14 +128,14 @@ a {
   height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #F5F5F2;
+  background: #EFE2C4;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D6D3CD;
+  background: #1C7D63;
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #A8A29E;
+  background: #0E5A47;
 }
 
 /* Heading balance & body text wrapping */

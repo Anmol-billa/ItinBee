@@ -1,0 +1,1600 @@
+[
+ {
+  "slug": "india",
+  "name": "India",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "IN",
+  "lat": 22.5,
+  "lng": 79.0,
+  "wikipediaTitle": "India",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "himachal-pradesh",
+  "name": "Himachal Pradesh",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 31.8,
+  "lng": 77.2,
+  "wikipediaTitle": "Himachal Pradesh",
+  "aliases": [
+   "HP"
+  ],
+  "bestMonths": [
+   3,
+   4,
+   5,
+   6,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "manali",
+  "name": "Manali",
+  "kind": "city",
+  "parentSlug": "himachal-pradesh",
+  "countryCode": "IN",
+  "lat": 32.2396,
+  "lng": 77.1887,
+  "wikipediaTitle": "Manali, Himachal Pradesh",
+  "wikivoyageTitle": "Manali",
+  "aliases": [
+   "Old Manali",
+   "Solang"
+  ],
+  "bestMonths": [
+   3,
+   4,
+   5,
+   6,
+   9,
+   10,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "spiti-valley",
+  "name": "Spiti Valley",
+  "kind": "region",
+  "parentSlug": "himachal-pradesh",
+  "countryCode": "IN",
+  "lat": 32.246,
+  "lng": 78.0349,
+  "wikipediaTitle": "Spiti Valley",
+  "aliases": [
+   "Spiti",
+   "Kaza",
+   "Key Monastery"
+  ],
+  "bestMonths": [
+   5,
+   6,
+   7,
+   8,
+   9
+  ]
+ },
+ {
+  "slug": "shimla",
+  "name": "Shimla",
+  "kind": "city",
+  "parentSlug": "himachal-pradesh",
+  "countryCode": "IN",
+  "lat": 31.1048,
+  "lng": 77.1734,
+  "wikipediaTitle": "Shimla",
+  "bestMonths": [
+   3,
+   4,
+   5,
+   6,
+   10,
+   11,
+   12
+  ]
+ },
+ {
+  "slug": "dharamshala",
+  "name": "Dharamshala",
+  "kind": "city",
+  "parentSlug": "himachal-pradesh",
+  "countryCode": "IN",
+  "lat": 32.219,
+  "lng": 76.3234,
+  "wikipediaTitle": "Dharamshala",
+  "aliases": [
+   "Dharamsala",
+   "McLeod Ganj",
+   "Dalhousie Road"
+  ],
+  "bestMonths": [
+   3,
+   4,
+   5,
+   6,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "uttarakhand",
+  "name": "Uttarakhand",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 30.1,
+  "lng": 79.3,
+  "wikipediaTitle": "Uttarakhand",
+  "bestMonths": [
+   3,
+   4,
+   5,
+   6,
+   9,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "rishikesh",
+  "name": "Rishikesh",
+  "kind": "city",
+  "parentSlug": "uttarakhand",
+  "countryCode": "IN",
+  "lat": 30.0869,
+  "lng": 78.2676,
+  "wikipediaTitle": "Rishikesh",
+  "aliases": [
+   "Laxman Jhula",
+   "Ram Jhula"
+  ],
+  "bestMonths": [
+   2,
+   3,
+   4,
+   9,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "mussoorie",
+  "name": "Mussoorie",
+  "kind": "city",
+  "parentSlug": "uttarakhand",
+  "countryCode": "IN",
+  "lat": 30.4598,
+  "lng": 78.0644,
+  "wikipediaTitle": "Mussoorie",
+  "aliases": [
+   "Mussoori"
+  ],
+  "bestMonths": [
+   3,
+   4,
+   5,
+   6,
+   9,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "landour",
+  "name": "Landour",
+  "kind": "area",
+  "parentSlug": "mussoorie",
+  "countryCode": "IN",
+  "lat": 30.4553,
+  "lng": 78.0959,
+  "wikipediaTitle": "Landour",
+  "bestMonths": [
+   3,
+   4,
+   5,
+   6,
+   9,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "nainital",
+  "name": "Nainital",
+  "kind": "city",
+  "parentSlug": "uttarakhand",
+  "countryCode": "IN",
+  "lat": 29.3919,
+  "lng": 79.4542,
+  "wikipediaTitle": "Nainital",
+  "bestMonths": [
+   3,
+   4,
+   5,
+   6,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "dehradun",
+  "name": "Dehradun",
+  "kind": "city",
+  "parentSlug": "uttarakhand",
+  "countryCode": "IN",
+  "lat": 30.3165,
+  "lng": 78.0322,
+  "wikipediaTitle": "Dehradun",
+  "bestMonths": [
+   2,
+   3,
+   4,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "rajasthan",
+  "name": "Rajasthan",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 26.9,
+  "lng": 73.8,
+  "wikipediaTitle": "Rajasthan",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "jaipur",
+  "name": "Jaipur",
+  "kind": "city",
+  "parentSlug": "rajasthan",
+  "countryCode": "IN",
+  "lat": 26.9124,
+  "lng": 75.7873,
+  "wikipediaTitle": "Jaipur",
+  "aliases": [
+   "Pink City"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "udaipur",
+  "name": "Udaipur",
+  "kind": "city",
+  "parentSlug": "rajasthan",
+  "countryCode": "IN",
+  "lat": 24.5854,
+  "lng": 73.7125,
+  "wikipediaTitle": "Udaipur",
+  "aliases": [
+   "City of Lakes"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "jaisalmer",
+  "name": "Jaisalmer",
+  "kind": "city",
+  "parentSlug": "rajasthan",
+  "countryCode": "IN",
+  "lat": 26.9157,
+  "lng": 70.9083,
+  "wikipediaTitle": "Jaisalmer",
+  "aliases": [
+   "Golden City"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "jodhpur",
+  "name": "Jodhpur",
+  "kind": "city",
+  "parentSlug": "rajasthan",
+  "countryCode": "IN",
+  "lat": 26.2389,
+  "lng": 73.0243,
+  "wikipediaTitle": "Jodhpur",
+  "aliases": [
+   "Blue City"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "pushkar",
+  "name": "Pushkar",
+  "kind": "city",
+  "parentSlug": "rajasthan",
+  "countryCode": "IN",
+  "lat": 26.4897,
+  "lng": 74.5511,
+  "wikipediaTitle": "Pushkar",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "kerala",
+  "name": "Kerala",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 10.5,
+  "lng": 76.5,
+  "wikipediaTitle": "Kerala",
+  "bestMonths": [
+   9,
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "munnar",
+  "name": "Munnar",
+  "kind": "city",
+  "parentSlug": "kerala",
+  "countryCode": "IN",
+  "lat": 10.0889,
+  "lng": 77.0595,
+  "wikipediaTitle": "Munnar",
+  "bestMonths": [
+   9,
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "alleppey",
+  "name": "Alleppey",
+  "kind": "city",
+  "parentSlug": "kerala",
+  "countryCode": "IN",
+  "lat": 9.4981,
+  "lng": 76.3388,
+  "wikipediaTitle": "Alappuzha",
+  "wikivoyageTitle": "Alappuzha",
+  "aliases": [
+   "Alappuzha",
+   "Backwaters"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "kochi",
+  "name": "Kochi",
+  "kind": "city",
+  "parentSlug": "kerala",
+  "countryCode": "IN",
+  "lat": 9.9312,
+  "lng": 76.2673,
+  "wikipediaTitle": "Kochi",
+  "aliases": [
+   "Cochin",
+   "Fort Kochi"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "goa",
+  "name": "Goa",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 15.3,
+  "lng": 74.0,
+  "wikipediaTitle": "Goa",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "north-goa",
+  "name": "North Goa",
+  "kind": "area",
+  "parentSlug": "goa",
+  "countryCode": "IN",
+  "lat": 15.55,
+  "lng": 73.78,
+  "wikipediaTitle": "North Goa district",
+  "wikivoyageTitle": "North Goa",
+  "aliases": [
+   "Calangute",
+   "Baga",
+   "Anjuna",
+   "Candolim",
+   "Vagator"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "south-goa",
+  "name": "South Goa",
+  "kind": "area",
+  "parentSlug": "goa",
+  "countryCode": "IN",
+  "lat": 15.15,
+  "lng": 73.98,
+  "wikipediaTitle": "South Goa district",
+  "wikivoyageTitle": "South Goa",
+  "aliases": [
+   "Palolem",
+   "Agonda",
+   "Margao",
+   "Colva",
+   "Benaulim"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "ladakh",
+  "name": "Ladakh",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 34.15,
+  "lng": 77.6,
+  "wikipediaTitle": "Ladakh",
+  "bestMonths": [
+   5,
+   6,
+   7,
+   8,
+   9
+  ]
+ },
+ {
+  "slug": "leh",
+  "name": "Leh",
+  "kind": "city",
+  "parentSlug": "ladakh",
+  "countryCode": "IN",
+  "lat": 34.1526,
+  "lng": 77.5771,
+  "wikipediaTitle": "Leh",
+  "aliases": [
+   "Leh Ladakh"
+  ],
+  "bestMonths": [
+   5,
+   6,
+   7,
+   8,
+   9
+  ]
+ },
+ {
+  "slug": "uttar-pradesh",
+  "name": "Uttar Pradesh",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 26.8,
+  "lng": 80.9,
+  "wikipediaTitle": "Uttar Pradesh",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "varanasi",
+  "name": "Varanasi",
+  "kind": "city",
+  "parentSlug": "uttar-pradesh",
+  "countryCode": "IN",
+  "lat": 25.3176,
+  "lng": 82.9739,
+  "wikipediaTitle": "Varanasi",
+  "aliases": [
+   "Banaras",
+   "Benares",
+   "Kashi"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "ayodhya",
+  "name": "Ayodhya",
+  "kind": "city",
+  "parentSlug": "uttar-pradesh",
+  "countryCode": "IN",
+  "lat": 26.7922,
+  "lng": 82.1998,
+  "wikipediaTitle": "Ayodhya",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "agra",
+  "name": "Agra",
+  "kind": "city",
+  "parentSlug": "uttar-pradesh",
+  "countryCode": "IN",
+  "lat": 27.1767,
+  "lng": 78.0081,
+  "wikipediaTitle": "Agra",
+  "aliases": [
+   "Taj Mahal"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "delhi",
+  "name": "Delhi",
+  "kind": "city",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 28.6139,
+  "lng": 77.209,
+  "wikipediaTitle": "Delhi",
+  "aliases": [
+   "New Delhi",
+   "NCR"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "maharashtra",
+  "name": "Maharashtra",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 19.7,
+  "lng": 75.7,
+  "wikipediaTitle": "Maharashtra",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "mumbai",
+  "name": "Mumbai",
+  "kind": "city",
+  "parentSlug": "maharashtra",
+  "countryCode": "IN",
+  "lat": 19.076,
+  "lng": 72.8777,
+  "wikipediaTitle": "Mumbai",
+  "aliases": [
+   "Bombay"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "karnataka",
+  "name": "Karnataka",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 14.5,
+  "lng": 76.0,
+  "wikipediaTitle": "Karnataka",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "bengaluru",
+  "name": "Bengaluru",
+  "kind": "city",
+  "parentSlug": "karnataka",
+  "countryCode": "IN",
+  "lat": 12.9716,
+  "lng": 77.5946,
+  "wikipediaTitle": "Bengaluru",
+  "aliases": [
+   "Bangalore"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "hampi",
+  "name": "Hampi",
+  "kind": "area",
+  "parentSlug": "karnataka",
+  "countryCode": "IN",
+  "lat": 15.335,
+  "lng": 76.46,
+  "wikipediaTitle": "Hampi",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "pondicherry",
+  "name": "Pondicherry",
+  "kind": "city",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 11.9416,
+  "lng": 79.8083,
+  "wikipediaTitle": "Puducherry",
+  "wikivoyageTitle": "Pondicherry",
+  "aliases": [
+   "Puducherry",
+   "Pondy",
+   "Auroville"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "west-bengal",
+  "name": "West Bengal",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 23.0,
+  "lng": 87.9,
+  "wikipediaTitle": "West Bengal",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "darjeeling",
+  "name": "Darjeeling",
+  "kind": "city",
+  "parentSlug": "west-bengal",
+  "countryCode": "IN",
+  "lat": 27.041,
+  "lng": 88.2663,
+  "wikipediaTitle": "Darjeeling",
+  "bestMonths": [
+   3,
+   4,
+   5,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "kolkata",
+  "name": "Kolkata",
+  "kind": "city",
+  "parentSlug": "west-bengal",
+  "countryCode": "IN",
+  "lat": 22.5726,
+  "lng": 88.3639,
+  "wikipediaTitle": "Kolkata",
+  "aliases": [
+   "Calcutta"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "sikkim",
+  "name": "Sikkim",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 27.55,
+  "lng": 88.5,
+  "wikipediaTitle": "Sikkim",
+  "bestMonths": [
+   3,
+   4,
+   5,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "gangtok",
+  "name": "Gangtok",
+  "kind": "city",
+  "parentSlug": "sikkim",
+  "countryCode": "IN",
+  "lat": 27.3389,
+  "lng": 88.6065,
+  "wikipediaTitle": "Gangtok",
+  "bestMonths": [
+   3,
+   4,
+   5,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "meghalaya",
+  "name": "Meghalaya",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 25.5,
+  "lng": 91.4,
+  "wikipediaTitle": "Meghalaya",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "shillong",
+  "name": "Shillong",
+  "kind": "city",
+  "parentSlug": "meghalaya",
+  "countryCode": "IN",
+  "lat": 25.5788,
+  "lng": 91.8933,
+  "wikipediaTitle": "Shillong",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "cherrapunji",
+  "name": "Cherrapunji",
+  "kind": "area",
+  "parentSlug": "meghalaya",
+  "countryCode": "IN",
+  "lat": 25.2702,
+  "lng": 91.7323,
+  "wikipediaTitle": "Cherrapunji",
+  "aliases": [
+   "Sohra",
+   "Cherrapunjee"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "andaman-nicobar",
+  "name": "Andaman & Nicobar Islands",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 11.7,
+  "lng": 92.7,
+  "wikipediaTitle": "Andaman and Nicobar Islands",
+  "aliases": [
+   "Andamans",
+   "Andaman Islands",
+   "Andaman"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3,
+   4
+  ]
+ },
+ {
+  "slug": "port-blair",
+  "name": "Port Blair",
+  "kind": "city",
+  "parentSlug": "andaman-nicobar",
+  "countryCode": "IN",
+  "lat": 11.6234,
+  "lng": 92.7265,
+  "wikipediaTitle": "Port Blair",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3,
+   4
+  ]
+ },
+ {
+  "slug": "havelock",
+  "name": "Havelock Island",
+  "kind": "area",
+  "parentSlug": "andaman-nicobar",
+  "countryCode": "IN",
+  "lat": 11.9743,
+  "lng": 92.9889,
+  "wikipediaTitle": "Swaraj Dweep",
+  "wikivoyageTitle": "Havelock Island",
+  "aliases": [
+   "Swaraj Dweep",
+   "Radhanagar Beach"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3,
+   4
+  ]
+ },
+ {
+  "slug": "punjab",
+  "name": "Punjab",
+  "kind": "state",
+  "parentSlug": "india",
+  "countryCode": "IN",
+  "lat": 31.1,
+  "lng": 75.3,
+  "wikipediaTitle": "Punjab, India",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "amritsar",
+  "name": "Amritsar",
+  "kind": "city",
+  "parentSlug": "punjab",
+  "countryCode": "IN",
+  "lat": 31.634,
+  "lng": 74.8723,
+  "wikipediaTitle": "Amritsar",
+  "aliases": [
+   "Golden Temple"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "thailand",
+  "name": "Thailand",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "TH",
+  "lat": 15.87,
+  "lng": 100.99,
+  "wikipediaTitle": "Thailand",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "bangkok",
+  "name": "Bangkok",
+  "kind": "city",
+  "parentSlug": "thailand",
+  "countryCode": "TH",
+  "lat": 13.7563,
+  "lng": 100.5018,
+  "wikipediaTitle": "Bangkok",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "phuket",
+  "name": "Phuket",
+  "kind": "area",
+  "parentSlug": "thailand",
+  "countryCode": "TH",
+  "lat": 7.9519,
+  "lng": 98.3381,
+  "wikipediaTitle": "Phuket Province",
+  "wikivoyageTitle": "Phuket",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3,
+   4
+  ]
+ },
+ {
+  "slug": "chiang-mai",
+  "name": "Chiang Mai",
+  "kind": "city",
+  "parentSlug": "thailand",
+  "countryCode": "TH",
+  "lat": 18.7883,
+  "lng": 98.9853,
+  "wikipediaTitle": "Chiang Mai",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2
+  ]
+ },
+ {
+  "slug": "vietnam",
+  "name": "Vietnam",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "VN",
+  "lat": 14.06,
+  "lng": 108.28,
+  "wikipediaTitle": "Vietnam",
+  "bestMonths": [
+   2,
+   3,
+   4,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "hanoi",
+  "name": "Hanoi",
+  "kind": "city",
+  "parentSlug": "vietnam",
+  "countryCode": "VN",
+  "lat": 21.0285,
+  "lng": 105.8542,
+  "wikipediaTitle": "Hanoi",
+  "bestMonths": [
+   10,
+   11,
+   12,
+   3,
+   4
+  ]
+ },
+ {
+  "slug": "hoi-an",
+  "name": "Hoi An",
+  "kind": "city",
+  "parentSlug": "vietnam",
+  "countryCode": "VN",
+  "lat": 15.8801,
+  "lng": 108.338,
+  "wikipediaTitle": "Hội An",
+  "wikivoyageTitle": "Hoi An",
+  "aliases": [
+   "Hội An"
+  ],
+  "bestMonths": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ]
+ },
+ {
+  "slug": "da-nang",
+  "name": "Da Nang",
+  "kind": "city",
+  "parentSlug": "vietnam",
+  "countryCode": "VN",
+  "lat": 16.0544,
+  "lng": 108.2022,
+  "wikipediaTitle": "Da Nang",
+  "aliases": [
+   "Danang"
+  ],
+  "bestMonths": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ]
+ },
+ {
+  "slug": "ha-long",
+  "name": "Ha Long",
+  "kind": "city",
+  "parentSlug": "vietnam",
+  "countryCode": "VN",
+  "lat": 20.9517,
+  "lng": 107.0807,
+  "wikipediaTitle": "Hạ Long",
+  "wikivoyageTitle": "Ha Long",
+  "aliases": [
+   "Halong Bay",
+   "Ha Long Bay"
+  ],
+  "bestMonths": [
+   10,
+   11,
+   3,
+   4,
+   5
+  ]
+ },
+ {
+  "slug": "indonesia",
+  "name": "Indonesia",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "ID",
+  "lat": -2.5,
+  "lng": 118.0,
+  "wikipediaTitle": "Indonesia",
+  "bestMonths": [
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "bali",
+  "name": "Bali",
+  "kind": "region",
+  "parentSlug": "indonesia",
+  "countryCode": "ID",
+  "lat": -8.4095,
+  "lng": 115.1889,
+  "wikipediaTitle": "Bali",
+  "aliases": [
+   "Denpasar",
+   "Seminyak",
+   "Canggu"
+  ],
+  "bestMonths": [
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "ubud",
+  "name": "Ubud",
+  "kind": "area",
+  "parentSlug": "bali",
+  "countryCode": "ID",
+  "lat": -8.5069,
+  "lng": 115.2625,
+  "wikipediaTitle": "Ubud",
+  "bestMonths": [
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "united-arab-emirates",
+  "name": "United Arab Emirates",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "AE",
+  "lat": 24.0,
+  "lng": 54.0,
+  "wikipediaTitle": "United Arab Emirates",
+  "aliases": [
+   "UAE",
+   "Emirates"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "dubai",
+  "name": "Dubai",
+  "kind": "city",
+  "parentSlug": "united-arab-emirates",
+  "countryCode": "AE",
+  "lat": 25.2048,
+  "lng": 55.2708,
+  "wikipediaTitle": "Dubai",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "slug": "singapore",
+  "name": "Singapore",
+  "kind": "city",
+  "parentSlug": null,
+  "countryCode": "SG",
+  "lat": 1.3521,
+  "lng": 103.8198,
+  "wikipediaTitle": "Singapore",
+  "bestMonths": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ]
+ },
+ {
+  "slug": "japan",
+  "name": "Japan",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "JP",
+  "lat": 36.2,
+  "lng": 138.25,
+  "wikipediaTitle": "Japan",
+  "bestMonths": [
+   3,
+   4,
+   5,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "tokyo",
+  "name": "Tokyo",
+  "kind": "city",
+  "parentSlug": "japan",
+  "countryCode": "JP",
+  "lat": 35.6762,
+  "lng": 139.6503,
+  "wikipediaTitle": "Tokyo",
+  "aliases": [
+   "Tōkyō"
+  ],
+  "bestMonths": [
+   3,
+   4,
+   5,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "kyoto",
+  "name": "Kyoto",
+  "kind": "city",
+  "parentSlug": "japan",
+  "countryCode": "JP",
+  "lat": 35.0116,
+  "lng": 135.7681,
+  "wikipediaTitle": "Kyoto",
+  "bestMonths": [
+   3,
+   4,
+   5,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "france",
+  "name": "France",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "FR",
+  "lat": 46.6,
+  "lng": 2.5,
+  "wikipediaTitle": "France",
+  "bestMonths": [
+   4,
+   5,
+   6,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "paris",
+  "name": "Paris",
+  "kind": "city",
+  "parentSlug": "france",
+  "countryCode": "FR",
+  "lat": 48.8566,
+  "lng": 2.3522,
+  "wikipediaTitle": "Paris",
+  "bestMonths": [
+   4,
+   5,
+   6,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "italy",
+  "name": "Italy",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "IT",
+  "lat": 42.8,
+  "lng": 12.5,
+  "wikipediaTitle": "Italy",
+  "bestMonths": [
+   4,
+   5,
+   6,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "rome",
+  "name": "Rome",
+  "kind": "city",
+  "parentSlug": "italy",
+  "countryCode": "IT",
+  "lat": 41.9028,
+  "lng": 12.4964,
+  "wikipediaTitle": "Rome",
+  "aliases": [
+   "Roma"
+  ],
+  "bestMonths": [
+   4,
+   5,
+   6,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "portugal",
+  "name": "Portugal",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "PT",
+  "lat": 39.5,
+  "lng": -8.0,
+  "wikipediaTitle": "Portugal",
+  "bestMonths": [
+   4,
+   5,
+   6,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "lisbon",
+  "name": "Lisbon",
+  "kind": "city",
+  "parentSlug": "portugal",
+  "countryCode": "PT",
+  "lat": 38.7223,
+  "lng": -9.1393,
+  "wikipediaTitle": "Lisbon",
+  "aliases": [
+   "Lisboa"
+  ],
+  "bestMonths": [
+   4,
+   5,
+   6,
+   9,
+   10
+  ]
+ },
+ {
+  "slug": "united-kingdom",
+  "name": "United Kingdom",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "GB",
+  "lat": 54.0,
+  "lng": -2.5,
+  "wikipediaTitle": "United Kingdom",
+  "aliases": [
+   "UK",
+   "England",
+   "Great Britain"
+  ],
+  "bestMonths": [
+   5,
+   6,
+   7,
+   8,
+   9
+  ]
+ },
+ {
+  "slug": "london",
+  "name": "London",
+  "kind": "city",
+  "parentSlug": "united-kingdom",
+  "countryCode": "GB",
+  "lat": 51.5074,
+  "lng": -0.1278,
+  "wikipediaTitle": "London",
+  "bestMonths": [
+   5,
+   6,
+   7,
+   8,
+   9
+  ]
+ },
+ {
+  "slug": "turkey",
+  "name": "Turkey",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "TR",
+  "lat": 39.0,
+  "lng": 35.0,
+  "wikipediaTitle": "Turkey",
+  "aliases": [
+   "Türkiye"
+  ],
+  "bestMonths": [
+   4,
+   5,
+   9,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "istanbul",
+  "name": "Istanbul",
+  "kind": "city",
+  "parentSlug": "turkey",
+  "countryCode": "TR",
+  "lat": 41.0082,
+  "lng": 28.9784,
+  "wikipediaTitle": "Istanbul",
+  "aliases": [
+   "Constantinople"
+  ],
+  "bestMonths": [
+   4,
+   5,
+   9,
+   10,
+   11
+  ]
+ },
+ {
+  "slug": "maldives",
+  "name": "Maldives",
+  "kind": "country",
+  "parentSlug": null,
+  "countryCode": "MV",
+  "lat": 3.2,
+  "lng": 73.2,
+  "wikipediaTitle": "Maldives",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3,
+   4
+  ]
+ },
+ {
+  "slug": "male",
+  "name": "Malé",
+  "kind": "city",
+  "parentSlug": "maldives",
+  "countryCode": "MV",
+  "lat": 4.1755,
+  "lng": 73.5093,
+  "wikipediaTitle": "Malé",
+  "wikivoyageTitle": "Malé",
+  "aliases": [
+   "Male"
+  ],
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3,
+   4
+  ]
+ },
+ {
+  "slug": "maafushi",
+  "name": "Maafushi",
+  "kind": "area",
+  "parentSlug": "maldives",
+  "countryCode": "MV",
+  "lat": 3.9425,
+  "lng": 73.4902,
+  "wikipediaTitle": "Maafushi",
+  "bestMonths": [
+   11,
+   12,
+   1,
+   2,
+   3,
+   4
+  ]
+ }
+]

@@ -5,6 +5,7 @@ export interface AuthTokenClaims {
   sub: string;
   displayName: string;
   tier: 'free' | 'trip_pass' | 'pro';
+  guest?: boolean;
   iat: number;
   exp: number;
 }

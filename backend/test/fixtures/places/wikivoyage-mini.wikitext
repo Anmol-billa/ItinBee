@@ -1,0 +1,31 @@
+== Understand ==
+Jaipur, the Pink City, is the capital of Rajasthan. See [[Jaipur/Walled City]] for the old town.
+
+== See ==
+=== Forts and palaces ===
+{{see
+| name=Hawa Mahal | alt=Palace of Winds | url=http://hawamahal.example.org | email=
+| address=Hawa Mahal Rd, Badi Choupad | lat=26.9239 | long=75.8267 | directions=
+| phone=+91 141 000 0001 | tollfree=
+| hours=9AM-5PM | price=₹50 {{dead link|date=2023}}
+| wikidata=Q9000001 | wikipedia=Hawa Mahal | image=Hawa Mahal 2011.jpg
+| content=The iconic five-storey façade of pink sandstone with 953 small windows, built in 1799. Best photographed from the cafés across the street in the morning light. [[File:Skip.jpg|thumb]] <ref>ignored</ref>
+}}
+{{see | name=City Palace | alt=Chandra Mahal | lat= | long= | wikidata= | wikipedia=City Palace, Jaipur | content=The royal residence in the old city, still home to the Jaipur royal family; the museum wing is open to visitors.}}
+{{see | name=Jantar Mantar | lat=26.9248 | long=75.8246 | wikidata=Q9000002 | content=An 18th century astronomical observatory with the world's largest stone sundial.}}
+{{see | name=The Mystery Haveli | lat= | long= | content=A listing without any coordinates or links that cannot be located.}}
+
+== Do ==
+{{do | name=Sunrise balloon ride | lat=26.95 | long=75.80 | content=A [[hot air balloon|balloon]] flight over the city.}}
+
+== Eat ==
+{{eat | name=Laxmi Misthan Bhandar (LMB) | alt=LMB | lat=26.9197 | long=75.8225 | address=Johari Bazaar | hours=8AM-11PM | price=₹₹ | content=Famous for sweets and vegetarian thalis.}}
+
+== Drink ==
+{{drink | name=Tapri Central | lat=26.9020 | long=75.8056 | content=Rooftop chai and coffee place.}}
+
+== Sleep ==
+=== Splurge ===
+{{sleep | name=Samode Haveli | lat=26.9262 | long=75.8279 | price=₹₹₹₹ | content=A restored 19th century haveli hotel.}}
+{{listing | type=buy | name=Johari Bazaar | lat=26.9215 | long=75.8232 | content=Jewellery bazaar.}}
+{{listing | type=other | name=Unknown thing | lat=26.9 | long=75.8}}

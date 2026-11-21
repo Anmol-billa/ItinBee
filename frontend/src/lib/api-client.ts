@@ -16,7 +16,7 @@ export interface SyncClientMutationInput {
   payload: Record<string, unknown>;
 }
 
-function getBaseUrl(): string {
+export function getBaseUrl(): string {
   if (typeof window === 'undefined') {
     const internal =
       process.env.INTERNAL_API_URL ||

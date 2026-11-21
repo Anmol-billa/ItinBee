@@ -60,6 +60,459 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/guest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or reuse an anonymous guest session (idempotent per cookie/bearer token) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            user: {
+                                /** Format: uuid */
+                                id: string;
+                                displayName: string;
+                                preferredLang: string;
+                                /** @enum {string} */
+                                tier: "free" | "trip_pass" | "pro";
+                                hasUpiVpa: boolean;
+                                createdAt: string;
+                            };
+                            guest: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/magic/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an email magic code / sign-in link (Resend in prod; includes dev preview in non-prod) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        email: string;
+                        redirectPath?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            sent: boolean;
+                            expiresInSeconds: number;
+                            devMagicCode?: string;
+                            devVerifyUrl?: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/magic/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify email magic code, sign in, and automatically merge any active guest trips */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        email: string;
+                        code: string;
+                        displayName?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            user: {
+                                /** Format: uuid */
+                                id: string;
+                                displayName: string;
+                                preferredLang: string;
+                                /** @enum {string} */
+                                tier: "free" | "trip_pass" | "pro";
+                                hasUpiVpa: boolean;
+                                createdAt: string;
+                            };
+                            mergedTripsCount: number;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/google/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Google ID token (or devEmail in local dev when GOOGLE_CLIENT_ID is unset) and merge guest trips */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        idToken?: string;
+                        /** Format: email */
+                        devEmail?: string;
+                        devName?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            user: {
+                                /** Format: uuid */
+                                id: string;
+                                displayName: string;
+                                preferredLang: string;
+                                /** @enum {string} */
+                                tier: "free" | "trip_pass" | "pro";
+                                hasUpiVpa: boolean;
+                                createdAt: string;
+                            };
+                            mergedTripsCount: number;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current session status (unauthenticated, guest, or signed-in user) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            authenticated: boolean;
+                            guest: boolean;
+                            user: {
+                                /** Format: uuid */
+                                id: string;
+                                displayName: string;
+                                preferredLang: string;
+                                /** @enum {string} */
+                                tier: "free" | "trip_pass" | "pro";
+                                hasUpiVpa: boolean;
+                                createdAt: string;
+                            } | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update user profile (display name, preferred language, UPI VPA) */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        displayName?: string;
+                        /** @enum {string} */
+                        preferredLang?: "en" | "hi";
+                        upiVpa?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            user: {
+                                /** Format: uuid */
+                                id: string;
+                                displayName: string;
+                                preferredLang: string;
+                                /** @enum {string} */
+                                tier: "free" | "trip_pass" | "pro";
+                                hasUpiVpa: boolean;
+                                createdAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear session cookie and sign out */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List only trips owned or joined by the current caller (excludes uncloned sample templates) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            trips: {
+                                /** Format: uuid */
+                                id: string;
+                                shortId: string;
+                                title: string;
+                                destinationSummary: string;
+                                startDate: string | null;
+                                endDate: string | null;
+                                /** @enum {string} */
+                                homeCurrency: "INR" | "THB" | "VND" | "AED" | "JPY" | "EUR" | "USD";
+                                isPublicTemplate: boolean;
+                                isSample: boolean;
+                                elderModeEnabled: boolean;
+                                vaultBytesUsed: number;
+                                vaultQuotaBytes: number;
+                                latestSeq: number;
+                                mapAttribution: string;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/request": {
         parameters: {
             query?: never;
@@ -2930,6 +3383,1654 @@ export interface paths {
                             advisories: string[];
                             googleMapsUrl: string;
                             attribution: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/geo/autocomplete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Destination/place typeahead: local destinations (instant) merged with cached Photon (OSM) results. Debounce >= 250 ms. */
+        get: {
+            parameters: {
+                query: {
+                    q: string;
+                    lat?: number;
+                    lng?: number;
+                    lang?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            query: string;
+                            results: {
+                                id: string;
+                                /** @enum {string} */
+                                source: "destination" | "photon";
+                                slug: string | null;
+                                name: string;
+                                secondary: string;
+                                /** @enum {string} */
+                                kind: "country" | "state" | "region" | "city" | "area" | "place";
+                                lat: number;
+                                lng: number;
+                                countryCode: string | null;
+                                /** @enum {string|null} */
+                                packStatus: "none" | "building" | "ready" | "stale" | null;
+                            }[];
+                            cached: boolean;
+                            photonAvailable: boolean;
+                            attribution: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            retryAfterSec: number;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/destinations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List destinations (countries, states, regions, cities, areas). `tree=true` returns the full nested hierarchy. */
+        get: {
+            parameters: {
+                query?: {
+                    kind?: "country" | "state" | "region" | "city" | "area";
+                    country?: string;
+                    q?: string;
+                    parent?: string;
+                    tree?: "true" | "false";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            destinations: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                                /** @enum {string} */
+                                kind: "country" | "state" | "region" | "city" | "area";
+                                parentSlug: string | null;
+                                countryCode: string;
+                                lat: number;
+                                lng: number;
+                                aliases: string[];
+                                bestMonths: number[];
+                                heroImage: {
+                                    url: string;
+                                    author: string | null;
+                                    license: string | null;
+                                    licenseUrl: string | null;
+                                    sourceUrl: string | null;
+                                } | null;
+                                /** @enum {string} */
+                                packStatus: "none" | "building" | "ready" | "stale";
+                            }[];
+                            tree?: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                                /** @enum {string} */
+                                kind: "country" | "state" | "region" | "city" | "area";
+                                parentSlug: string | null;
+                                countryCode: string;
+                                lat: number;
+                                lng: number;
+                                aliases: string[];
+                                bestMonths: number[];
+                                heroImage: {
+                                    url: string;
+                                    author: string | null;
+                                    license: string | null;
+                                    licenseUrl: string | null;
+                                    sourceUrl: string | null;
+                                } | null;
+                                /** @enum {string} */
+                                packStatus: "none" | "building" | "ready" | "stale";
+                                children: {
+                                    id: string;
+                                    slug: string;
+                                    name: string;
+                                    /** @enum {string} */
+                                    kind: "country" | "state" | "region" | "city" | "area";
+                                    parentSlug: string | null;
+                                    countryCode: string;
+                                    lat: number;
+                                    lng: number;
+                                    aliases: string[];
+                                    bestMonths: number[];
+                                    heroImage: {
+                                        url: string;
+                                        author: string | null;
+                                        license: string | null;
+                                        licenseUrl: string | null;
+                                        sourceUrl: string | null;
+                                    } | null;
+                                    /** @enum {string} */
+                                    packStatus: "none" | "building" | "ready" | "stale";
+                                    children: {
+                                        id: string;
+                                        slug: string;
+                                        name: string;
+                                        /** @enum {string} */
+                                        kind: "country" | "state" | "region" | "city" | "area";
+                                        parentSlug: string | null;
+                                        countryCode: string;
+                                        lat: number;
+                                        lng: number;
+                                        aliases: string[];
+                                        bestMonths: number[];
+                                        heroImage: {
+                                            url: string;
+                                            author: string | null;
+                                            license: string | null;
+                                            licenseUrl: string | null;
+                                            sourceUrl: string | null;
+                                        } | null;
+                                        /** @enum {string} */
+                                        packStatus: "none" | "building" | "ready" | "stale";
+                                        children: {
+                                            id: string;
+                                            slug: string;
+                                            name: string;
+                                            /** @enum {string} */
+                                            kind: "country" | "state" | "region" | "city" | "area";
+                                            parentSlug: string | null;
+                                            countryCode: string;
+                                            lat: number;
+                                            lng: number;
+                                            aliases: string[];
+                                            bestMonths: number[];
+                                            heroImage: {
+                                                url: string;
+                                                author: string | null;
+                                                license: string | null;
+                                                licenseUrl: string | null;
+                                                sourceUrl: string | null;
+                                            } | null;
+                                            /** @enum {string} */
+                                            packStatus: "none" | "building" | "ready" | "stale";
+                                        }[];
+                                    }[];
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/destinations/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Destination profile: summary, hero image, breadcrumb, children and Destination Pack status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            destination: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                                /** @enum {string} */
+                                kind: "country" | "state" | "region" | "city" | "area";
+                                parentSlug: string | null;
+                                countryCode: string;
+                                lat: number;
+                                lng: number;
+                                aliases: string[];
+                                bestMonths: number[];
+                                heroImage: {
+                                    url: string;
+                                    author: string | null;
+                                    license: string | null;
+                                    licenseUrl: string | null;
+                                    sourceUrl: string | null;
+                                } | null;
+                                /** @enum {string} */
+                                packStatus: "none" | "building" | "ready" | "stale";
+                                wikidataId: string | null;
+                                wikipediaTitle: string | null;
+                                summary: string | null;
+                            };
+                            breadcrumb: {
+                                slug: string;
+                                name: string;
+                                /** @enum {string} */
+                                kind: "country" | "state" | "region" | "city" | "area";
+                            }[];
+                            children: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                                /** @enum {string} */
+                                kind: "country" | "state" | "region" | "city" | "area";
+                                parentSlug: string | null;
+                                countryCode: string;
+                                lat: number;
+                                lng: number;
+                                aliases: string[];
+                                bestMonths: number[];
+                                heroImage: {
+                                    url: string;
+                                    author: string | null;
+                                    license: string | null;
+                                    licenseUrl: string | null;
+                                    sourceUrl: string | null;
+                                } | null;
+                                /** @enum {string} */
+                                packStatus: "none" | "building" | "ready" | "stale";
+                            }[];
+                            pack: {
+                                /** @enum {string} */
+                                status: "none" | "building" | "ready" | "stale";
+                                buildable: boolean;
+                                builtAt: string | null;
+                                startedAt: string | null;
+                                attemptedAt: string | null;
+                                error: string | null;
+                                stats: {
+                                    [key: string]: unknown;
+                                };
+                            };
+                            placeCounts: {
+                                [key: string]: number;
+                            };
+                            attribution: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/destinations/{slug}/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ranked places for a destination. Pack ready: served instantly (200). Pack missing/stale: a build is enqueued and a 202 payload with live Wikipedia fallback results is returned. */
+        get: {
+            parameters: {
+                query?: {
+                    category?: "sights" | "culture" | "nature" | "food" | "cafe" | "nightlife" | "stay" | "activity" | "spiritual" | "transport";
+                    q?: string;
+                    /** @description lat,lng */
+                    near?: string;
+                    /** @description metres, used with `near` */
+                    radius?: number;
+                    /** @description minLng,minLat,maxLng,maxLat */
+                    bbox?: string;
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "none" | "building" | "ready" | "stale";
+                            /** @enum {string} */
+                            source: "pack" | "live";
+                            destination: {
+                                slug: string;
+                                name: string;
+                                /** @enum {string} */
+                                kind: "country" | "state" | "region" | "city" | "area";
+                            };
+                            total: number;
+                            nextCursor: string | null;
+                            places: {
+                                id: string;
+                                refId: string;
+                                name: string;
+                                nameLocal: {
+                                    [key: string]: string;
+                                };
+                                /** @enum {string} */
+                                category: "sights" | "culture" | "nature" | "food" | "cafe" | "nightlife" | "stay" | "activity" | "spiritual" | "transport";
+                                subtype: string | null;
+                                lat: number;
+                                lng: number;
+                                address: string | null;
+                                website: string | null;
+                                openingHours: string | null;
+                                description: string | null;
+                                whyVisit: string | null;
+                                typicalDurationMins: number | null;
+                                bestTime: string | null;
+                                dietaryHints: string[];
+                                image: {
+                                    url: string;
+                                    author: string | null;
+                                    license: string | null;
+                                    licenseUrl: string | null;
+                                    sourceUrl: string | null;
+                                } | null;
+                                popularity: number;
+                                distanceM: number | null;
+                                /** @enum {string} */
+                                origin: "pack" | "curated" | "live";
+                                wikipediaUrl: string | null;
+                                wikidataId: string | null;
+                                sources: {
+                                    /** @enum {string} */
+                                    provider: "wikivoyage" | "wikipedia" | "wikidata" | "osm" | "commons" | "curated";
+                                    fields: string[];
+                                    license: string;
+                                    url: string | null;
+                                    ref: string | null;
+                                    retrievedAt: string;
+                                }[];
+                            }[];
+                            attribution: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "none" | "building" | "ready" | "stale";
+                            /** @enum {string} */
+                            source: "pack" | "live";
+                            destination: {
+                                slug: string;
+                                name: string;
+                                /** @enum {string} */
+                                kind: "country" | "state" | "region" | "city" | "area";
+                            };
+                            total: number;
+                            nextCursor: string | null;
+                            places: {
+                                id: string;
+                                refId: string;
+                                name: string;
+                                nameLocal: {
+                                    [key: string]: string;
+                                };
+                                /** @enum {string} */
+                                category: "sights" | "culture" | "nature" | "food" | "cafe" | "nightlife" | "stay" | "activity" | "spiritual" | "transport";
+                                subtype: string | null;
+                                lat: number;
+                                lng: number;
+                                address: string | null;
+                                website: string | null;
+                                openingHours: string | null;
+                                description: string | null;
+                                whyVisit: string | null;
+                                typicalDurationMins: number | null;
+                                bestTime: string | null;
+                                dietaryHints: string[];
+                                image: {
+                                    url: string;
+                                    author: string | null;
+                                    license: string | null;
+                                    licenseUrl: string | null;
+                                    sourceUrl: string | null;
+                                } | null;
+                                popularity: number;
+                                distanceM: number | null;
+                                /** @enum {string} */
+                                origin: "pack" | "curated" | "live";
+                                wikipediaUrl: string | null;
+                                wikidataId: string | null;
+                                sources: {
+                                    /** @enum {string} */
+                                    provider: "wikivoyage" | "wikipedia" | "wikidata" | "osm" | "commons" | "curated";
+                                    fields: string[];
+                                    license: string;
+                                    url: string | null;
+                                    ref: string | null;
+                                    retrievedAt: string;
+                                }[];
+                            }[];
+                            attribution: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/destinations/{slug}/pack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueue a Destination Pack (re)build. Requires the ADMIN_TOKEN (x-admin-token header or Bearer). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description Rebuild even if the pack is ready/fresh
+                         * @default false
+                         */
+                        force?: boolean;
+                        /**
+                         * @description Bypass provider caches
+                         * @default false
+                         */
+                        refresh?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            slug: string;
+                            enqueued: boolean;
+                            /** @enum {string} */
+                            status: "none" | "building" | "ready" | "stale";
+                            /** @enum {string} */
+                            reason: "enqueued" | "already-building" | "fresh" | "cooldown";
+                            jobId: string | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/destinations/{slug}/pack/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Destination Pack build status (none | building | ready | stale) and last build statistics */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            slug: string;
+                            pack: {
+                                /** @enum {string} */
+                                status: "none" | "building" | "ready" | "stale";
+                                buildable: boolean;
+                                builtAt: string | null;
+                                startedAt: string | null;
+                                attemptedAt: string | null;
+                                error: string | null;
+                                stats: {
+                                    [key: string]: unknown;
+                                };
+                            };
+                            placeCounts: {
+                                [key: string]: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/geo/route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Route polyline + distance + duration via OpenRouteService (cached by coordinate hash). Falls back to the India transit estimator (`source: "estimate"`, straight-line geometry). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @default driving-car
+                         * @enum {string}
+                         */
+                        profile?: "driving-car" | "foot-walking";
+                        coordinates: {
+                            lat: number;
+                            lng: number;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            profile: "driving-car" | "foot-walking";
+                            distanceM: number;
+                            durationS: number;
+                            /** @description Encoded polyline, precision 5 */
+                            geometry: string;
+                            /** @enum {string} */
+                            geometryFormat: "polyline5";
+                            /** @description [lng, lat] pairs (decoded geometry) */
+                            coordinates: [
+                                number,
+                                number
+                            ][];
+                            /** @enum {string} */
+                            source: "openrouteservice" | "estimate";
+                            cached: boolean;
+                            attribution: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            retryAfterSec: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/explore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Browse curated templates and user-published itineraries with hierarchical destination, duration, type, budget, and month filters */
+        get: {
+            parameters: {
+                query?: {
+                    dest?: string;
+                    q?: string;
+                    days?: string;
+                    type?: string;
+                    budget?: "budget" | "mid" | "premium";
+                    month?: number;
+                    sort?: "popular" | "newest" | "shortest";
+                    cursor?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                slug: string;
+                                title: string;
+                                summary: string;
+                                coverImage: {
+                                    url: string;
+                                    author: string;
+                                    license: string;
+                                    sourceUrl: string;
+                                } | null;
+                                durationDays: number;
+                                stopCount: number;
+                                destinations: {
+                                    slug: string;
+                                    name: string;
+                                }[];
+                                tripTypes: string[];
+                                /** @enum {string|null} */
+                                budgetTier: "budget" | "mid" | "premium" | null;
+                                bestMonths: number[];
+                                /** @enum {string} */
+                                origin: "template" | "user";
+                                authorName?: string;
+                                cloneCount: number;
+                                publishedAt: string;
+                            }[];
+                            nextCursor: string | null;
+                            total: number;
+                            facets: {
+                                durations: {
+                                    [key: string]: number;
+                                };
+                                types: {
+                                    [key: string]: number;
+                                };
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/explore/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch full day-by-day public itinerary detail for an Explore template or published trip */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            slug: string;
+                            title: string;
+                            summary: string;
+                            coverImage: {
+                                url: string;
+                                author: string;
+                                license: string;
+                                sourceUrl: string;
+                            } | null;
+                            durationDays: number;
+                            stopCount: number;
+                            destinations: {
+                                slug: string;
+                                name: string;
+                            }[];
+                            tripTypes: string[];
+                            /** @enum {string|null} */
+                            budgetTier: "budget" | "mid" | "premium" | null;
+                            bestMonths: number[];
+                            /** @enum {string} */
+                            origin: "template" | "user";
+                            authorName?: string;
+                            cloneCount: number;
+                            publishedAt: string;
+                            days: {
+                                dayNumber: number;
+                                title: string;
+                                items: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    kind: "stay" | "transit" | "activity" | "meal" | "note";
+                                    title: string;
+                                    notes: string;
+                                    lat: number | null;
+                                    lng: number | null;
+                                    startTime: string | null;
+                                    durationMins: number | null;
+                                    placeRefId: string | null;
+                                    image?: {
+                                        url: string;
+                                        author: string;
+                                        license: string;
+                                        sourceUrl: string;
+                                    };
+                                }[];
+                            }[];
+                            mapAttribution: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/explore/{slug}/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clone an Explore itinerary into a new editable trip draft owned by the caller (creates guest session if needed) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            tripId: string;
+                            shortId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trips/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a user trip into the public Explore catalogue */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        slug?: string;
+                        summary?: string;
+                        tripTypes: string[];
+                        /** @enum {string} */
+                        budgetTier?: "budget" | "mid" | "premium";
+                        bestMonths?: number[];
+                        coverImage?: {
+                            url: string;
+                            author: string;
+                            license: string;
+                            sourceUrl: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            slug: string;
+                            title: string;
+                            summary: string;
+                            coverImage: {
+                                url: string;
+                                author: string;
+                                license: string;
+                                sourceUrl: string;
+                            } | null;
+                            durationDays: number;
+                            stopCount: number;
+                            destinations: {
+                                slug: string;
+                                name: string;
+                            }[];
+                            tripTypes: string[];
+                            /** @enum {string|null} */
+                            budgetTier: "budget" | "mid" | "premium" | null;
+                            bestMonths: number[];
+                            /** @enum {string} */
+                            origin: "template" | "user";
+                            authorName?: string;
+                            cloneCount: number;
+                            publishedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/import/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start an asynchronous Smart Import job from messy text, WhatsApp chats, URLs, or ticket PDFs/screenshots */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        text?: string;
+                        urls?: string[];
+                        files?: {
+                            name: string;
+                            mimeType: string;
+                            dataBase64: string;
+                        }[];
+                        /** @enum {string} */
+                        locale?: "en" | "hi";
+                        baseTripSlug?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            jobId: string;
+                            /** @enum {string} */
+                            status: "queued";
+                            eventsUrl: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                            error: string;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            code: "quota_exceeded";
+                            /** @enum {string} */
+                            error: "quota_exceeded";
+                            message: string;
+                            resetAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/import/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll current Smart Import job state (fallback for environments without SSE) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            /** @enum {string} */
+                            status: "queued" | "understanding" | "needs_review" | "building" | "done" | "failed";
+                            /** @enum {string} */
+                            mode: "ai" | "basic";
+                            intent?: {
+                                title: string;
+                                destinations: {
+                                    name: string;
+                                    country?: string;
+                                    nights?: number;
+                                    order: number;
+                                    confidence: number;
+                                    destinationSlug?: string;
+                                    lat?: number;
+                                    lng?: number;
+                                    resolved: boolean;
+                                }[];
+                                dates: {
+                                    start: string | null;
+                                    end: string | null;
+                                    lengthDays: number | null;
+                                    flexibleMonth: number | null;
+                                };
+                                travellers: {
+                                    count: number | null;
+                                    /** @enum {string|null} */
+                                    group: "solo" | "couple" | "family" | "friends" | "seniors" | "mixed" | null;
+                                    hasChildren: boolean | null;
+                                    hasSeniors: boolean | null;
+                                };
+                                budget: {
+                                    amount: number | null;
+                                    currency: string | null;
+                                    /** @enum {string|null} */
+                                    tier: "budget" | "mid" | "premium" | null;
+                                };
+                                interests: string[];
+                                /** @enum {string|null} */
+                                pace: "relaxed" | "moderate" | "packed" | null;
+                                diet: string[];
+                                mustInclude: {
+                                    name: string;
+                                    sourceQuote: string;
+                                    placeRefId?: string;
+                                    lat?: number;
+                                    lng?: number;
+                                    resolved: boolean;
+                                }[];
+                                avoid: string[];
+                                bookings: {
+                                    /** @enum {string} */
+                                    itemKind: "stay" | "transit" | "activity" | "meal" | "note";
+                                    title: string;
+                                    /** @enum {string} */
+                                    provider: "irctc" | "indigo" | "air_india" | "akasa" | "spicejet" | "redbus" | "abhibus" | "mmt" | "goibibo" | "airbnb" | "zostel" | "homestay" | "manual";
+                                    startIso?: string;
+                                    endIso?: string;
+                                    summary: {
+                                        headline: string;
+                                        routeLabel?: string;
+                                        vehicleNumber?: string;
+                                        vehicleName?: string;
+                                        operatorName?: string;
+                                        originCode?: string;
+                                        originName?: string;
+                                        destinationCode?: string;
+                                        destinationName?: string;
+                                        departureIso?: string;
+                                        arrivalIso?: string;
+                                        terminalOrPlatform?: string;
+                                        coach?: string;
+                                        seatOrBerth?: string;
+                                        quota?: string;
+                                        boardingPoint?: string;
+                                        baggageAllowance?: string;
+                                        propertyName?: string;
+                                        checkInIso?: string;
+                                        checkOutIso?: string;
+                                    };
+                                    lowConfidenceFields: string[];
+                                }[];
+                                assumptions: string[];
+                                clarifyingQuestions: {
+                                    id: string;
+                                    question: string;
+                                    options?: string[];
+                                }[];
+                            };
+                            tripId?: string;
+                            shortId?: string;
+                            error?: {
+                                code: string;
+                                message: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                            error: string;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/import/jobs/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Server-Sent Events (text/event-stream) for Smart Import: replays full job history on connect, then streams live events with 15s heartbeats */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/import/jobs/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm (and optionally edit) extracted TripIntent + clarifying answers to build the grounded day-by-day itinerary (idempotent) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        intent: {
+                            title: string;
+                            destinations: {
+                                name: string;
+                                country?: string;
+                                nights?: number;
+                                order: number;
+                                confidence: number;
+                                destinationSlug?: string;
+                                lat?: number;
+                                lng?: number;
+                                resolved: boolean;
+                            }[];
+                            dates: {
+                                start: string | null;
+                                end: string | null;
+                                lengthDays: number | null;
+                                flexibleMonth: number | null;
+                            };
+                            travellers: {
+                                count: number | null;
+                                /** @enum {string|null} */
+                                group: "solo" | "couple" | "family" | "friends" | "seniors" | "mixed" | null;
+                                hasChildren: boolean | null;
+                                hasSeniors: boolean | null;
+                            };
+                            budget: {
+                                amount: number | null;
+                                currency: string | null;
+                                /** @enum {string|null} */
+                                tier: "budget" | "mid" | "premium" | null;
+                            };
+                            interests: string[];
+                            /** @enum {string|null} */
+                            pace: "relaxed" | "moderate" | "packed" | null;
+                            diet: string[];
+                            mustInclude: {
+                                name: string;
+                                sourceQuote: string;
+                                placeRefId?: string;
+                                lat?: number;
+                                lng?: number;
+                                resolved: boolean;
+                            }[];
+                            avoid: string[];
+                            bookings: {
+                                /** @enum {string} */
+                                itemKind: "stay" | "transit" | "activity" | "meal" | "note";
+                                title: string;
+                                /** @enum {string} */
+                                provider: "irctc" | "indigo" | "air_india" | "akasa" | "spicejet" | "redbus" | "abhibus" | "mmt" | "goibibo" | "airbnb" | "zostel" | "homestay" | "manual";
+                                startIso?: string;
+                                endIso?: string;
+                                summary: {
+                                    headline: string;
+                                    routeLabel?: string;
+                                    vehicleNumber?: string;
+                                    vehicleName?: string;
+                                    operatorName?: string;
+                                    originCode?: string;
+                                    originName?: string;
+                                    destinationCode?: string;
+                                    destinationName?: string;
+                                    departureIso?: string;
+                                    arrivalIso?: string;
+                                    terminalOrPlatform?: string;
+                                    coach?: string;
+                                    seatOrBerth?: string;
+                                    quota?: string;
+                                    boardingPoint?: string;
+                                    baggageAllowance?: string;
+                                    propertyName?: string;
+                                    checkInIso?: string;
+                                    checkOutIso?: string;
+                                };
+                                lowConfidenceFields: string[];
+                            }[];
+                            assumptions: string[];
+                            clarifyingQuestions: {
+                                id: string;
+                                question: string;
+                                options?: string[];
+                            }[];
+                        };
+                        answers?: {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "building";
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                            error: string;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trips/{id}/assist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask Itinbee read-only assistant: proposes grounded add/move/remove/update operations without mutating the trip directly */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        instruction: string;
+                        /** Format: uuid */
+                        dayId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            mode: "ai" | "basic";
+                            proposal: {
+                                summary: string;
+                                operations: {
+                                    /** @enum {string} */
+                                    op: "add" | "move" | "remove" | "update";
+                                    dayNumber?: number;
+                                    itemId?: string;
+                                    title?: string;
+                                    /** @enum {string} */
+                                    kind?: "stay" | "transit" | "activity" | "meal" | "note";
+                                    startTime?: string;
+                                    durationMins?: number;
+                                    notes?: string;
+                                    lat?: number | null;
+                                    lng?: number | null;
+                                    placeRefId?: string | null;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            code: "quota_exceeded";
+                            /** @enum {string} */
+                            error: "quota_exceeded";
+                            message: string;
+                            resetAt: string;
                         };
                     };
                 };

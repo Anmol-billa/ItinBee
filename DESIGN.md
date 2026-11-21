@@ -1,61 +1,62 @@
 ---
 name: "Itinbee"
-description: "OTA-agnostic, WhatsApp-native, offline-first travel itinerary workbench and UPI expense ledger."
+description: "OTA-agnostic, WhatsApp-native, offline-first travel itinerary platform, open-map route builder, and UPI expense ledger."
 colors:
-  honey: "#D97706"
-  honey-deep: "#B45309"
-  honey-wash: "#FEF3C7"
+  trunk: "#0E5A47"
+  trunk-light: "#1C7D63"
+  trunk-deep: "#073026"
+  trunk-dark: "#062119"
+  saffron: "#F2A71B"
+  vermilion: "#C7361F"
+  navy: "#14213D"
+  paper: "#F6EBD3"
+  paper-light: "#FFF7E4"
+  paper-dark: "#EAD9B5"
+  paper-edge: "#CBB68A"
+  paper-ink: "#4F4533"
   jade: "#0F766E"
   jade-wash: "#F0FDFA"
-  canvas: "#FCFCFA"
-  canvas-subtle: "#F5F5F2"
-  canvas-elevated: "#FFFFFF"
-  canvas-muted: "#EFECE6"
-  line: "#E7E5E0"
-  line-strong: "#D6D3CD"
-  ink: "#18181B"
-  ink-secondary: "#57534E"
-  ink-tertiary: "#655F5B"
+  honey-deep: "#B45309"
+  honey-wash: "#FEF3C7"
 typography:
   display:
-    fontFamily: "Public Sans, Kohinoor Devanagari, Noto Sans Devanagari, system-ui, sans-serif"
-    fontSize: "1.5rem"
-    fontWeight: 600
-    lineHeight: 1.33
-    letterSpacing: "-0.025em"
+    fontFamily: "Big Shoulders Display, Public Sans, system-ui, sans-serif"
+    fontSize: "3.75rem"
+    fontWeight: 900
+    lineHeight: 0.95
+    letterSpacing: "0.005em"
   headline:
-    fontFamily: "Public Sans, Kohinoor Devanagari, Noto Sans Devanagari, system-ui, sans-serif"
-    fontSize: "1.25rem"
-    fontWeight: 600
-    lineHeight: 1.4
-    letterSpacing: "-0.025em"
+    fontFamily: "Big Shoulders Display, Public Sans, system-ui, sans-serif"
+    fontSize: "2.25rem"
+    fontWeight: 900
+    lineHeight: 0.98
+    letterSpacing: "0.005em"
   title:
-    fontFamily: "Public Sans, Kohinoor Devanagari, Noto Sans Devanagari, system-ui, sans-serif"
-    fontSize: "0.875rem"
-    fontWeight: 600
-    lineHeight: 1.57
-    letterSpacing: "-0.015em"
+    fontFamily: "Source Sans 3, Kohinoor Devanagari, Noto Sans Devanagari, system-ui, sans-serif"
+    fontSize: "1.125rem"
+    fontWeight: 700
+    lineHeight: 1.35
   body:
-    fontFamily: "Public Sans, Kohinoor Devanagari, Noto Sans Devanagari, system-ui, sans-serif"
-    fontSize: "0.8125rem"
+    fontFamily: "Source Sans 3, Kohinoor Devanagari, Noto Sans Devanagari, system-ui, sans-serif"
+    fontSize: "1rem"
     fontWeight: 400
-    lineHeight: 1.54
+    lineHeight: 1.55
   compact:
-    fontFamily: "Public Sans, Kohinoor Devanagari, Noto Sans Devanagari, system-ui, sans-serif"
-    fontSize: "0.75rem"
-    fontWeight: 400
-    lineHeight: 1.5
-  label:
-    fontFamily: "JetBrains Mono, ui-monospace, monospace"
-    fontSize: "0.6875rem"
+    fontFamily: "Public Sans, Source Sans 3, Kohinoor Devanagari, Noto Sans Devanagari, system-ui, sans-serif"
+    fontSize: "0.875rem"
     fontWeight: 500
     lineHeight: 1.45
+  label:
+    fontFamily: "JetBrains Mono, ui-monospace, monospace"
+    fontSize: "0.75rem"
+    fontWeight: 600
+    lineHeight: 1.4
     fontFeature: "tnum"
 rounded:
   sm: "4px"
-  md: "6px"
-  lg: "8px"
-  xl: "12px"
+  md: "8px"
+  lg: "10px"
+  xl: "14px"
   full: "9999px"
 spacing:
   xs: "4px"
@@ -64,164 +65,152 @@ spacing:
   lg: "16px"
   xl: "24px"
   2xl: "32px"
+  3xl: "64px"
 components:
   button-primary:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.canvas-elevated}"
-    typography: "{typography.compact}"
-    rounded: "{rounded.md}"
-    padding: "6px 12px"
-  button-secondary:
-    backgroundColor: "{colors.canvas-elevated}"
-    textColor: "{colors.ink}"
-    typography: "{typography.compact}"
-    rounded: "{rounded.md}"
-    padding: "4px 10px"
-  nav-tab-active:
-    backgroundColor: "{colors.canvas-elevated}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.vermilion}"
+    textColor: "{colors.paper-light}"
     typography: "{typography.body}"
     rounded: "{rounded.md}"
-    padding: "6px 10px"
+    padding: "11px 24px"
+  button-secondary:
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.navy}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    padding: "11px 20px"
+  chip-day:
+    backgroundColor: "{colors.saffron}"
+    textColor: "{colors.navy}"
+    typography: "{typography.headline}"
+    rounded: "{rounded.sm}"
+    padding: "2px 8px"
   chip-confirmed:
     backgroundColor: "{colors.jade-wash}"
     textColor: "{colors.jade}"
     typography: "{typography.label}"
     rounded: "{rounded.sm}"
     padding: "2px 6px"
-  chip-advisory:
-    backgroundColor: "{colors.honey-wash}"
-    textColor: "{colors.honey-deep}"
-    typography: "{typography.label}"
-    rounded: "{rounded.sm}"
-    padding: "2px 8px"
-  card-stop:
-    backgroundColor: "{colors.canvas-elevated}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.lg}"
-    padding: "14px"
-  input-field:
-    backgroundColor: "{colors.canvas-elevated}"
-    textColor: "{colors.ink}"
-    typography: "{typography.compact}"
-    rounded: "{rounded.md}"
-    padding: "6px 10px"
-  dialog-surface:
-    backgroundColor: "{colors.canvas-elevated}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.xl}"
-    padding: "16px"
 ---
 
 # Design System: Itinbee
 
 ## Overview
 
-**Creative North Star: "The Calibrated Field Dispatch"**
+**Creative North Star: "Trunk Labels"**
 
-Itinbee treats multi-modal travel planning like a railway timetable crossed with a calm architectural notebook. Opening directly into the workbench defined in `frontend/tailwind.config.ts` and `frontend/src/app/globals.css`, Warm Alabaster (`#FCFCFA`) and Quiet Stone (`#F5F5F2`) planes separated by `1px` `#E7E5E0` hairlines keep IRCTC PNRs, coach and berth numbers, mountain switchback advisories, and UPI splits scannable without visual noise.
+Itinbee treats every trip as a lacquered steamer trunk and every destination or stop as a die-cut label pasted onto it, tied to real map pins by numbered ink leader lines. On Persuade and Browse surfaces (`/`, `/explore`, `/destinations`, `/create`), the world owns the stage: deep lacquered trunk green, chamfered paper luggage tags on twine, die-cut gloss photo labels in varied silhouettes, rubber-stamp postmarks, and perforated tear-strips.
 
-One shared palette powers two registers: compact `11px–13px` rows in `frontend/src/components/workbench/WorkbenchClient.tsx` for Trip Architects, and high-contrast `18px` bilingual English and Hindi sheets in `frontend/src/components/share/ElderCardView.tsx` and `frontend/src/components/share/GuestShareClient.tsx` for WhatsApp WebViews. Hero billboards, kickers above headings, gradient text, hard offset shadows, and nested icon-card grids are rejected; brand warmth lives in surgical amber accents and the two-tone vector linework of `frontend/src/components/mascot/ScoutBeeMark.tsx`.
+On Operate and Read surfaces (`/trip/[id]` and `/t/[shortId]`), ambition shifts to precision and daytime legibility. The trunk’s dark bar anchors workspace navigation while warm paper surfaces, tabular dispatch times, color-blind-safe day pins, and bilingual English / हिन्दी Elder Cards carry complex multi-modal Indian and international itineraries without visual fatigue. Itinbee refuses generic stock-hero search bars, identical icon-card grids, gradient text, and fabricated ratings or testimonials.
 
 **Key Characteristics:**
-- Warm-paper tonal planes (`#FCFCFA` ground, `#F5F5F2` rails, `#FFFFFF` cards) divided by `1px` `#E7E5E0` hairlines.
-- Compact `11px–14px` `Public Sans` UI copy paired with `JetBrains Mono` tabular numerals.
-- Dual-register legibility expanding to `18px` copy (`1.7` Devanagari line-height) in Elder Card mode.
-- Surgical accents: Charcoal Ink (`#18181B`) primary CTAs, Raw Honey (`#D97706`) and Tempered Amber (`#B45309`) focus and advisories, Signal Jade (`#0F766E`) verified state.
-- Themed browser surfaces (`#FEF3C7` selection, `#B45309` caret and `:focus-visible` ring, `7px` stone scrollbars, native `<dialog>` backdrop).
+- Committed lacquered trunk green (`#0E5A47`) paired with warm cut-paper tags (`#F6EBD3`) and navy stamp ink (`#14213D`).
+- Heavy condensed display lettering (`Big Shoulders Display`) contrasted against humanist UI prose (`Source Sans 3`) and tabular mono readouts (`JetBrains Mono`).
+- Four recurring die-cut destination label silhouettes (`arch`, `notch`, `oval`, `round`) carrying attributed Wikimedia Commons photography.
+- Dual-register density: expressive `16px–19px` editorial rhythm on discovery pages; calm `14px–15px` 3-pane workspace in the Trip Editor; `>=18px` high-contrast daylight legibility on WhatsApp Elder Cards.
 
 ## Colors
 
-A daylight-calibrated warm paper palette anchored by Charcoal Ink and accented only for focus, advisories, or verified tickets.
+A tactile full-palette system drawn from lacquered trunks, brass hardware, rag luggage tags, saffron day-stamps, and vermilion sealing ink.
 
 ### Primary
-- **Raw Honey** (`#D97706`): Active corridor map pin fill and Scout Bee thorax mark in `frontend/src/components/mascot/ScoutBeeMark.tsx`.
-- **Tempered Amber** (`#B45309`): Keyboard `:focus-visible` `2px` outline, text caret, Elder Card clocks, and transit or parser advisory text.
-- **Honeycomb Tint** (`#FEF3C7`): Text `::selection` highlight, Scout Bee body fill, and wash behind switchback or low-confidence parser chips.
+- **Lacquered Trunk Green** (`#0E5A47`, center lift `#1C7D63`, dark bar `#062119`): Owns major Persuade stages, page headers, and workspace top bars.
+- **Stamped Vermilion** (`#C7361F`): Reserved for the single primary stamp action (`Build my trip`, `Read & plan my trip`, `Use this itinerary`, `Share`) and active route pins.
 
 ### Secondary
-- **Signal Jade** (`#0F766E`): Confirmed PNR status, PII redaction shield, live online Wi-Fi indicator, open kitty status, and vegetarian/satvik tags.
-- **Mint Mist** (`#F0FDFA`): Soft wash paired with Signal Jade (`#0F766E`) on confirmed booking and kitty badges.
+- **Marigold Saffron** (`#F2A71B`): Brand wordmark, duration chips (`4D`, `7D`), active tab underlines, and text selection highlight.
+- **Signal Jade** (`#0F766E` on `#F0FDFA`): Confirmed PNR chips (`CNF`), verified map pins, dietary tags (`pure_veg`, `satvik`), and live sync pills.
+
+### Tertiary
+- **Tempered Amber** (`#B45309` on `#FEF3C7`): Pacing warnings, low-confidence parser fields requiring human review, and `RAC`/`WL` advisories.
 
 ### Neutral
-- **Warm Alabaster** (`#FCFCFA`) & **Quiet Stone** (`#F5F5F2`): Root stage ground and recessed navigation, map, and form planes.
-- **Crisp Paper** (`#FFFFFF`) & **Pressed Linen** (`#EFECE6`): Elevated stop rows, cards, inputs, dialogs, and secondary hover wash.
-- **Warm Hairline** (`#E7E5E0`) & **Calibrated Rule** (`#D6D3CD`): Default `1px` structural borders and active stop, transit spine, and Scout flight-path rules.
-- **Charcoal Ink** (`#18181B`), **Warm Graphite** (`#57534E`), **Stone Agate** (`#655F5B`): Primary (`17.25:1` on `#FCFCFA`), secondary (`7.43:1`), and placeholder/attribution (`4.80:1` on `#FFFFFF`) inks.
+- **Luggage Tag Paper** (`#F6EBD3`, highlight `#FFF7E4`, edge `#CBB68A`): Primary reading card, filter bar, and composer surface.
+- **Postmark Navy Ink** (`#14213D`): Primary foreground ink on paper, structural borders (`1.5px–2px`), leader lines, and rubber-stamp postmarks.
+- **Warm Rag Ink** (`#4F4533`): Secondary prose and metadata on paper, tinted from the paper hue rather than neutral gray.
 
 ### Named Rules
-**The Ink-Leads-Action Rule.** Primary structural buttons (`Share link`, `Add stop`, `Post`, `Log`) use Charcoal Ink (`#18181B`) with Crisp Paper (`#FFFFFF`) text, keeping Raw Honey (`#D97706`) and Tempered Amber (`#B45309`) rare and diagnostic.
-
-**The Semantic Jade Rule.** Signal Jade (`#0F766E`) on Mint Mist (`#F0FDFA`) appears strictly on verified trust states — confirmed PNRs, PII masking, live sync, open kitty balances, and dietary tags.
+**The One Stamp Rule.** Stamped Vermilion (`#C7361F`) appears on one primary action per region plus numbered route pins—never across rows of secondary buttons.
+**The Tinted Secondary Rule.** Secondary copy on trunk green uses translucent paper (`rgba(246, 235, 211, 0.85)`); secondary copy on paper uses Warm Rag Ink (`#4F4533`), never neutral gray.
 
 ## Typography
 
-**Display & Body Font:** `Public Sans` (self-hosted variable WOFF2 `400–700` at `frontend/public/fonts/public-sans-latin.woff2` and `frontend/public/fonts/public-sans-latin-ext.woff2`, with `Kohinoor Devanagari`, `Noto Sans Devanagari`, `system-ui`, `sans-serif` fallbacks)
-**Label/Mono Font:** `JetBrains Mono` (self-hosted variable WOFF2 `400–600` at `frontend/public/fonts/jetbrains-mono-latin.woff2` and `frontend/public/fonts/jetbrains-mono-latin-ext.woff2`, with `ui-monospace`, `monospace`)
+**Display Font:** `Big Shoulders Display` (with `Public Sans`, `system-ui`, `sans-serif` fallback)
+**Body Font:** `Source Sans 3` and `Public Sans` (with `Kohinoor Devanagari`, `Noto Sans Devanagari`, `system-ui` fallback)
+**Label/Mono Font:** `JetBrains Mono` (`tabular-nums`)
 
-**Character:** High-x-height civic sans copy keeps Indian place names effortless to scan, while `JetBrains Mono` aligns departure clocks, masked PNRs, and rupee balances cleanly.
+**Character:** Condensed poster authority in headlines paired with open, warm humanist prose that stays effortless across English, Hinglish, and Devanagari scripts.
 
 ### Hierarchy
-- **Display** (`600`, `1.5rem` / `24px`, line-height `1.33`, tracking `-0.025em`): Elder Card trip title.
-- **Headline** (`600`, `1.25rem` / `20px`, line-height `1.4`, tracking `-0.025em`): Workbench (`18px–20px`) and guest share title.
-- **Title** (`600`, `0.875rem` / `14px`, line-height `1.57`, tracking `-0.015em`): Day, modal, and section headings.
-- **Body** (`400–500`, `0.8125rem` / `13px`, line-height `1.54`): Default `body`, rail tabs, and stop titles; steps up to `18px` (`1.55` English / `1.7` Hindi line-height) in `ElderCardView`.
-- **Compact** (`400–500`, `0.75rem` / `12px`, line-height `1.5`): Stop notes, inputs, toolbar buttons, and ledger rows.
-- **Label** (`500`, `0.6875rem` / `11px`, line-height `1.45`, `tabular-nums`): Clocks, PNRs, day codes, transit connectors, and telemetry.
+- **Display** (`900`, `2.75rem–3.75rem`, line-height `0.95`): Hero claims, section headers, and destination titles.
+- **Headline** (`900`, `1.875rem–2.25rem`, line-height `0.98`): Itinerary card titles, day headers, and luggage-tag subheads.
+- **Title** (`700`, `1.125rem`, line-height `1.35`): Stop titles, filter legends, and review section headers.
+- **Body** (`400–600`, `1rem`, line-height `1.55`, measure `60–68ch`): Descriptions, notes, and form controls (`>=18px` with `1.7` line-height in Elder Card mode).
+- **Label** (`600`, `0.75rem`, `tabular-nums`): Clock times (`06:45`), PNR masks, transit distances/durations, and currency amounts.
 
 ### Named Rules
-**The Tabular Dispatch Rule.** Every clock time, PNR mask, vehicle code, vote count, and currency figure renders in `JetBrains Mono` with `tabular-nums`.
-
-**The Dual-Register Scale Rule.** Builder views cap headings at `20px` and UI copy at `11px–14px`, while Elder Card views enforce `18px` summaries and `1.7` Devanagari line-height.
+**The No-Kicker Rule.** Headings carry their own weight without uppercase eyebrow or kicker labels stacked above them.
+**The Tabular Dispatch Rule.** Every clock time, PNR mask, distance, duration, vote count, and INR/FX figure uses `JetBrains Mono` with `tabular-nums`.
 
 ## Layout
 
-Desktop (`>=1024px`) runs a 3-pane workbench (`232px` rail + `minmax(0, 1fr)` stage + `396px` map) below a sticky `48px` header. Timeline rows use `@container timeline (inline-size > 34rem)` (`544px`) in `frontend/src/app/globals.css` to switch `.stop-row-grid` from `1fr` to `5.5rem minmax(0, 1fr) auto`. Guest Share (`frontend/src/app/t/[shortId]/page.tsx`) uses a `1024px` split (`360px` sticky map) or `672px` Elder Card sheet; `<1024px` uses a safe-area bottom bar and `44px` coarse-pointer targets.
+Public pages (`/`, `/explore`, `/destinations`, `/create`) alternate between lacquered trunk stages and warm paper bands inside a `1280px` container (`20px` mobile padding, `32px` desktop padding). The first viewport on desktop (`>=1024px`) frames a `1280×804px` trunk stage beneath a `64px` navigation bar and closes with a `32px` agate open-data credits strip (`900px` total height, scaled smoothly via CSS zoom between `1024px` and `1279px` and stacked cleanly below `1024px`).
+
+The Trip Editor (`/trip/[id]`) uses a full-viewport 3-pane desktop workspace (Day Timeline · Explore Places Discovery · Synchronized OpenFreeMap Vector Route Map) that collapses into a single-row segmented switch (`Plan` | `Places` | `Map`) on mobile with `44px` minimum coarse-pointer hit targets.
 
 ## Elevation & Depth
 
-Paper value steps (`#F5F5F2` recessed behind `#FCFCFA` and `#FFFFFF`) and `1px` `#E7E5E0` borders carry depth, backed by two Charcoal Ink shadows and a `rgba(24, 24, 27, 0.36)` `2px`-blurred `<dialog>::backdrop`.
+Depth comes from physical paper stock resting over lacquered trunk panels: soft downward ambient drop-shadows with subtle blur rather than zero-blur neobrutalist block offsets or decorative glassmorphism.
 
 ### Shadow Vocabulary
-- **Panel Lift** (`box-shadow: 0 2px 8px -2px rgba(24, 24, 27, 0.05), 0 1px 2px 0 rgba(24, 24, 27, 0.03)`): Active rail tab, view toggle, highlighted stop, and POI popover.
-- **Dialog Float** (`box-shadow: 0 18px 42px -10px rgba(24, 24, 27, 0.14), 0 4px 12px -2px rgba(24, 24, 27, 0.06)`): Native `<dialog>` modals and toasts.
-
-### Named Rules
-**The Hairline-Over-Shadow Rule.** Resting cards, stop rows, and trays sit flat inside `1px` `#E7E5E0` borders; shadows mark active selection or modals only.
+- **Luggage Tag Lift** (`drop-shadow: 0 22px 22px rgba(3, 18, 14, 0.55)`): Primary hanging composer tag over trunk green.
+- **Die-Cut Label Lift** (`box-shadow: 0 14px 26px rgba(3, 18, 14, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.75)`): Destination labels and itinerary cards.
+- **Stamp Press** (`box-shadow: 0 6px 14px -2px rgba(98, 24, 12, 0.55)`): Primary vermilion stamp button, compressing on `:active`.
 
 ## Shapes
 
-Tight corners (`4px` chips, `6px` controls, `8px` cards/maps, `12px` modals and Elder Card, `9999px` index pins and scrollbars) pair with full-perimeter `1px` borders, dashed route polylines (`frontend/src/components/map/LazyRouteMap.tsx`), and `1.6–1.7` stroke Lucide icons (`12px–16px`).
+- **Chamfered Luggage Tag** (`clip-path: polygon(52px 0, calc(100% - 52px) 0, 100% 52px, 100% 100%, 0 100%, 0 52px)` with centered brass grommet hole and `2px dashed` perforation).
+- **Die-Cut Silhouettes:** Four distinct destination frames—`arch` (`16px 16px 999px 999px`), `oval` (`50%`), `round` (`18px`), and `notch` (radial-gradient side ticket cutouts)—bordered by `7px` paper stock and `1.5px` navy keylines.
+- **Restrained Rotation:** Destination labels rotate at most `±4deg` on Persuade stages and `0deg` inside dense Operate lists.
 
 ## Components
 
 ### Buttons
-- **Shape & Primary:** `6px` radius; `#18181B` fill with `#FFFFFF` `12px` medium text (`6px 12px` padding).
-- **Secondary & Focus:** `#FFFFFF` fill with `1px` `#E7E5E0` border (`4px 10px` padding); `:focus-visible` draws a `2px` `#B45309` ring (`2px` offset); `.icon-hit` adds a `-6px` touch halo.
+- **Shape:** Gently rounded corners (`8px`), `2px solid #14213D` stroke on primary stamps, `1.5px solid` on outline actions, minimum `48px` height.
+- **Primary (`.btn-stamp`):** Stamped Vermilion (`#C7361F`) with `#FFFDF8` bold text (`11px 24px` padding) and soft warm blur shadow.
+- **Hover / Focus:** Lifts `-1px` on hover (`#D63F26`), settles `+1px` on press, and shows a `3px solid` high-contrast `:focus-visible` outline (`#F2A71B` on trunk, `#14213D` on paper).
+- **Secondary (`.btn-line`):** Transparent ground with current-ink `1.5px` border and subtle wash on hover.
 
 ### Chips
-- **Style & State:** `4px` radius (`2px 6px` padding); `#F0FDFA` / `#0F766E` for confirmed PNRs and dietary tags, `#FEF3C7` / `#B45309` for transit and parser advisories.
+- **Style:** Pill radius (`9999px`), `1.5px solid rgba(20, 33, 61, 0.4)` on `#EFE0BE` paper stock (`44px` min-height on coarse pointers).
+- **State:** Selected filter chips invert to `#14213D` ground with `#F6EBD3` text (`aria-pressed="true"`). Duration chips use `#F2A71B` saffron with `#14213D` condensed numerals.
 
 ### Cards / Containers
-- **Style:** `8px` stop and ledger cards (`14px` padding) and `12px` `ElderCardView` (`20px–28px` padding) on `#FFFFFF` with `1px` `#E7E5E0` borders; highlighted stops add `#D6D3CD` and Panel Lift.
+- **Corner Style:** `14px` outer radius on itinerary cards and workspace panels; chamfered top corners on luggage tags.
+- **Background:** `#F6EBD3` / `#FFF7E4` paper stock with `1.5px–2px solid #14213D` structural framing.
+- **Internal Padding:** `16px–24px` on itinerary cards; `24px–42px` on primary composer tags.
 
 ### Inputs / Fields
-- **Style & Focus:** `6px` radius, `1px solid #E7E5E0`, `#FFFFFF` fill (`#FCFCFA` in Scout box), `12px` `#18181B` text, `#655F5B` placeholder, `#B45309` `:focus-visible` ring.
+- **Style:** `#FFFDF8` cream paper ground, `2px solid rgba(20, 33, 61, 0.6)` border, `8px` radius, `>=16px` font size to prevent iOS zoom.
+- **Focus:** `3px solid #14213D` outline with `2px` offset.
+- **Error / Disabled:** `#A82E19` border with linked `aria-describedby` message after blur/submit; `0.6` opacity when disabled.
 
 ### Navigation
-- **Chrome:** `48px` header (`ScoutBeeMark` + `15px` `itinbee`, route pills, `Elder Card (अ/A)`, `Share link`), `232px` `#F5F5F2` rail, SVG schematic map upgrading on click to `frontend/src/components/map/MapLibreImpl.tsx`, `1px` `#D6D3CD` transit spine, and native `<dialog>` (`frontend/src/components/ui/ModalDialog.tsx`).
+- **Style:** Solid `#062119` trunk-dark header (`64px` height) with `1px` saffron-tinted bottom rule, honey bee-pin mark + `itinbee` condensed wordmark, links to `Explore`, `Destinations`, `Create`, `My trips`, `Sign in`, and a pill `Plan a trip` CTA. Collapses into an accessible `<details>` menu below `768px`.
+
+### Die-Cut Destination Label (Signature Component)
+Wraps a verified destination photograph inside a `7px` paper border (`arch`, `notch`, `oval`, or `round`) with a subtle diagonal gloss sheen, a `1.5px` navy-ruled footer displaying the condensed uppercase place name and saffron day-count badge (`7D`), and an optional numbered navy pin badge (`1`, `2`) that connects to route insets via dashed saffron-on-navy SVG leader lines.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** open task and sandbox routes directly into live itinerary data on `#FCFCFA` and `#F5F5F2` with `1px` `#E7E5E0` borders.
-- **Do** set clocks, PNRs, vehicle codes, indices, and INR/FX amounts in `JetBrains Mono` (`tabular-nums`).
-- **Do** keep compact text `>=4.5:1` (`#18181B` on `#FFFFFF`, `#FFFFFF` on `#B45309` at `5.02:1`, or `#18181B` on `#D97706` at `5.56:1`).
-- **Do** step `ElderCardView` up to `18px` with `1.7` Devanagari line-height and route view switches via `frontend/src/lib/view-transition.ts`.
+- **Do** pair every destination photograph and map view with visible open-data attribution (`© OpenStreetMap contributors`, `Wikivoyage / Wikipedia CC BY-SA`, `Wikimedia Commons`).
+- **Do** label non-user itineraries explicitly as `Itinbee template` or `Sample workspace` and show a `Popular` badge derived from open-data signals rather than star ratings.
+- **Do** indicate active tabs with both color (`#F2A71B`) and a `3px` bottom border shape so state remains clear in forced-colors and color-blind views.
+- **Do** suppress entrance and camera fly animations whenever `prefers-reduced-motion: reduce` is active.
 
 ### Don't:
-- **Don't** place kickers or uppercase eyebrow labels above headings.
-- **Don't** pair `#FFFFFF` on `#D97706` (`3.19:1`) or `#78716C` on `#F5F5F2` (`4.39:1`) for `11px–12px` text.
-- **Don't** strip the `#B45309` `:focus-visible` ring on inputs without an explicit `:focus-visible` replacement.
-- **Don't** use one-sided card border stripes, hard offset shadows, gradient text, or nested card grids.
-- **Don't** load `maplibre-gl` eagerly on initial paint or call Google Places APIs.
+- **Don't** place kickers or uppercase eyebrow labels above `h1`–`h3` headings.
+- **Don't** use `Impact` or generic system display fallbacks, gradient text, decorative backdrop-blur navbars, one-sided card border stripes, hard `4px 4px 0` offset shadows, or nested cards.
+- **Don't** fabricate user counts, reviews, star ratings, or testimonials, or call Google Places APIs.
+- **Don't** import `maplibre-gl` eagerly in SSR bundles for `/`, `/explore`, `/destinations`, or `/t/[shortId]`.

@@ -1,3 +1,21 @@
 {
-  "buildPath": "code"
+  "buildPath": "code",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "big shoulders display",
+        "createdAt": "2026-11-21T07:45:12.610Z",
+        "reason": "user confirmed: chose the Trunk Labels world in the design decision round; DESIGN.md is rewritten at finish"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "source sans 3",
+        "createdAt": "2026-11-21T07:45:12.626Z",
+        "reason": "user confirmed: chose the Trunk Labels world in the design decision round; DESIGN.md is rewritten at finish"
+      }
+    ]
+  }
 }

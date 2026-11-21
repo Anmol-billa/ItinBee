@@ -1,0 +1,30 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62",
+  "elements": [
+    {"type": "way", "id": 1001, "center": {"lat": 26.92395, "lon": 75.82672},
+     "tags": {"historic": "palace", "tourism": "attraction", "name": "Hawa Mahal", "name:en": "Hawa Mahal", "name:hi": "हवा महल", "wikidata": "Q9000001", "website": "https://hawamahal.example.org", "opening_hours": "Mo-Su 09:00-17:00", "addr:street": "Hawa Mahal Road", "addr:city": "Jaipur", "wheelchair": "limited", "fixme": "should be dropped"}},
+    {"type": "node", "id": 1002, "lat": 26.9199, "lon": 75.82265,
+     "tags": {"amenity": "restaurant", "name": "Laxmi Misthan Bhandar", "cuisine": "indian;sweets", "diet:vegetarian": "only", "opening_hours": "08:00-23:00", "phone": "+91 141 000 0002"}},
+    {"type": "node", "id": 1003, "lat": 26.9020, "lon": 75.8056,
+     "tags": {"amenity": "cafe", "name": "Tapri Central", "website": "tapri.example.org", "outdoor_seating": "yes"}},
+    {"type": "node", "id": 1004, "lat": 26.92625, "lon": 75.82795,
+     "tags": {"tourism": "hotel", "name": "Hotel Samode Haveli", "stars": "5", "website": "https://samode.example.org"}},
+    {"type": "node", "id": 1005, "lat": 26.9301, "lon": 75.8200,
+     "tags": {"amenity": "place_of_worship", "religion": "hindu", "name": "Shri Birla Mandir", "name:en": "Birla Mandir", "wikidata": "Q9000003", "wikipedia": "en:Birla Mandir, Jaipur"}},
+    {"type": "node", "id": 1006, "lat": 26.9400, "lon": 75.8100,
+     "tags": {"amenity": "place_of_worship", "religion": "hindu", "name": "Small Roadside Shrine"}},
+    {"type": "node", "id": 1007, "lat": 26.9410, "lon": 75.8110,
+     "tags": {"historic": "memorial", "name": "Plaque for somebody"}},
+    {"type": "node", "id": 1008, "lat": 26.9112, "lon": 75.8190,
+     "tags": {"tourism": "museum", "name": "Albert Hall Museum", "wikidata": "Q9000004", "website": "https://albert.example.org", "opening_hours": "Mo-Su 09:00-17:00"}},
+    {"type": "node", "id": 1009, "lat": 26.9112, "lon": 75.8191,
+     "tags": {"tourism": "museum", "name": "Albert Hall Museum", "note": "duplicate node of the same museum"}},
+    {"type": "node", "id": 1010, "lat": 26.9500, "lon": 75.8000,
+     "tags": {"leisure": "park", "name": "Neighbourhood Park"}},
+    {"type": "node", "id": 1011, "lat": 26.9500, "lon": 75.7900,
+     "tags": {"amenity": "restaurant", "name": "Chain Diner"}},
+    {"type": "node", "id": 1012, "lat": 26.9505, "lon": 75.7905,
+     "tags": {"amenity": "restaurant", "name": "Chain Diner"}}
+  ]
+}

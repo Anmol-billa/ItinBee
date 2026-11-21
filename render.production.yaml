@@ -1,0 +1,120 @@
+# Production Render Blueprint (Zero Cold-Starts, Dedicated BullMQ Pack & Import Worker, Persistent PostGIS)
+databases:
+  - name: itinbee-db
+    databaseName: itinbee_prod
+    user: itinbee_app
+    plan: basic-256mb
+    region: singapore
+
+services:
+  # 1. Always-On Fastify API + SSE + WebSocket Service
+  - type: web
+    name: itinbee-backend
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: backend
+    buildFilter:
+      paths:
+        - backend/**
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: RUN_INLINE_WORKER
+        value: "false"
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ORS_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: itinbee-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: itinbee-kv
+          property: connectionString
+      - key: AWS_S3_VAULT_REGION
+        value: ap-south-1
+      - key: GCP_VERTEX_LOCATION
+        value: asia-south1
+
+  # 2. Dedicated Background Worker (Destination Pack Builder + Smart Import Pipeline)
+  - type: worker
+    name: itinbee-worker
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: backend
+    buildFilter:
+      paths:
+        - backend/**
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ORS_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: itinbee-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: itinbee-kv
+          property: connectionString
+
+  # 3. Always-On Next.js App Router SSR + PWA Frontend (Private Singapore Internal Hop)
+  - type: web
+    name: itinbee-frontend
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: frontend
+    buildFilter:
+      paths:
+        - frontend/**
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: INTERNAL_API_URL
+        fromService:
+          type: web
+          name: itinbee-backend
+          property: hostport
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        sync: false
+
+  # 4. Persistent Redis Key Value
+  - type: keyvalue
+    name: itinbee-kv
+    region: singapore
+    plan: starter
+    maxmemoryPolicy: noeviction
+    ipAllowList: []

@@ -14,7 +14,7 @@ function resolveServerBackendOrigin(): string {
 async function handleProxy(
   req: NextRequest,
   context: { params: Promise<{ path: string[] }> }
-): Promise<NextResponse> {
+): Promise<Response> {
   const { path } = await context.params;
   const backendOrigin = resolveServerBackendOrigin();
 
@@ -26,13 +26,14 @@ async function handleProxy(
 
   const targetUrl = `${backendOrigin}/${path.join('/')}${req.nextUrl.search}`;
   const headers = new Headers();
-  const contentType = req.headers.get('content-type');
-  if (contentType) headers.set('content-type', contentType);
-  const authorization = req.headers.get('authorization');
-  if (authorization) headers.set('authorization', authorization);
-  const cookie = req.headers.get('cookie');
-  if (cookie) headers.set('cookie', cookie);
+  for (const name of ['content-type', 'accept', 'authorization', 'cookie', 'last-event-id']) {
+    const val = req.headers.get(name);
+    if (val) headers.set(name, val);
+  }
 
+  const isEventStream =
+    req.headers.get('accept')?.includes('text/event-stream') ||
+    path[path.length - 1] === 'events';
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
   const bodyBuffer = hasBody ? await req.arrayBuffer() : undefined;
 
@@ -42,13 +43,31 @@ async function handleProxy(
       headers,
       body: bodyBuffer,
       cache: 'no-store',
-      // Generous timeout to absorb Render Free Tier 15-min idle cold starts
-      signal: AbortSignal.timeout(45_000),
+      signal: isEventStream ? req.signal : AbortSignal.timeout(45_000),
     });
 
     const respHeaders = new Headers();
     const upstreamType = upstream.headers.get('content-type');
     if (upstreamType) respHeaders.set('content-type', upstreamType);
+    const retryAfter = upstream.headers.get('retry-after');
+    if (retryAfter) respHeaders.set('retry-after', retryAfter);
+
+    const setCookies =
+      typeof upstream.headers.getSetCookie === 'function'
+        ? upstream.headers.getSetCookie()
+        : [];
+    for (const c of setCookies) {
+      respHeaders.append('set-cookie', c);
+    }
+
+    if (upstreamType?.includes('text/event-stream') && upstream.body) {
+      respHeaders.set('cache-control', 'no-cache, no-transform');
+      respHeaders.set('x-accel-buffering', 'no');
+      return new Response(upstream.body, {
+        status: upstream.status,
+        headers: respHeaders,
+      });
+    }
 
     const payload = await upstream.arrayBuffer();
     return new NextResponse(payload, {

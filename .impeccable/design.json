@@ -1,401 +1,137 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-20T08:08:44.617Z",
+  "generatedAt": "2026-11-21T11:50:00Z",
   "title": "Design System: Itinbee",
   "extensions": {
     "colorMeta": {
-      "honey": {
+      "trunk": {
         "role": "primary",
-        "displayName": "Raw Honey",
-        "canonical": "#D97706",
-        "tonalRamp": [
-          "#462D0B",
-          "#7D4C0C",
-          "#B86D0A",
-          "#D97706",
-          "#F3A949",
-          "#F3C486",
-          "#F7DFBF",
-          "#FDF4E7"
-        ]
+        "displayName": "Lacquered Trunk Green",
+        "canonical": "#0E5A47",
+        "tonalRamp": ["#04180F", "#062119", "#073026", "#0E5A47", "#1C7D63", "#3B9B80", "#8CCBB8", "#D9F0E8"]
       },
-      "honey-deep": {
+      "vermilion": {
         "role": "primary",
-        "displayName": "Tempered Amber",
-        "canonical": "#B45309",
-        "tonalRamp": [
-          "#3D2508",
-          "#6E410A",
-          "#96580B",
-          "#B45309",
-          "#D97706",
-          "#F0B265",
-          "#F7D9B0",
-          "#FDF3E4"
-        ]
+        "displayName": "Stamped Vermilion",
+        "canonical": "#C7361F",
+        "tonalRamp": ["#3B0D06", "#62180C", "#942514", "#C7361F", "#E2432B", "#EE7562", "#F7B4A9", "#FDECE9"]
       },
-      "honey-wash": {
-        "role": "primary",
-        "displayName": "Honeycomb Tint",
-        "canonical": "#FEF3C7",
-        "tonalRamp": [
-          "#4A3509",
-          "#7C580E",
-          "#B47B12",
-          "#D99B26",
-          "#ECC05B",
-          "#F6DA92",
-          "#FBE8B4",
-          "#FEF3C7"
-        ]
+      "saffron": {
+        "role": "secondary",
+        "displayName": "Marigold Saffron",
+        "canonical": "#F2A71B",
+        "tonalRamp": ["#3D2602", "#6B4305", "#9E650A", "#C98512", "#F2A71B", "#F6C15C", "#FADEA4", "#FEF5E1"]
       },
       "jade": {
         "role": "secondary",
         "displayName": "Signal Jade",
         "canonical": "#0F766E",
-        "tonalRamp": [
-          "#0B3B37",
-          "#0F5C56",
-          "#0F766E",
-          "#159A90",
-          "#3DB8AE",
-          "#7AD3CB",
-          "#B8ECE7",
-          "#E9FBFA"
-        ]
+        "tonalRamp": ["#062E2B", "#0A4A45", "#0F766E", "#14968C", "#2EB8AC", "#74D7CE", "#B9ECE7", "#F0FDFA"]
       },
-      "jade-wash": {
-        "role": "secondary",
-        "displayName": "Mint Mist",
-        "canonical": "#F0FDFA",
-        "tonalRamp": [
-          "#0E433F",
-          "#12786F",
-          "#15ACA0",
-          "#3CC7BC",
-          "#72DCD3",
-          "#A7ECE6",
-          "#D2F7F3",
-          "#F0FDFA"
-        ]
-      },
-      "canvas": {
+      "paper": {
         "role": "neutral",
-        "displayName": "Warm Alabaster",
-        "canonical": "#FCFCFA",
-        "tonalRamp": [
-          "#2C2A26",
-          "#4B473F",
-          "#6B6457",
-          "#8C8473",
-          "#A9A293",
-          "#C5BFB5",
-          "#E7E5E0",
-          "#FCFCFA"
-        ]
+        "displayName": "Luggage Tag Paper",
+        "canonical": "#F6EBD3",
+        "tonalRamp": ["#2E271B", "#4F4533", "#7D6E53", "#A99674", "#CBB68A", "#EAD9B5", "#F6EBD3", "#FFF7E4"]
       },
-      "canvas-subtle": {
+      "navy": {
         "role": "neutral",
-        "displayName": "Quiet Stone",
-        "canonical": "#F5F5F2",
-        "tonalRamp": [
-          "#2C2A26",
-          "#4B473F",
-          "#6B6457",
-          "#8C8473",
-          "#A9A293",
-          "#C5BFB5",
-          "#E0DDD6",
-          "#F5F5F2"
-        ]
-      },
-      "canvas-elevated": {
-        "role": "neutral",
-        "displayName": "Crisp Paper",
-        "canonical": "#FFFFFF",
-        "tonalRamp": [
-          "#27272A",
-          "#44403C",
-          "#68635E",
-          "#8E8983",
-          "#B5B0AA",
-          "#D6D3CD",
-          "#F5F5F2",
-          "#FFFFFF"
-        ]
-      },
-      "canvas-muted": {
-        "role": "neutral",
-        "displayName": "Pressed Linen",
-        "canonical": "#EFECE6",
-        "tonalRamp": [
-          "#2B2823",
-          "#49443B",
-          "#696255",
-          "#8A8171",
-          "#A89F90",
-          "#C5BEB1",
-          "#DDD8CE",
-          "#EFECE6"
-        ]
-      },
-      "line": {
-        "role": "neutral",
-        "displayName": "Warm Hairline",
-        "canonical": "#E7E5E0",
-        "tonalRamp": [
-          "#2C2A26",
-          "#4A463F",
-          "#69645A",
-          "#898377",
-          "#A8A297",
-          "#C6C2B9",
-          "#E7E5E0",
-          "#F6F5F2"
-        ]
-      },
-      "line-strong": {
-        "role": "neutral",
-        "displayName": "Calibrated Rule",
-        "canonical": "#D6D3CD",
-        "tonalRamp": [
-          "#2B2926",
-          "#484540",
-          "#67635C",
-          "#878279",
-          "#A5A199",
-          "#C0BCB4",
-          "#D6D3CD",
-          "#F2F0EC"
-        ]
-      },
-      "ink": {
-        "role": "neutral",
-        "displayName": "Charcoal Ink",
-        "canonical": "#18181B",
-        "tonalRamp": [
-          "#18181B",
-          "#2E2E33",
-          "#47474F",
-          "#63636E",
-          "#858591",
-          "#A9A9B3",
-          "#D1D1D7",
-          "#F2F2F4"
-        ]
-      },
-      "ink-secondary": {
-        "role": "neutral",
-        "displayName": "Warm Graphite",
-        "canonical": "#57534E",
-        "tonalRamp": [
-          "#262421",
-          "#3E3B37",
-          "#57534E",
-          "#736E68",
-          "#928C86",
-          "#B3AEA8",
-          "#D4D0CB",
-          "#F3F1EF"
-        ]
-      },
-      "ink-tertiary": {
-        "role": "neutral",
-        "displayName": "Stone Agate",
-        "canonical": "#655F5B",
-        "tonalRamp": [
-          "#292624",
-          "#44403C",
-          "#5E5854",
-          "#655F5B",
-          "#968F8A",
-          "#B5AFA9",
-          "#D6D2CE",
-          "#F4F2F0"
-        ]
+        "displayName": "Postmark Navy Ink",
+        "canonical": "#14213D",
+        "tonalRamp": ["#09101F", "#14213D", "#23365E", "#384F80", "#566079", "#8591AB", "#BCC4D6", "#EAEEF5"]
       }
     },
     "typographyMeta": {
-      "display": {
-        "displayName": "Display (Elder Card Title)",
-        "purpose": "24px semibold trip title inside Family / Elder Card mode for arm's-length legibility."
-      },
-      "headline": {
-        "displayName": "Headline (Workbench & Share Title)",
-        "purpose": "18px–20px semibold primary trip heading in the center workbench stage and WhatsApp guest view."
-      },
-      "title": {
-        "displayName": "Title (Section & Dialog Heading)",
-        "purpose": "14px semibold day titles, modal dialog headers, and tool section headers."
-      },
-      "body": {
-        "displayName": "Body (UI Row & Navigation)",
-        "purpose": "13px default root copy, rail navigation tabs, stop titles, and poll questions."
-      },
-      "compact": {
-        "displayName": "Compact (Notes, Controls & Inputs)",
-        "purpose": "12px stop descriptions, form controls, action buttons, and ledger rows."
-      },
-      "label": {
-        "displayName": "Label (Tabular Monospace)",
-        "purpose": "11px JetBrains Mono tabular numerals for departure times, PNR masks, transit durations, and telemetry."
-      }
+      "display": { "displayName": "Display", "purpose": "Hero claims, section headers, and destination titles." },
+      "headline": { "displayName": "Headline", "purpose": "Itinerary card titles, day headers, and luggage-tag subheads." },
+      "title": { "displayName": "Title", "purpose": "Stop titles, filter legends, and review section headers." },
+      "body": { "displayName": "Body", "purpose": "Prose, stop notes, and form controls (60-68ch measure)." },
+      "compact": { "displayName": "Compact", "purpose": "Dense Operate editor controls and secondary chips." },
+      "label": { "displayName": "Tabular Label", "purpose": "Clock times, PNR masks, distances, and INR/FX amounts." }
     },
     "shadows": [
-      {
-        "name": "panel",
-        "value": "0 2px 8px -2px rgba(24, 24, 27, 0.05), 0 1px 2px 0 rgba(24, 24, 27, 0.03)",
-        "purpose": "Subtle lift on active rail tabs, highlighted timeline stop rows, and POI autocomplete popovers."
-      },
-      {
-        "name": "dialog",
-        "value": "0 18px 42px -10px rgba(24, 24, 27, 0.14), 0 4px 12px -2px rgba(24, 24, 27, 0.06)",
-        "purpose": "Top-layer elevation for native <dialog> modals and transient status toasts."
-      }
+      { "name": "tag", "value": "0 22px 28px rgba(3, 18, 14, 0.56)", "purpose": "Hanging paper luggage-tag composer over trunk green." },
+      { "name": "label", "value": "0 14px 26px rgba(3, 18, 14, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.75)", "purpose": "Die-cut destination labels and itinerary cards." },
+      { "name": "stamp", "value": "0 6px 14px -2px rgba(98, 24, 12, 0.55)", "purpose": "Primary vermilion stamp button." }
     ],
     "motion": [
-      {
-        "name": "color-transition",
-        "value": "color 150ms cubic-bezier(0.4, 0, 0.2, 1), background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), border-color 150ms cubic-bezier(0.4, 0, 0.2, 1)",
-        "purpose": "Crisp state feedback across compact buttons, rail tabs, and timeline stop borders."
-      },
-      {
-        "name": "map-camera-fly",
-        "value": "450ms ease-out",
-        "purpose": "MapLibre bounds fit and pin focus transition when selecting stops."
-      },
-      {
-        "name": "view-transition-reduced-motion",
-        "value": "document.startViewTransition() with prefers-reduced-motion: reduce bypass and post-transition heading focus",
-        "purpose": "Accessible state switch between Timeline, Polls, Ledger, Vault, and Elder Card views."
-      }
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Label landing, luggage-tag settle, and view transitions (disabled under prefers-reduced-motion)." }
     ],
     "breakpoints": [
-      {
-        "name": "timeline-container",
-        "value": "544px"
-      },
-      {
-        "name": "sm",
-        "value": "640px"
-      },
-      {
-        "name": "md",
-        "value": "768px"
-      },
-      {
-        "name": "lg",
-        "value": "1024px"
-      }
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
     ]
   },
   "components": [
     {
-      "name": "Primary Action Button",
+      "name": "Stamp Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "High-contrast Charcoal Ink primary CTA used for Share link, Add stop, Post, and Log.",
-      "html": "<button type=\"button\" class=\"ds-btn-primary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"5\" r=\"3\"/><circle cx=\"6\" cy=\"12\" r=\"3\"/><circle cx=\"18\" cy=\"19\" r=\"3\"/><line x1=\"8.59\" y1=\"13.51\" x2=\"15.42\" y2=\"17.49\"/><line x1=\"15.41\" y1=\"6.51\" x2=\"8.59\" y2=\"10.49\"/></svg><span>Share link</span></button>",
-      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; background: #18181B; color: #FFFFFF; font-family: 'Public Sans', system-ui, sans-serif; font-size: 12px; line-height: 18px; font-weight: 500; padding: 6px 12px; border: 1px solid #18181B; border-radius: 6px; cursor: pointer; transition: background-color 150ms ease, opacity 150ms ease; } .ds-btn-primary:hover { background: rgba(24, 24, 27, 0.9); } .ds-btn-primary:focus-visible { outline: 2px solid #B45309; outline-offset: 2px; } .ds-btn-primary:active { transform: translateY(0.5px); }"
+      "description": "Single primary action per region in Stamped Vermilion.",
+      "html": "<button class=\"ds-btn-stamp\" type=\"button\">Build my trip</button>",
+      "css": ".ds-btn-stamp { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 24px; border: 2px solid #14213D; border-radius: 8px; background: #C7361F; color: #FFFDF8; font-weight: 700; font-size: 16px; cursor: pointer; box-shadow: 0 6px 14px -2px rgba(98, 24, 12, 0.55); transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), background-color 160ms; } .ds-btn-stamp:hover { background: #D63F26; transform: translateY(-1px); } .ds-btn-stamp:focus-visible { outline: 3px solid #14213D; outline-offset: 3px; }"
     },
     {
-      "name": "Secondary Hairline Button",
+      "name": "Outline Action Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Crisp Paper secondary button with 1px Warm Hairline border for Elder Card toggle, Guest preview, and QR PDF export.",
-      "html": "<button type=\"button\" class=\"ds-btn-secondary\">Elder Card (अ/A)</button>",
-      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; gap: 6px; background: #FFFFFF; color: #18181B; font-family: 'Public Sans', 'Noto Sans Devanagari', system-ui, sans-serif; font-size: 12px; line-height: 18px; font-weight: 500; padding: 4px 10px; border: 1px solid #E7E5E0; border-radius: 6px; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease; } .ds-btn-secondary:hover { background: #F5F5F2; border-color: #D6D3CD; } .ds-btn-secondary:focus-visible { outline: 2px solid #B45309; outline-offset: 2px; } .ds-btn-secondary:active { background: #EFECE6; }"
+      "description": "Secondary paper or trunk outline action.",
+      "html": "<button class=\"ds-btn-line\" type=\"button\">Browse itineraries</button>",
+      "css": ".ds-btn-line { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 20px; border: 1.5px solid #14213D; border-radius: 8px; background: #F6EBD3; color: #14213D; font-weight: 700; font-size: 16px; cursor: pointer; } .ds-btn-line:hover { background: #EAD9B5; } .ds-btn-line:focus-visible { outline: 3px solid #14213D; outline-offset: 3px; }"
     },
     {
-      "name": "Workbench Rail Navigation",
-      "kind": "nav",
-      "refersTo": "nav-tab-active",
-      "description": "Quiet Stone vertical view switcher with active Crisp Paper pill lift and tabular monospace item counters.",
-      "html": "<nav class=\"ds-nav-rail\" aria-label=\"Trip workspace views\"><button type=\"button\" class=\"ds-nav-item ds-nav-active\"><span class=\"ds-nav-label\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/></svg>Itinerary</span><span class=\"ds-nav-count\">4</span></button><button type=\"button\" class=\"ds-nav-item\"><span class=\"ds-nav-label\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 3h12\"/><path d=\"M6 8h12\"/><path d=\"m6 13 8.5 8\"/><path d=\"M6 13h3\"/><path d=\"M9 13c6.667 0 6.667-10 0-10\"/></svg>UPI Split &amp; Kitty</span><span class=\"ds-nav-count\">2</span></button></nav>",
-      "css": ".ds-nav-rail { display: flex; flex-direction: column; gap: 4px; width: 220px; background: #F5F5F2; padding: 10px; border: 1px solid #E7E5E0; border-radius: 8px; } .ds-nav-item { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: 6px 10px; border: none; border-radius: 6px; background: transparent; color: #57534E; font-family: 'Public Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; cursor: pointer; transition: color 150ms ease, background-color 150ms ease; } .ds-nav-item:hover { color: #18181B; } .ds-nav-item:focus-visible { outline: 2px solid #B45309; outline-offset: 2px; } .ds-nav-active { background: #FFFFFF; color: #18181B; font-weight: 500; box-shadow: 0 2px 8px -2px rgba(24, 24, 27, 0.05), 0 1px 2px 0 rgba(24, 24, 27, 0.03); } .ds-nav-label { display: inline-flex; align-items: center; gap: 8px; } .ds-nav-count { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-variant-numeric: tabular-nums; color: #57534E; }"
-    },
-    {
-      "name": "Semantic Booking & Advisory Chips",
-      "kind": "chip",
-      "refersTo": "chip-confirmed",
-      "description": "Tabular 11px JetBrains Mono badges distinguishing confirmed PNR state (Signal Jade) from mountain/parser advisories (Tempered Amber).",
-      "html": "<div class=\"ds-chip-row\"><span class=\"ds-chip-jade\">CONFIRMED · ••••••842</span><span class=\"ds-chip-amber\">Hill switchback 1.9x @ 22 km/h</span></div>",
-      "css": ".ds-chip-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .ds-chip-jade { display: inline-flex; align-items: center; background: #F0FDFA; color: #0F766E; border: 1px solid rgba(15, 118, 110, 0.3); border-radius: 4px; padding: 2px 6px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums; } .ds-chip-amber { display: inline-flex; align-items: center; background: #FEF3C7; color: #B45309; border: 1px solid rgba(217, 119, 6, 0.38); border-radius: 4px; padding: 2px 8px; font-family: 'Public Sans', system-ui, sans-serif; font-size: 11px; line-height: 16px; font-weight: 500; }"
-    },
-    {
-      "name": "Scout Ticket & Reel Dropbar Input",
+      "name": "Paper Field Input",
       "kind": "input",
-      "refersTo": "input-field",
-      "description": "Compact textarea with Scout Bee flight trail micro-illustration for pasting IRCTC SMS, airline passes, or Reel captions.",
-      "html": "<div class=\"ds-scout-box\"><div class=\"ds-scout-head\"><span>Scout ticket or Reel</span><svg width=\"40\" height=\"20\" viewBox=\"0 0 56 28\" fill=\"none\" aria-hidden=\"true\"><path d=\"M2 21C11 21 15 9 25 11C31 12.2 34 17 40 15\" stroke=\"#D6D3CD\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-dasharray=\"2.5 3\"/><g transform=\"translate(34, 3)\"><ellipse cx=\"11\" cy=\"13\" rx=\"4.4\" ry=\"5.5\" fill=\"#FEF3C7\" stroke=\"#18181B\" stroke-width=\"1.4\"/><path d=\"M7.2 12h7.6M7.6 14.8h6.8\" stroke=\"#18181B\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><circle cx=\"11\" cy=\"6.4\" r=\"1.6\" fill=\"#D97706\" stroke=\"#18181B\" stroke-width=\"1.2\"/></g></svg></div><textarea class=\"ds-scout-input\" rows=\"2\" placeholder=\"Paste IRCTC PNR SMS, IndiGo pass, or Reel caption…\"></textarea></div>",
-      "css": ".ds-scout-box { background: #FFFFFF; border: 1px solid #E7E5E0; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; max-width: 260px; } .ds-scout-head { display: flex; align-items: center; justify-content: space-between; font-family: 'Public Sans', system-ui, sans-serif; font-size: 12px; font-weight: 500; color: #18181B; } .ds-scout-input { width: 100%; resize: none; border: 1px solid #E7E5E0; border-radius: 6px; background: #FCFCFA; color: #18181B; padding: 8px 10px; font-family: 'Public Sans', system-ui, sans-serif; font-size: 12px; line-height: 18px; transition: border-color 150ms ease; } .ds-scout-input::placeholder { color: #655F5B; } .ds-scout-input:hover { border-color: #D6D3CD; } .ds-scout-input:focus-visible { border-color: #18181B; outline: 2px solid #B45309; outline-offset: 2px; }"
+      "refersTo": "button-secondary",
+      "description": "Accessible 44px+ cream paper input with navy stroke.",
+      "html": "<input class=\"ds-field\" type=\"text\" placeholder=\"Where to? Try Rajasthan or Kyoto\" />",
+      "css": ".ds-field { display: block; width: 280px; min-height: 44px; padding: 8px 12px; border: 2px solid rgba(20, 33, 61, 0.6); border-radius: 8px; background: #FFFDF8; color: #14213D; font-size: 16px; } .ds-field:focus-visible { outline: 3px solid #14213D; outline-offset: 2px; }"
     },
     {
-      "name": "Timeline Stop Row & Transit Spine",
-      "kind": "card",
-      "refersTo": "card-stop",
-      "description": "Signature multi-modal itinerary stop row paired with an indented transit spine connector above.",
-      "html": "<div class=\"ds-timeline-unit\"><div class=\"ds-spine\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#57534E\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"16\" height=\"16\" x=\"4\" y=\"3\" rx=\"2\"/><path d=\"M4 11h16\"/><path d=\"M12 3v8\"/><path d=\"m8 19-2 3\"/><path d=\"m18 22-2-3\"/></svg><span>rail · 24.5 km · 0h 52m</span></div><div class=\"ds-stop-card\" tabindex=\"0\"><div class=\"ds-stop-time\"><span class=\"ds-stop-idx\">1</span><span>06:45</span></div><div class=\"ds-stop-body\"><div class=\"ds-stop-title-row\"><span class=\"ds-stop-title\">12017 Dehradun Shatabdi · NDLS to Haridwar Jn</span><span class=\"ds-stop-pnr\">CONFIRMED · ••••••842</span></div><p class=\"ds-stop-notes\">Coach C4 Seats 21–24 · Pure-veg onboard breakfast pre-booked</p></div></div></div>",
-      "css": ".ds-timeline-unit { display: flex; flex-direction: column; gap: 8px; max-width: 560px; } .ds-spine { margin-left: 24px; padding: 4px 0 4px 16px; border-left: 1px solid #D6D3CD; display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: #57534E; font-variant-numeric: tabular-nums; } .ds-stop-card { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 14px; align-items: start; background: #FFFFFF; border: 1px solid #E7E5E0; border-radius: 8px; padding: 14px; transition: border-color 150ms ease, box-shadow 150ms ease; cursor: pointer; } .ds-stop-card:hover { border-color: #D6D3CD; box-shadow: 0 2px 8px -2px rgba(24, 24, 27, 0.05), 0 1px 2px 0 rgba(24, 24, 27, 0.03); } .ds-stop-card:focus-visible { outline: 2px solid #B45309; outline-offset: 2px; } .ds-stop-time { display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #57534E; font-variant-numeric: tabular-nums; } .ds-stop-idx { display: inline-flex; width: 20px; height: 20px; border-radius: 9999px; background: #F5F5F2; color: #18181B; font-size: 11px; font-weight: 500; align-items: center; justify-content: center; } .ds-stop-body { display: flex; flex-direction: column; gap: 4px; } .ds-stop-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; } .ds-stop-title { font-family: 'Public Sans', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #18181B; } .ds-stop-pnr { background: #F0FDFA; color: #0F766E; border: 1px solid rgba(15, 118, 110, 0.3); border-radius: 4px; padding: 1px 6px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-variant-numeric: tabular-nums; } .ds-stop-notes { margin: 0; font-family: 'Public Sans', system-ui, sans-serif; font-size: 12px; line-height: 18px; color: #57534E; }"
+      "name": "Saffron Day Badge",
+      "kind": "chip",
+      "refersTo": "chip-day",
+      "description": "Condensed day-count stamp badge on destination labels and itinerary cards.",
+      "html": "<span class=\"ds-chip-day\">5D</span>",
+      "css": ".ds-chip-day { display: inline-block; padding: 2px 8px; border: 1px solid #14213D; border-radius: 4px; background: #F2A71B; color: #14213D; font-weight: 900; font-size: 18px; line-height: 1; }"
     },
     {
-      "name": "Bilingual Family / Elder Card",
-      "kind": "custom",
-      "refersTo": "dialog-surface",
-      "description": "High-contrast 18px bilingual itinerary card with Devanagari line-height protection and local-script driver address box.",
-      "html": "<article class=\"ds-elder-card\"><div class=\"ds-elder-top\"><span class=\"ds-elder-clock\">06:45</span><span class=\"ds-elder-pnr\">PNR ••••••842 · CONFIRMED</span></div><p class=\"ds-elder-summary\">सुबह 06:45 शताब्दी ट्रेन नई दिल्ली से हरिद्वार (कोच C4, सीट 21–24)। शाकाहारी नाश्ता सीट पर मिलेगा।</p><div class=\"ds-elder-driver\"><strong>ऑटो / कैब ड्राइवर को दिखाएं: </strong><span>हरिद्वार जंक्शन रेलवे स्टेशन, प्लेटफ़ॉर्म 1</span></div></article>",
-      "css": ".ds-elder-card { background: #FCFCFA; border: 1px solid #D6D3CD; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; max-width: 520px; } .ds-elder-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; } .ds-elder-clock { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 600; color: #B45309; font-variant-numeric: tabular-nums; } .ds-elder-pnr { background: #FFFFFF; border: 1px solid #E7E5E0; border-radius: 4px; padding: 2px 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #57534E; font-variant-numeric: tabular-nums; } .ds-elder-summary { margin: 0; font-family: 'Kohinoor Devanagari', 'Noto Sans Devanagari', 'Public Sans', sans-serif; font-size: 18px; line-height: 1.7; font-weight: 500; color: #18181B; } .ds-elder-driver { background: #FFFFFF; border: 1px solid #E7E5E0; border-radius: 6px; padding: 8px 12px; font-family: 'Kohinoor Devanagari', 'Noto Sans Devanagari', 'Public Sans', sans-serif; font-size: 15px; color: #18181B; }"
+      "name": "Trunk Navigation Bar",
+      "kind": "nav",
+      "refersTo": "button-secondary",
+      "description": "Solid trunk-dark top navigation bar with saffron wordmark and pill CTA.",
+      "html": "<header class=\"ds-nav\"><span class=\"ds-brand\">itinbee</span><nav><a href=\"#explore\">Explore</a><a href=\"#create\" class=\"ds-cta\">Plan a trip</a></nav></header>",
+      "css": ".ds-nav { display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; background: #062119; border-bottom: 1px solid rgba(242, 167, 27, 0.3); color: #F6EBD3; } .ds-brand { color: #F2A71B; font-weight: 900; font-size: 26px; letter-spacing: 0.01em; } .ds-nav nav { display: flex; align-items: center; gap: 14px; } .ds-nav a { color: #F6EBD3; text-decoration: none; font-weight: 600; font-size: 14px; } .ds-nav .ds-cta { padding: 6px 14px; border: 1.5px solid #F2A71B; border-radius: 999px; color: #F2A71B; font-weight: 700; }"
     }
   ],
   "narrative": {
-    "northStar": "The Calibrated Field Dispatch",
-    "overview": "Itinbee treats multi-modal travel planning like a railway timetable crossed with a calm architectural notebook. Opening directly into the workbench defined in `frontend/tailwind.config.ts` and `frontend/src/app/globals.css`, Warm Alabaster (`#FCFCFA`) and Quiet Stone (`#F5F5F2`) planes separated by `1px` `#E7E5E0` hairlines keep IRCTC PNRs, coach and berth numbers, mountain switchback advisories, and UPI splits scannable without visual noise.\n\nOne shared palette powers two registers: compact `11px–13px` rows in `frontend/src/components/workbench/WorkbenchClient.tsx` for Trip Architects, and high-contrast `18px` bilingual English and Hindi sheets in `frontend/src/components/share/ElderCardView.tsx` and `frontend/src/components/share/GuestShareClient.tsx` for WhatsApp WebViews. Hero billboards, kickers above headings, gradient text, hard offset shadows, and nested icon-card grids are rejected; brand warmth lives in surgical amber accents and the two-tone vector linework of `frontend/src/components/mascot/ScoutBeeMark.tsx`.",
+    "northStar": "Trunk Labels",
+    "overview": "Itinbee treats every trip as a lacquered steamer trunk and every destination or stop as a die-cut label pasted onto it, tied to real map pins by numbered ink leader lines. On Persuade and Browse surfaces, the world owns the stage: deep lacquered trunk green, chamfered paper luggage tags on twine, die-cut gloss photo labels in varied silhouettes, rubber-stamp postmarks, and perforated tear-strips. On Operate and Read surfaces, ambition shifts to precision and daytime legibility.",
     "keyCharacteristics": [
-      "Warm-paper tonal planes (`#FCFCFA` ground, `#F5F5F2` rails, `#FFFFFF` cards) divided by `1px` `#E7E5E0` hairlines.",
-      "Compact `11px–14px` `Public Sans` UI copy paired with `JetBrains Mono` tabular numerals.",
-      "Dual-register legibility expanding to `18px` copy (`1.7` Devanagari line-height) in Elder Card mode.",
-      "Surgical accents: Charcoal Ink (`#18181B`) primary CTAs, Raw Honey (`#D97706`) and Tempered Amber (`#B45309`) focus and advisories, Signal Jade (`#0F766E`) verified state.",
-      "Themed browser surfaces (`#FEF3C7` selection, `#B45309` caret and `:focus-visible` ring, `7px` stone scrollbars, native `<dialog>` backdrop)."
+      "Committed lacquered trunk green (#0E5A47) paired with warm cut-paper tags (#F6EBD3) and navy stamp ink (#14213D).",
+      "Heavy condensed display lettering (Big Shoulders Display) contrasted against humanist UI prose (Source Sans 3) and tabular mono readouts (JetBrains Mono).",
+      "Four recurring die-cut destination label silhouettes (arch, notch, oval, round) carrying attributed Wikimedia Commons photography.",
+      "Dual-register density: expressive 16px-19px editorial rhythm on discovery pages; calm 14px-15px 3-pane workspace in the Trip Editor; >=18px high-contrast daylight legibility on WhatsApp Elder Cards."
     ],
     "rules": [
-      {
-        "name": "The Ink-Leads-Action Rule",
-        "body": "Primary structural buttons (`Share link`, `Add stop`, `Post`, `Log`) use Charcoal Ink (`#18181B`) with Crisp Paper (`#FFFFFF`) text, keeping Raw Honey (`#D97706`) and Tempered Amber (`#B45309`) rare and diagnostic.",
-        "section": "colors"
-      },
-      {
-        "name": "The Semantic Jade Rule",
-        "body": "Signal Jade (`#0F766E`) on Mint Mist (`#F0FDFA`) appears strictly on verified trust states — confirmed PNRs, PII masking, live sync, open kitty balances, and dietary tags.",
-        "section": "colors"
-      },
-      {
-        "name": "The Tabular Dispatch Rule",
-        "body": "Every clock time, PNR mask, vehicle code, vote count, and currency figure renders in `JetBrains Mono` with `tabular-nums`.",
-        "section": "typography"
-      },
-      {
-        "name": "The Dual-Register Scale Rule",
-        "body": "Builder views cap headings at `20px` and UI copy at `11px–14px`, while Elder Card views enforce `18px` summaries and `1.7` Devanagari line-height.",
-        "section": "typography"
-      },
-      {
-        "name": "The Hairline-Over-Shadow Rule",
-        "body": "Resting cards, stop rows, and trays sit flat inside `1px` `#E7E5E0` borders; shadows mark active selection or modals only.",
-        "section": "elevation"
-      }
+      { "name": "The One Stamp Rule", "body": "Stamped Vermilion (#C7361F) appears on one primary action per region plus numbered route pins—never across rows of secondary buttons.", "section": "colors" },
+      { "name": "The Tinted Secondary Rule", "body": "Secondary copy on trunk green uses translucent paper (rgba(246, 235, 211, 0.85)); secondary copy on paper uses Warm Rag Ink (#4F4533), never neutral gray.", "section": "colors" },
+      { "name": "The No-Kicker Rule", "body": "Headings carry their own weight without uppercase eyebrow or kicker labels stacked above them.", "section": "typography" },
+      { "name": "The Tabular Dispatch Rule", "body": "Every clock time, PNR mask, distance, duration, vote count, and INR/FX figure uses JetBrains Mono with tabular-nums.", "section": "typography" }
     ],
     "dos": [
-      "**Do** open task and sandbox routes directly into live itinerary data on `#FCFCFA` and `#F5F5F2` with `1px` `#E7E5E0` borders.",
-      "**Do** set clocks, PNRs, vehicle codes, indices, and INR/FX amounts in `JetBrains Mono` (`tabular-nums`).",
-      "**Do** keep compact text `>=4.5:1` (`#18181B` on `#FFFFFF`, `#FFFFFF` on `#B45309` at `5.02:1`, or `#18181B` on `#D97706` at `5.56:1`).",
-      "**Do** step `ElderCardView` up to `18px` with `1.7` Devanagari line-height and route view switches via `frontend/src/lib/view-transition.ts`."
+      "Do pair every destination photograph and map view with visible open-data attribution (© OpenStreetMap contributors, Wikivoyage / Wikipedia CC BY-SA, Wikimedia Commons).",
+      "Do label non-user itineraries explicitly as Itinbee template or Sample workspace and show a Popular badge derived from open-data signals rather than star ratings.",
+      "Do indicate active tabs with both color (#F2A71B) and a 3px bottom border shape so state remains clear in forced-colors and color-blind views.",
+      "Do suppress entrance and camera fly animations whenever prefers-reduced-motion: reduce is active."
     ],
     "donts": [
-      "**Don't** place kickers or uppercase eyebrow labels above headings.",
-      "**Don't** pair `#FFFFFF` on `#D97706` (`3.19:1`) or `#655F5B` on `#F5F5F2` (`4.39:1`) for `11px–12px` text.",
-      "**Don't** strip the `#B45309` `:focus-visible` ring on inputs without an explicit `:focus-visible` replacement.",
-      "**Don't** use one-sided card border stripes, hard offset shadows, gradient text, or nested card grids.",
-      "**Don't** load `maplibre-gl` eagerly on initial paint or call Google Places APIs."
+      "Don't place kickers or uppercase eyebrow labels above h1-h3 headings.",
+      "Don't use Impact or generic system display fallbacks, gradient text, decorative backdrop-blur navbars, one-sided card border stripes, hard 4px 4px 0 offset shadows, or nested cards.",
+      "Don't fabricate user counts, reviews, star ratings, or testimonials, or call Google Places APIs.",
+      "Don't import maplibre-gl eagerly in SSR bundles for /, /explore, /destinations, or /t/[shortId]."
     ]
   }
 }

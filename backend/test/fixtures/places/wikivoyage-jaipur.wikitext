@@ -1,0 +1,278 @@
+{{pagebanner|unesco_whs=yes|unesco_cc=yes<!-- City of Crafts and Folk Arts -->|dotm=yes|origin=-1,0}}
+
+'''Jaipur''' ([[Hindi phrasebook|Hindi]]: जयपुर ''Jaypur''), also known as the ''Pink City'', is the capital of Indian state of [[Rajasthan]], and its largest city. The city was built in the 18th century by Sawai Jai Singh as India's first planned city, and today it's a major tourist attraction for Indians and for international visitors. It is a very picturesque city with splendid palaces, forts and historical monuments and belongs to the tourist '''Golden Triangle''' along with [[Delhi]] and [[Agra]]. It hosts several attractions including the City Palace, Govind Dev ji Temple, Vidhan Sabha, Birla Temple and several massive Rajput forts. It also serves as a stepping stone for those heading to the desert cities of [[Jodhpur]] and [[Jaisalmer]].
+
+Jaipur is growing fast and various development projects are being undertaken by the government and private enterprises.
+
+Jaipur's nickname, the Pink City, is due to its distinctly coloured buildings, which were painted this colour to imitate the red sandstone architecture of Mughal cities. The present earthy red colour originates from repainting of the buildings undertaken for a visit by the Prince of Wales in 1876.
+
+==Understand==
+[[File:LL-Q1568 (hin)-Medhi jyoti-जयपुर.wav]]
+===History===
+[[File:City Palace-Jaipur-India0010.JPG|thumb|City Palace]]
+Jaipur ([[Hindi]]: ''JIGH-poor'') gets its name from its founder Maharaja Jai Singh II (1693-1744), a great warrior and astronomer. He came to power at the age of 11 on the death of his father Maharaja Bishan Singh. Jai Singh's lineage can be traced back to the Kucchwaha Rajput, clan who came to power in the 12th century. They were long-term rivals to the Sisodia Rajputs who ruled from [[Mewar]]. This rivalry led them to ally with the Mughals, and this alliance resulted in them eventually gaining a pre-eminent position in Rajasthan.
+
+Ruling from the magnificent Amber Fort which they built, the might of the Kucchwahas encompassed the kingdoms of [[Mewar]] and [[Marwar]]. After Jai Singh came to power, there was moment of disquiet when he supported Aurangzeb's son Azam Shah's bid to the throne. Azam Shah lost the battle of succession to his brother Bahadur Shah, who demanded Jai Singh's removal and the installation of Vijay Singh to the throne of Jaipur. Jai Singh, not one to take setbacks lying down, formed a formidable front against the Mughals by aligning himself with other Rajput states and reinstated himself.
+
+After the dust had settled, peace reigned, the kingdom prospered and its borders expanded. Jai Singh built the city around the Amber Fort to serve as his capital, and the city was named Jaipur, after himself. Much of the credit for Jaipur goes to Vidhyadhar Bhattacharya, the chief architect from Bengal who, with Jai Singh's approval, founded the city on strong scientific principles, laid out according to the Shilpa Shastra, the ancient architectural manual. It remains one of India's best planned cities. However, expansion meant that the limited sources of water proved inadequate for the city.
+
+After Jai Singh's death in 1744, his sons squabbled for power and without a monarch, the kingdom became open to invasion and neighbouring Rajput states and the Marathas usurped large areas of kingdom. The core, however, remained part of the kingdom, which lasted during British times.  As with the Mughals, Jaipur maintained good relations with the British and during the war of independence in 1857 remained loyal to the Raj. Yet, the British gradually began to undermine the independence of the state and exercised greater control over the administration.
+
+In 1876, Maharaja Ram Singh painted the entire city pink, traditionally a colour associated with hospitality, to welcome the Prince of Wales (later King Edward VII) to the city. The tradition has been maintained and today all residents in the old city are compelled by law to preserve the pink colour. Jaipur has thereby earned the sobriquet of '''Pink City'''.
+
+Maharaja Ram Singh also built the Ramgarh Lake to supply water to the burgeoning city. During the 19th and 20th centuries, the city's population spread beyond its walls. In 1922, Man Singh II ascended to the throne and it was during his reign that civic buildings like the secretariat, schools, hospitals and other public buildings were built. After independence, Jaipur merged with the states of Jodhpur, Jaisalmer and Bikaner to form the state of Rajasthan. In 1956, Jaipur became the capital of the state of Rajasthan.
+
+===Climate===
+{{climate chart
+|Jaipur
+|8.4 |22.5 |5.9
+|12.0 |26.1 |10.2
+|17.4 |32.0 |4.4
+|22.8 |37.6 |7.1
+|27.1 |41.1 |12.2
+|27.9 |39.7 |61.9
+|26.2 |34.8 |190.5
+|24.9 |32.7 |203.4
+|24.0 |34.2 |79.6
+|20.1 |34.1 |19.4
+|14.4 |29.6 |1.9
+|9.9 |25.1 |3.8
+
+|float=right
+|clear=right
+| description =Source: IMD
+}}
+
+Jaipur's climate is characterised as semiarid, with just a few rainy days per month for most of the year. The exception is the monsoon period from June to September, when heavy rain and thunderstorms are commonplace. Expect daytime highs of above +20°C throughout the year, and prepare for scorching heat in May and June. During the winter temperatures are mild, and while nighttime temperatures seldom drop much below +10°C, Jaipur has experienced temperatures below freezing.
+
+===Read===
+
+*Sarkar, Jadunath, (2009). ''A history of Jaipur''. New Delhi: Orient Blackswan. A well written account of the history of Jaipur by prominent historian Sir Jadunath Sarkar.
+*''Jaipur – [[Nagaur]] - Deshnoke (India Charming Chaos)'' by Johnny Fincioen. This book concentrates on Jaipur and two small villages and puts them in historic context. The text and the 190 original pictures offer the reader a holistic view of the particular way of life in Rajasthan.
+
+===Tourist information ===
+* [https://www.tourism.rajasthan.gov.in/ Rajasthan Tourism] website
+
+==Get in==
+
+===By plane===
+* {{go
+| name=Jaipur International Airport | alt={{IATA|JAI}} | url= | email=
+| address=Sanganer | lat=26.824167 | long=75.812222 | directions=
+| phone= | tollfree=
+|fax=| hours= | price=
+| wikipedia=Jaipur International Airport | wikidata=Q572387
+|lastedit=2019-10-14
+| content=Offers sporadic (chartered) service from [[London]] and [[Dublin]]. Direct flights from Singapore, Bangkok, Sharjah, Muscat and [[Dubai]] are also available. Jaipur also has daily domestic air links with many Indian cities such as [[Jodhpur]], [[Udaipur]], [[Aurangabad]], [[Delhi]], [[Hyderabad]], [[Kolkata]], [[Goa]], [[Chennai]], [[Ahmedabad]], [[Bangalore]], [[Mumbai]], [[Pune]] and [[Indore]].
+}}
+
+===By train===
+[[File:Jaipur 03-2016 31 Jaipur railway station.jpg|thumb|Jaipur Junction]]
+[[Rail travel in India|Indian Railways]] connects Jaipur from all over the country and is one of the cheapest options. A number of daily trains arrive from [[Delhi]], [[Ahmedabad]], [[Agra]], [[Mumbai]], [[Jodhpur]], [[Kota]], [[Alwar]] and [[Ajmer]]. Daily connections are also available for [[Udaipur]], [[Chittorgarh]], [[Bikaner]], [[Jaisalmer]], [[Barmer]], [[Kolkata]], [[Jammu]], [[Pathankot]], [[Ludhiana]], [[Kanpur]], [[Roorkee]], [[Haridwar]], [[Gwalior]], [[Indore]], [[Jabalpur]] and [[Bhopal]].
+
+Long-distance trains arrive from many other major cities including [[Lucknow]], [[Prayagraj]], [[Varanasi]], [[Vadodara]], [[Surat]], [[Nagpur]], [[Bilaspur (Chhattisgarh)|Bilaspur]], [[Raipur]], [[Patna]], [[Ranchi]], [[Bhubaneswar]], [[Puri]], [[Chennai]], [[Bangalore]], [[Mysore]], [[Hyderabad]], [[Goa]], [[Mangalore]], [[Kozhikode]] and [[Kochi]].
+
+The most popular option from Delhi are Vande Bharat and Shatabdi Express trains. The Shatabdi Express train departs New Delhi station at 06:05 and reaches Jaipur at 10:30AM.
+
+There are three major railway stations: {{marker|type=go|name={{station|Jaipur Junction|city=india|nwr}}|wikidata=Q6124154}}, which is the main station, Durgapura and Gandhinagar (Jaipur) — which is not to be confused with the [[Gandhinagar]] that is the capital city of the state of [[Gujarat]]. All trains stop at Jaipur Junction and a few trains stop at Durgapura and Gandhinagar stations also.
+
+===By bus===
+There is an excellent bus service between Jaipur to Delhi by Rajasthan State Road Transport Corporation (RSRTC) with buses approximately every half an hour in both directions. Non-AC and AC Volvo bus services are offered. The air-conditioned bus is taken through a well-maintained highway and has good shock absorbers. From Delhi you can board the bus from Bikaner House on Pandara Road next to India Gate. From Jaipur you can board the bus from Narayan Singh Circle or the main Sindhi Camp bus stand. You can also book tickets up to 6 days in advance from both these places. These buses typically take 6 hours for the Volvo and 6-7 hours for the others. There are also some private bus operators from Dhaula Kuan in Delhi and outside of Sindhi camp in Jaipur. No need to make advance reservations. The buses journey along bumpy backroads to avoid toll roads, and their shock absorbers are not good.
+
+If you plan to leave from Delhi IGI Airport, you can get off the bus at Dhaula Kuan and get an autorickshaw (to the bus stand) or perhaps a taxi from there. No need to enter the congested Delhi.
+
+Express buses to several cities and towns within Rajasthan, such as Kota and [[Bundi]], are also available.
+
+===By car===
+
+This is the most popular way of reaching from Delhi. The journey by car from Delhi to Jaipur takes less than 4 hr. National Highway no. 8 connects Delhi to Jaipur via the industrial township of [[Gurgaon]]. The road is excellent.
+
+There are also many car rental services in Delhi which can provide chauffeur-driven cars to Jaipur.
+
+==Get around==
+{{Mapframe|26.925|75.823|zoom=13|width=520|height=560}}
+{{Mapshapes|Q6124135}}<!-- Metro -->
+{{mapshape|wikidata=Q123256799,Q123256808,Q123256836}}
+
+===By RTDC bus===
+It is the best and cheaper way to visit the Jaipur Local Sights by [http://rtdc.tourism.rajasthan.gov.in/Client/CityTour.aspx RTDC] (Rajasthan Tourism Dept. Corp.) There will be one guide with each bus to give you brief info about all sights. The full day tour, as of 2019, costs ₹600.
+
+===By metro===
+[[File:Jaipur 03-2016 34 Jaipur Metro.jpg|thumb|Jaipur Metro]]
+The '''[http://transport.rajasthan.gov.in/jmrc Jaipur Metro]''' provides a fast, reliable and inexpensive way to get around the city. The '''Pink Line''' {{rint|jaipur}} runs from '''Mansarovar''' to '''Badi Chaupar''' station, which is in the centre of the walled town (a.k.a the Pink City). Fares range between ₹5 and ₹25.
+
+===By autorickshaw===
+[[File:Jaipur City - View from Hawa Mahal 2.jpg|thumbnail|View from Hawa Mahal to one of Jaipur's bustling streets]]
+'''Autorickshaws''' (tuk-tuks) are probably the best way to reach places in the outskirts of Jaipur such as Amber Fort or Galtaji, where getting a taxi or Uber/Ola to go back to the city may be tricky. They are generally more expensive than Uber/Ola, but they are readily available and don't require waiting time.
+
+Hiring an autorickshaw for a whole day to go to Amber Fort, Tiger Fort, Jal Mahal, and other areas costs anywhere between ₹450 to ₹550 (as of 2018). A common scam is drivers asking for extra money throughout the day for parking fees, petrol, and other things along the way. Always agree on an ‘all-in’ price that includes their time, petrol, lunch, and parking fees. It's not uncommon for people to agree to ₹500 and pay close to ₹1000 with all of the surprise fees. Lastly, make sure you and the driver agree that they will take you to the site and not close to it ‘just for photographs’.
+
+Prepaid autos are available at the Jaipur railway station and the Sindhi Camp bus stand, although prices are a little inflated and often the same as you get with minimal bargaining.
+
+At a certain point, the rates were revised to ₹350-400. The autorickshaw wallas will tell you to take the slip from the police booths. You can also go directly without the slip, but don't forget to [[bargain]] over the price in that case; it could be much cheaper. It'll be best if you start your sightseeing by 10:00 as some of the major spots close by 16:30 and each spot takes a lot of time, especially the forts.
+
+Some autorickshaw drivers will try to trick you into paying more than the agreed amount after the trip is over, but you should stick to the original amount decided. Police in Jaipur are very friendly, so in case you feel the autorickshaw driver is trying to misguide you or force you to hand over extra money, just refer the dispute to the police officers at various spots.
+
+Also some autorickshaw drivers will tell you to buy artefacts and gifts from some shops especially some on the way to Amber Fort. These shops operate on commission to the auto driver and fleece you. If you want to buy souvenirs, get them in city's main shopping areas like Bapu Bazaar.
+
+Take along some of your own information about the eating and shopping places as the drivers have their fixed commissions at shops and eating outlets, so you might end up paying more for an item or eating at an undesirable place.
+
+Autorickshaw drivers have been known to work together with the gem scammers. If you hire an autorickshaw for the day, he may suggest that you 'go for a beer' afterwards, and if you accept you will be introduced to the main man on the scam attempt, usually a very charismatic person who is clearly much wealthier than his rickshaw-driving 'friend'. Use common sense: why would a rickshaw driver who earns ₹350 per day (minus petrol) want to take you to a bar where beers are ₹75? Politely decline these invitations as they are invariably more trouble than they are worth.
+
+===By local bus===
+City bus #5 connects directly Amber Fort, Hawa Mahal, New Gate and the intersection of MI Road and Railway Rd every 10 min until 9PM.
+
+City bus #2 runs from the train station up Station Road to the City Palace, Minar, Observatory, etc. The bus driver will try to charge you more. They also sometimes ask you if you need change, or say they don't have change, despite it being obvious they do.
+
+The buses are generally overcrowded and are in a poor condition. You can view [https://jaipurbus.in/ this link] to learn about the bus routes in Jaipur. Fares are by distance, as shown [http://www.jaipurbus.com/fare.html on these charts]{{Dead link|date=February 2026 |bot=InternetArchiveBot }}.
+
+===By cycle-rickshaw===
+[[File:India-6526 - Flickr - archer10 (Dennis).jpg|thumbnail|Cycle rickshaws and other traffic]]
+'''Cycle-rickshaws''' are cheaper, but the amount of time it takes quickly makes it worth paying a few extra rupees and going by autorickshaw, bus or taxi. The advantage of traveling by cycle-rickshaw is that you can cover some great places in the narrow lanes of Jaipur which can not be seen if you hire some other mode of transport.
+
+===On foot===
+Walking around the old town (Pink City) is certainly a highlight, and should be done on shopping business hours; otherwise, streets can be deserted and it might be a bit unsafe, especially for solo women. While the Pink City has footpaths, they are often obstructed so you will have to walk on the road. Also, be careful with crossing the streets at the multi-lane roads. Even so, the Pink City's staggering architecture and endless colorful bazaars make walking around a treat, and many points of interest, like the Hawa Mahal, City Palace and Jantar Mantar are close by each other. As in many Indian cities. however, you need to be prepared to cope with the traffic, noise, pollution and litter in the streets.
+
+===By taxi===
+The taxis in Jaipur are very convenient and comfortable. Most of the vehicles are Maruti Omni Vans or Tata Indica cars, which are much safer than Auto rickshaws, and the drivers are polite. If you are alone or going to an unknown destination, you are strongly advised to choose this option, even though the rates will be double that of an autorickshaw. you must call for a taxi, as it is nearly impossible to hail one unless you are at a major point like the airport. When you call, you should negotiate a fare (or agree on using the meter) and get the taxi's 'number'. The taxi will come pick you up, and call you when they are close. Taxis generally have yellow licence plates with black letters. Some taxis are yellow & black, which helps to differentiate them from the private cars.
+
+Rideshare apps are also popular locally.
+
+===By car===
+Car rental is one of the effective alternatives for wandering around in Jaipur. Almost all of the car rental services in India including Zoomcar, Myles and Avis offer services in Jaipur.
+
+==Fees and permits==
+The ticket price for each point of interest is posted on the [http://tourism.rajasthan.gov.in/ Rajasthan Tourist Government Office website] Big discounts apply if you can show a student ID. 
+
+===Composite tickets===
+The composite ticket includes '''Amber Fort''', '''Jantar-Mantar''', '''Hawa Mahal''', '''Albert Hall (Central Museum)''', '''Nahargarh Fort''', '''Sisodia Rani Palace/Garden''', '''Vidyadhar Garden''', and '''Isarlat tower (Swargasuli)'''. The '''Composite Ticket''' is for sale at all archaeological monuments and costs ₹300/40 Indian adult/student and ₹1000/200 foreign adult/student (2018). The ticket is valid for two days.
+
+==See==
+===Amber Fort===
+[[File:Jaipur 03-2016 04 Amber Fort.jpg|thumb|240px|Amber Fort]]
+* {{see
+| name=Amber Fort | alt=अंबेर क़िला ''Amber Qilā'' | url=http://www.tourism.rajasthan.gov.in/amber-palace.html | email=
+| address= | lat=26.985486 | long=75.851345 | directions=11 km North of central Jaipur, local bus #5 from Hawa Mahal or New Gate
+| phone=+91 14 1253 0293 | tollfree=
+| hours=8AM-6PM | price=₹100/20 for Indian adult/student and ₹500/100 for foreign adult/student. Included in the '''Composite Ticket'''. There is a special evening viewing from 6:30-9AM, ₹100 for all, Composite Ticket not valid. Camera: free. Audioguides ₹200. Elephant rides: ₹1100. Consider not taking elephant rides as there have been many reports of these animals not being kept and cared for in humane ways
+| wikipedia=Amer Fort | wikidata=Q456817
+| lastedit=2018-10-14
+| content=This massive fort-palace complex built in hybrid Hindu-Muslim style dates back to Raja Man Singh and was the royal palace of the Kachwahas from c. 1600-1727. It's one of six [[UNESCO World Heritage]] forts in Rajasthan. The name has nothing to do with the rather pretty pastel yellow colour; instead, the fort is named after the area of Amber, in turn named after the goddess Amba.
+}}
+
+The fort grounds are sprawling and the information panels (Hindi/English) are somewhat limited, so it might be worth getting an audio guide or a real guide. It's a bit of a hike up from the town, and the touristy thing to do is to ride on an elephant to the top (in order to get an elephant it is better to arrive there in the morning, otherwise at midday the elephants are done working; however, the road that the elephants walk on is not so long). If you hire a genuine guide, you will be taken not only to the Amber Fort but also to the Rajasthan Kala Mandir (a government operated shop) to buy souvenirs. Guides get a 2% commission on the items you buy there. Also see the ''Amber Light Show'' below. The site has come under scrutiny as tourists claim to have witnessed the elephants being beaten by handlers. If you walk up the hill to the Jaigarh Fort be prepared to pay the entry fee as the path terminates at a ticket window and there is no way around to the road.
+
+The main sights within the fort include the following:
+* {{see
+| name=Dalaram Bagh | alt= | url= | email=
+| address= | lat=26.986250 | long=75.853333 | directions=
+| phone= | tollfree=
+| hours= | price=
+| image=Dilaram Bagh, Amber 2016.jpg | wikidata=Q97119523
+| lastedit=2026-03-11
+| content=
+}}
+* {{see
+| name=Diwan-i-Am | alt=Hall of Public Audience | url= | email=
+| address= | lat=26.986251 | long=75.850962 | directions=
+| phone= | tollfree=
+| hours= | price=
+| lastedit=2026-03-11
+| content=
+}}
+* {{see
+| name=Sheesh Mahal | alt=Glass Palace | url= | email=
+| address= | lat=26.985766 | long=75.850642 | directions=
+| phone= | tollfree=
+| hours= | price=
+| lastedit=2026-03-11
+| content=A palace adorned with thousands on thousands of mirror tiles on the walls and ceiling.
+}}
+
+===Forts===
+* {{see
+| name=Jaigarh Fort | alt= | url=http://tourism.rajasthan.gov.in/jaipur#jaigarh-fort | email=
+| address= | lat=26.986654 | long=75.845654 | directions=A 1 km walk uphill from '''Amber Fort''', or ₹100/200 for motorbike/auto-rickshaw
+| phone=+91 14 1267 1848 | tollfree=
+| hours=9AM-4:30PM | price=₹35/100 for Indian/foreigner. Camera: ₹50 (if you do not disclose that you have a camera and later the police/their person sees you talking a photo (e.g. with your phone) they may ask you to show your ticket, and if you don't have one, will either ask you to buy the ₹50 ticket or penalise you). Video ₹200. Automobile ₹50
+| wikipedia=Jaigarh Fort | image=Rajasthan-Jaipur-Jaigarh-Fort-perimeter-walls-Apr-2004-01.JPG | wikidata=Q2722759
+| lastedit=2026-03-07
+| content=Never conquered in battle, this was considered the strongest of the three forts in the area. It is best-known as the site of the world's largest cannon, the ''Jaivana'', which was test-fired only once &mdash; according to legend, despite using only the half the design amount of gunpowder, the cannonball flew {{km|35}}! A better reason to visit the fort, though, are the scenic gardens at the other end and the spectacular views over the Amber Fort and the hills around. The remains of the foundry where the Jaivana (and many more) were cast are also in the fort grounds. There are multiple boards with "no tips allowed," in case someone is bothering you.
+}}
+* {{see | name=Nahargarh Fort | alt= | url=http://tourismtravelindia.com/rajasthanportal/touristattractions/NAHARGARH.html | email= | address=Krishna Nagar, Brahampuri | lat=26.939946 | long=75.816768 | directions= | phone=+91 14 1518 2957 | tollfree= | fax= | hours=10AM-6PM | price=₹50/200 for Indians/foreigners. Included in the 5-monument Composite Ticket. ₹400/₹700 (Indian/foreigners) for the tour of the Wax Museum and the Sheesh Mahal. | wikidata=Q2723401 | wikipedia=Nahargarh Fort | lastedit=2017-08-17 | content=The smallest of the three forts, notable primarily for excellent views over Man Sagar lake and the vast sprawl of Jaipur. Built in 1734 by the Maharaja Sawai Jai Singh II in a mix of Indian and European styles, the fort also houses the (relatively) compact Madhavendra Bhawan palace, although its former splendour is fading under layers of graffiti and pigeon droppings. Some of the film ''Rang De Basanti'' were shot at this fort. To get to the area where the "Pathshala" song was shot, take a left turn as soon as you enter the fort. An autorickshaw can be taken from the stand in front of the Amber fort. The fort also houses the Jaipur's Wax Museum and Sheesh Mahal, although tickets for these have to be bought separately and are ridiculously expensive. Beware if buying the Wax Museum and Sheesh Mahal combo ticket, you'll be paraded through the largely unimpressive museum and then be told to queue for the Sheesh Mahal which can last from 30 minutes to 2 hours.
+}} {{Dead link|date=October 2026 |bot=InternetArchiveBot }}
+
+===Palaces===
+[[File:Hawa Mahal 2011.jpg|thumb|240px|Hawa Mahal]]
+[[File:Jal Mahal. 2009.jpg|thumb|240px|A view of Jal Mahal from the road to Amber Fort]]
+
+* {{see
+| name=City Palace | alt= | url=https://royaljaipur.in/ | email=
+| address=Jaleb Chowk | lat=26.925500 | long=75.823600 | directions=Inside the old city, close to New Gate and Hawa Mahal, metro: {{station|Badi Chaupar|pink}}
+| phone=+91-141-4088888, +91-141-4088855 | tollfree=
+| hours= | price=₹400 for Indians, ₹1200 for foreigners, half price(₹200/₹600) for students, children below 12, Indian senior citizens and Indian defense personnel; a composite ticket (₹500/₹300) for Indians (₹1700/₹850) for foreigners gives extra access to Jaigarh Fort and Royal Cenotaphs
+| wikipedia=City Palace, Jaipur | image=Jaipur 03-2016 22 City Palace complex.jpg | wikidata=Q2723395
+| lastedit=2026-03-07
+| content=An imposing blend of traditional Rajput and Mughal architecture. It is a vast palace complex occupying nearly one-seventh of the Pink City. It was built by Maharaja Jai Singh II. The complex is divided into a series of courtyards, sprawling gardens and buildings. It is home to several palatial structures like the '''Chandra Mahal''', (home to present Maharajah of Jaipur), '''Mubarak Mahal''' (housing a textile museum), '''Diwan-e-Khas''' (or Hall of Private audience housing the two largest silver vessels in the world, which are duly mentioned in the Guinness book), the '''Diwan-e-Aam''' ( or Hall of Public Audience) and the gateway '''Ridhi Sidhi Pol''' (with four small doorways decorated with motifs depicting the four seasons). Be warned that although they sell tickets for taking photos with a camera inside, most exhibits inside have a "no photography" sign.
+}}
+*{{see
+| name=Hawa Mahal | alt=Palace of Breeze | url=http://museumsrajasthan.gov.in/monument/hawa-mahal | email=
+| address= | lat=26.924000 | long=75.826720 | directions=
+| phone= | tollfree=
+| hours=9AM-5PM | price=₹10 for Indians, ₹200 for foreigners. Included in the Composite Ticket, free on 18 May. Camera free
+| wikipedia=Hawa Mahal | image=East facade Hawa Mahal Jaipur from ground level (July 2022) - img 01.jpg | wikidata=Q836531
+| lastedit=2026-03-07
+| content=Built in 1799 by Maharaja Sawai Singh as part of City Palace, it was an extension of the ''Zenana'' (women's) chamber. Its purpose was to allow royal ladies to observe everyday life in the street below without being seen. It is a five storey high red sandstone structure complete with over 950 windows. The breeze (or hawa in Hindi) circulates through these windows, giving the palace its name. The iconic facade is best seen from the street, which is free.
+}}
+* {{see
+| name=Jal Mahal | alt=Water Palace | url= | email=
+| address=Jal Mahal Amer Road | lat=26.953333 | long=75.846111 | directions=on the way to Amer Road
+| phone= | tollfree=
+| hours= | price=Free to view and photograph, but as of 2015, it is private property, so you probably won't be allowed to enter
+| wikipedia=Jal Mahal | image=Jal Mahal Palace in Jaipur, 20191218 1427 9226.jpg | wikidata=Q2757538
+| lastedit=2026-03-07
+| content=This beautiful Jal Mahal or water palace was made by the King of Amber in the middle of the Man Sagar Lake. The Jal Mahal represents the use of Mughal and Rajput architecture style.
+}}
+* {{see
+| name=Mundota Fort and Palace | alt= | url= | email=
+| address= | lat=26.960000 | long=75.620000 | directions=
+| phone= | tollfree=
+| hours= | price=
+| wikipedia=Mundota Fort and Palace | image=RK 3457.CR.jpg | wikidata=Q15260236
+| lastedit=2026-03-07
+| content=A 450-year-old palace, built around 1550 by Jaswant Singh.
+}}
+
+===Temples===
+[[File:Birla Temple in Jaipur.jpg|thumb|Birla Temple]]
+[[File:GaltaTempleWater.jpg|thumb|Galtaji]]
+* {{see
+| name=Akshardham Temple | alt= | url= | email=
+| address=Vaishali Nagar | lat=26.90222 | long=75.74062 | directions=
+| phone=+91 141 224 6100 | tollfree= | fax=
+| hours= | price=
+| content=
+}}
+* {{see
+| name=Birla Mandir (aka The Marble Temple) | alt=Lakshmi Narayan Temple | url=http://www.jaipur.org.uk/temples/birla-temple.html | email=
+| address= | lat=26.892161 | long=75.815530 | directions=below the well-known Moti Dungri Fort
+| phone=+91 98295 95467 | tollfree=
+| hours= | price=Free
+| wikipedia=Birla Mandir, Jaipur | image=Jaipur - Birla Temple (7122464805).jpg | wikidata=Q4916529
+| lastedit=2026-03-07
+| content=This is a relatively new temple made of white marble with beautiful carvings. It covers a vast area in Jaipur city and is built in a contemporary manner. Birla Temple is completely constructed with the finest high-quality white marbles. In addition to having statues and paintings of Hindu deities, the temple has pictures of famous philosophers from around the world including Socrates, Confucius and Zoroaster. No bags (besides purses), food, cameras. No photos allowed in the temple, but rules are not enforced outside.
+}}
+* {{see
+| name=Galtaji | alt=Shree Galta Ji; Monkey Temple | url=http://www.galtaji.org/ | email=
+| address=10 km from Jaipur on Jaipur-Agra highway near Sisodia Rani Garden | lat=26.916920 | long=75.858120 | directions=
+| phone= | tollfree=
+| hours= | price=₹100 for foreigners, ₹150 camera charge
+| wikipedia=Galtaji | image=GaltaTempleOverview.jpg | wikidata=Q3635211
+| lastedit=2026-03-07
+| content=An ancient Hindu pilgrimage site. The main temple, Galtaji, is constructed in pink stone. The temple has a number of pavilions with rounded roofs, exquisitely carved pillars and painted walls. The temple is surrounded by natural springs and reservoirs that are considered holy. There are also seven tanks or ''kunds'' here. There are two routes to reach the temple: if you arrive from west you will have to hike uphill and downhill for about 20 minutes; the eastern gate is easily accessible by car, though it is a longer journey to get there.
+}}
+* {{see
+| name=Galwar Bagh | alt= The Monkey Temple | url= | email=
+| address=Eastern edge of the city | lat=26.91679 | long=75.858903 | directions= adjacent to Suriya Mandir (aka The Sun Temple)
+| phone= | tollfree= | fax=
+| hours= | price=

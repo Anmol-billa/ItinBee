@@ -402,16 +402,35 @@ export class PostgresTripStore implements TripStore {
     return this.mapUserRow(inserted.rows[0]!);
   }
 
-  public async upsertUserByGoogle(params: {
-    googleSub: string;
+  public async createGuestUser(displayName?: string): Promise<UserPublic> {
+    const uid = crypto.randomUUID();
+    const inserted = await this.pool.query(
+      `INSERT INTO users (id, display_name, is_guest)
+       VALUES ($1, $2, TRUE)
+       RETURNING *`,
+      [uid, displayName?.trim() || 'Traveller']
+    );
+    return this.mapUserRow(inserted.rows[0]!);
+  }
+
+  public async isGuestUser(userId: string): Promise<boolean> {
+    const res = await this.pool.query(
+      'SELECT is_guest FROM users WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+    return Boolean(res.rows[0]?.is_guest);
+  }
+
+  public async upsertUserByEmail(params: {
     email: string;
-    displayName: string;
+    displayName?: string;
     upiVpa?: string;
   }): Promise<UserPublic> {
-    const subHash = hashIdentifier(params.googleSub);
+    const normalizedEmail = params.email.trim().toLowerCase();
+    const emailHash = hashIdentifier(`email:${normalizedEmail}`);
     const existing = await this.pool.query(
-      'SELECT * FROM users WHERE google_sub_hash = $1 LIMIT 1',
-      [subHash]
+      'SELECT * FROM users WHERE email_hash = $1 LIMIT 1',
+      [emailHash]
     );
 
     if (existing.rows[0]) {
@@ -421,17 +440,75 @@ export class PostgresTripStore implements TripStore {
         : existing.rows[0].upi_vpa_enc;
       const updated = await this.pool.query(
         `UPDATE users
-         SET display_name = $2, upi_vpa_enc = $3
+         SET display_name = COALESCE($2, display_name),
+             upi_vpa_enc = $3,
+             is_guest = FALSE
          WHERE id = $1
          RETURNING *`,
-        [uid, params.displayName.trim() || 'Traveller', upiEnc]
+        [uid, params.displayName?.trim() || null, upiEnc]
+      );
+      return this.mapUserRow(updated.rows[0]!);
+    }
+
+    const uid = crypto.randomUUID();
+    const emailEnc = await this.kms.encryptString(normalizedEmail, `user:${uid}:email`);
+    const upiEnc = params.upiVpa?.trim()
+      ? await this.kms.encryptString(params.upiVpa.trim(), `user:${uid}:upi`)
+      : null;
+    const inferredName =
+      params.displayName?.trim() ||
+      normalizedEmail
+        .split('@')[0]!
+        .replace(/[._-]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .trim() ||
+      'Traveller';
+
+    const inserted = await this.pool.query(
+      `INSERT INTO users (id, email_hash, email_enc, display_name, upi_vpa_enc, is_guest)
+       VALUES ($1, $2, $3, $4, $5, FALSE)
+       RETURNING *`,
+      [uid, emailHash, emailEnc, inferredName.slice(0, 80), upiEnc]
+    );
+    return this.mapUserRow(inserted.rows[0]!);
+  }
+
+  public async upsertUserByGoogle(params: {
+    googleSub: string;
+    email: string;
+    displayName: string;
+    upiVpa?: string;
+  }): Promise<UserPublic> {
+    const subHash = hashIdentifier(params.googleSub);
+    const normalizedEmail = params.email.trim().toLowerCase();
+    const emailHash = hashIdentifier(`email:${normalizedEmail}`);
+    const existing = await this.pool.query(
+      'SELECT * FROM users WHERE google_sub_hash = $1 OR email_hash = $2 LIMIT 1',
+      [subHash, emailHash]
+    );
+
+    if (existing.rows[0]) {
+      const uid = String(existing.rows[0].id);
+      const upiEnc = params.upiVpa?.trim()
+        ? await this.kms.encryptString(params.upiVpa.trim(), `user:${uid}:upi`)
+        : existing.rows[0].upi_vpa_enc;
+      const updated = await this.pool.query(
+        `UPDATE users
+         SET display_name = $2,
+             upi_vpa_enc = $3,
+             google_sub_hash = COALESCE(google_sub_hash, $4),
+             email_hash = COALESCE(email_hash, $5),
+             is_guest = FALSE
+         WHERE id = $1
+         RETURNING *`,
+        [uid, params.displayName.trim() || 'Traveller', upiEnc, subHash, emailHash]
       );
       return this.mapUserRow(updated.rows[0]!);
     }
 
     const uid = crypto.randomUUID();
     const emailEnc = await this.kms.encryptString(
-      params.email.trim().toLowerCase(),
+      normalizedEmail,
       `user:${uid}:email`
     );
     const upiEnc = params.upiVpa?.trim()
@@ -439,12 +516,104 @@ export class PostgresTripStore implements TripStore {
       : null;
 
     const inserted = await this.pool.query(
-      `INSERT INTO users (id, google_sub_hash, email_enc, display_name, upi_vpa_enc)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (id, google_sub_hash, email_hash, email_enc, display_name, upi_vpa_enc, is_guest)
+       VALUES ($1, $2, $3, $4, $5, $6, FALSE)
        RETURNING *`,
-      [uid, subHash, emailEnc, params.displayName.trim() || 'Traveller', upiEnc]
+      [uid, subHash, emailHash, emailEnc, params.displayName.trim() || 'Traveller', upiEnc]
     );
     return this.mapUserRow(inserted.rows[0]!);
+  }
+
+  public async updateUserProfile(
+    userId: string,
+    patch: { displayName?: string; preferredLang?: string; upiVpa?: string | null }
+  ): Promise<UserPublic | null> {
+    const existing = await this.pool.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [
+      userId,
+    ]);
+    if (!existing.rows[0]) return null;
+    const row = existing.rows[0];
+    const nextName =
+      patch.displayName !== undefined && patch.displayName.trim()
+        ? patch.displayName.trim().slice(0, 80)
+        : String(row.display_name);
+    const nextLang =
+      patch.preferredLang !== undefined && patch.preferredLang.trim()
+        ? patch.preferredLang.trim().slice(0, 10)
+        : String(row.preferred_lang ?? 'en');
+    let nextUpiEnc = row.upi_vpa_enc;
+    if (patch.upiVpa !== undefined) {
+      if (patch.upiVpa === null || patch.upiVpa.trim() === '') {
+        nextUpiEnc = null;
+      } else {
+        nextUpiEnc = await this.kms.encryptString(
+          patch.upiVpa.trim(),
+          `user:${userId}:upi`
+        );
+      }
+    }
+    const updated = await this.pool.query(
+      `UPDATE users
+       SET display_name = $2, preferred_lang = $3, upi_vpa_enc = $4
+       WHERE id = $1
+       RETURNING *`,
+      [userId, nextName, nextLang, nextUpiEnc]
+    );
+    return this.mapUserRow(updated.rows[0]!);
+  }
+
+  public async mergeGuestIntoUser(
+    guestUserId: string,
+    targetUserId: string
+  ): Promise<number> {
+    if (!guestUserId || guestUserId === targetUserId) return 0;
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const guestCheck = await client.query(
+        'SELECT is_guest FROM users WHERE id = $1 LIMIT 1',
+        [guestUserId]
+      );
+      if (guestCheck.rows[0] && !guestCheck.rows[0].is_guest) {
+        await client.query('ROLLBACK');
+        return 0;
+      }
+
+      const mems = await client.query(
+        `SELECT tm.trip_id, tm.role, tm.vault_access, tm.dietary_tags
+         FROM trip_members tm
+         JOIN trips t ON t.id = tm.trip_id
+         WHERE tm.user_id = $1 AND t.is_sample = FALSE`,
+        [guestUserId]
+      );
+
+      for (const m of mems.rows) {
+        await client.query(
+          `INSERT INTO trip_members (trip_id, user_id, role, vault_access, dietary_tags)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (trip_id, user_id)
+           DO UPDATE SET
+             role = CASE WHEN EXCLUDED.role = 'owner' THEN 'owner' ELSE trip_members.role END,
+             vault_access = trip_members.vault_access OR EXCLUDED.vault_access`,
+          [m.trip_id, targetUserId, m.role, m.vault_access, m.dietary_tags]
+        );
+        await client.query(
+          'DELETE FROM trip_members WHERE trip_id = $1 AND user_id = $2',
+          [m.trip_id, guestUserId]
+        );
+      }
+
+      await client.query('DELETE FROM users WHERE id = $1 AND is_guest = TRUE', [
+        guestUserId,
+      ]);
+      await client.query('COMMIT');
+      return mems.rowCount ?? 0;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   public async getUserById(userId: string): Promise<UserPublic | null> {
@@ -497,6 +666,18 @@ export class PostgresTripStore implements TripStore {
            WHERE is_public_template = TRUE OR is_sample = TRUE
            ORDER BY created_at DESC`
         );
+    return res.rows.map((r) => this.mapTripMeta(r));
+  }
+
+  public async listUserTrips(userId: string): Promise<TripMeta[]> {
+    const res = await this.pool.query(
+      `SELECT DISTINCT t.*
+       FROM trips t
+       JOIN trip_members tm ON tm.trip_id = t.id
+       WHERE tm.user_id = $1 AND t.is_sample = FALSE
+       ORDER BY t.updated_at DESC`,
+      [userId]
+    );
     return res.rows.map((r) => this.mapTripMeta(r));
   }
 
@@ -658,13 +839,13 @@ export class PostgresTripStore implements TripStore {
         await client.query(
           `INSERT INTO itinerary_items (
              id, trip_id, day_id, kind, title, notes, location, lat, lng, place_ref_id,
-             address_local_script, sort_key, start_time, duration_mins, dietary_flags,
+             address_local_script, sort_key, start_time, duration_mins, transit_meta, dietary_flags,
              accessibility_notes, elder_summary_i18n, is_shortlist, server_seq, hlc_timestamp
            ) VALUES (
              $1, $2, $3, $4, $5, $6,
              CASE WHEN $7::double precision IS NOT NULL AND $8::double precision IS NOT NULL
                   THEN ST_SetSRID(ST_MakePoint($8, $7), 4326)::geography ELSE NULL END,
-             $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+             $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17, $18, $19, $20
            )`,
           [
             itemId,
@@ -680,6 +861,7 @@ export class PostgresTripStore implements TripStore {
             it.sortKey ?? defaultKeys[idx] ?? 'V0',
             it.startTime ?? null,
             it.durationMins ?? null,
+            JSON.stringify(it.transitMeta ?? {}),
             it.dietaryFlags ?? [],
             it.accessibilityNotes ?? '',
             JSON.stringify(it.elderSummaryI18n ?? {}),

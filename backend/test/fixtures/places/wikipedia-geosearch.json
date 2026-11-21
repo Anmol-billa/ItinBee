@@ -1,0 +1,12 @@
+{"batchcomplete": true, "query": {"geosearch": [
+  {"pageid": 1, "ns": 0, "title": "Hawa Mahal", "lat": 26.92389, "lon": 75.82667, "dist": 12.4, "primary": ""},
+  {"pageid": 2, "ns": 0, "title": "City Palace, Jaipur", "lat": 26.9258, "lon": 75.8237, "dist": 350.1, "primary": ""},
+  {"pageid": 3, "ns": 0, "title": "Jantar Mantar, Jaipur", "lat": 26.9247, "lon": 75.8245, "dist": 310.0, "primary": ""},
+  {"pageid": 4, "ns": 0, "title": "Birla Mandir, Jaipur", "lat": 26.9300, "lon": 75.8201, "dist": 900.3, "primary": ""},
+  {"pageid": 5, "ns": 0, "title": "Jal Mahal", "lat": 26.9534, "lon": 75.8461, "dist": 3900.7, "primary": ""},
+  {"pageid": 6, "ns": 0, "title": "Albert Hall Museum", "lat": 26.9113, "lon": 75.8190, "dist": 1500.2, "primary": ""},
+  {"pageid": 8, "ns": 0, "title": "Jaipur Municipal Corporation", "lat": 26.9, "lon": 75.8, "dist": 2800.0, "primary": ""},
+  {"pageid": 9, "ns": 0, "title": "St. Xavier's School, Jaipur", "lat": 26.9, "lon": 75.79, "dist": 3900.0, "primary": ""},
+  {"pageid": 10, "ns": 0, "title": "Jaipur Railway Station", "lat": 26.9196, "lon": 75.7878, "dist": 4000.0, "primary": ""},
+  {"pageid": 11, "ns": 0, "title": "Some Person", "lat": 26.91, "lon": 75.78, "dist": 4100.0, "primary": ""}
+]}}

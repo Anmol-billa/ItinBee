@@ -3,6 +3,10 @@ import { LocalDevStore } from './store/local-dev-store.js';
 import { PostgresTripStore } from './store/pg-store.js';
 import { RealtimeAndQueueBus } from './store/pubsub.js';
 import { runHybridTextIngestion } from './modules/ingest/pipeline.js';
+import {
+  createPlacesServices,
+  seedPlacesOnStartup,
+} from './modules/places/places-module.js';
 
 async function startDedicatedWorker(): Promise<void> {
   const store = env.DATABASE_URL
@@ -13,6 +17,11 @@ async function startDedicatedWorker(): Promise<void> {
     redisUrl: env.REDIS_URL,
     runInlineWorker: true,
   });
+
+  // Destination Pack builds (`build-destination-pack` jobs on the `itinbee-packs` queue)
+  const places = createPlacesServices({ config: env, queue: bus });
+  bus.registerPackProcessor((job) => places.packs.runBuild(job));
+  await seedPlacesOnStartup(places);
 
   bus.registerIngestProcessor(async (job) => {
     const output = await runHybridTextIngestion(job.rawText);
@@ -45,6 +54,7 @@ async function startDedicatedWorker(): Promise<void> {
   const shutdown = async () => {
     await bus.close();
     await store.close();
+    await places.close();
     process.exit(0);
   };
 

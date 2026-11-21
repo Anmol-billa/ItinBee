@@ -1,0 +1,351 @@
+/* Itinbee public world: "Trunk Labels". Imported by the (public) layout only. */
+
+@font-face {
+  font-family: "Big Shoulders Display";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/big-shoulders-display-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Big Shoulders Display";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/big-shoulders-display-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/fonts/source-sans-3-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/fonts/source-sans-3-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+.world {
+  --trunk: #0e5a47;
+  --paper: #f6ebd3;
+  --ink: #14213d;
+  --saffron: #f2a71b;
+  --vermilion: #c7361f;
+  font-family: "Source Sans 3", var(--font-devanagari), system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--paper);
+  background: #062119;
+  caret-color: var(--vermilion);
+}
+.world ::selection {
+  background: var(--saffron);
+  color: var(--ink);
+}
+.world :focus-visible {
+  outline: 3px solid var(--saffron);
+  outline-offset: 3px;
+}
+.world .on-paper :focus-visible,
+.world .on-paper:focus-visible {
+  outline-color: var(--ink);
+}
+.world ::-webkit-scrollbar-track {
+  background: #062119;
+}
+.world ::-webkit-scrollbar-thumb {
+  background: #1c7d63;
+}
+
+/* Lacquered trunk ground: faint grain and a soft lit centre */
+.trunk-ground {
+  background:
+    radial-gradient(ellipse 900px 580px at 50% 38%, rgba(28, 125, 99, 0.5), transparent 72%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.04) 0 1px, transparent 1px 4px),
+    var(--trunk);
+  box-shadow: inset 0 0 110px rgba(3, 20, 15, 0.7);
+}
+.trunk-ground-flat {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 6px),
+    var(--trunk);
+}
+.trunk-frame::before {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  border-radius: 10px;
+  pointer-events: none;
+  border: 1.5px solid rgba(242, 167, 27, 0.26);
+  box-shadow: inset 0 0 0 4px rgba(4, 24, 18, 0.32);
+}
+
+/* Paper surfaces */
+.paper-surface {
+  background: radial-gradient(circle at 50% 0%, #fff7e4, var(--paper) 65%, #ead9b5);
+  color: var(--ink);
+}
+.tag-cut {
+  clip-path: polygon(52px 0, calc(100% - 52px) 0, 100% 52px, 100% 100%, 0 100%, 0 52px);
+}
+.tag-hole {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  width: 24px;
+  height: 24px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: var(--trunk);
+  border: 5px solid #c89332;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.perforation {
+  border-top: 2px dashed rgba(20, 33, 61, 0.28);
+}
+
+/* Die-cut label silhouettes */
+.shape-arch { border-radius: 16px 16px 999px 999px; }
+.shape-arch .label-inner { border-radius: 11px 11px 999px 999px; }
+.shape-oval { border-radius: 50%; }
+.shape-oval .label-inner { border-radius: 50%; }
+.shape-round { border-radius: 18px; }
+.shape-round .label-inner { border-radius: 12px; }
+.shape-notch {
+  border-radius: 10px;
+  -webkit-mask:
+    radial-gradient(circle at 0 50%, transparent 10px, #000 11px) left / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 50%, transparent 10px, #000 11px) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle at 0 50%, transparent 10px, #000 11px) left / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 50%, transparent 10px, #000 11px) right / 51% 100% no-repeat;
+}
+.shape-notch .label-inner { border-radius: 6px; }
+.label-gloss::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 45%, rgba(0, 0, 0, 0.08) 100%);
+}
+
+/* The one authored moment: labels land on the trunk once, the tag settles on its string */
+@keyframes label-land {
+  from { opacity: 0; translate: 0 -26px; scale: 1.1; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes tag-settle {
+  0% { rotate: 2.2deg; }
+  40% { rotate: -1.2deg; }
+  70% { rotate: 0.5deg; }
+  100% { rotate: 0deg; }
+}
+@keyframes stamp-press {
+  from { opacity: 0; scale: 1.5; }
+  to { opacity: 0.8; scale: 1; }
+}
+.anim-land {
+  animation: label-land 620ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: var(--delay, 0ms);
+}
+.anim-settle {
+  transform-origin: 50% 0;
+  animation: tag-settle 1400ms cubic-bezier(0.16, 1, 0.3, 1) 150ms backwards;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.anim-fade {
+  animation: fade-in 500ms ease-out backwards;
+  animation-delay: var(--delay, 0ms);
+}
+.anim-stamp {
+  animation: stamp-press 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: var(--delay, 700ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-land, .anim-settle, .anim-stamp, .anim-fade { animation: none; }
+}
+
+/* Buttons */
+.btn-stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0.7rem 1.5rem;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: var(--vermilion);
+  color: #fffdf8;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 6px 14px -2px rgba(98, 24, 12, 0.55);
+  transition: translate 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1), background-color 160ms;
+}
+.btn-stamp:hover { background: #d63f26; translate: 0 -1px; box-shadow: 0 9px 18px -3px rgba(98, 24, 12, 0.6); }
+.btn-stamp:active { translate: 0 1px; box-shadow: 0 2px 6px -1px rgba(98, 24, 12, 0.5); }
+.btn-stamp:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0.7rem 1.25rem;
+  border: 1.5px solid currentColor;
+  border-radius: 8px;
+  font-weight: 700;
+  transition: background-color 160ms;
+}
+.btn-line:hover { background: rgba(20, 33, 61, 0.08); }
+.btn-line-light:hover { background: rgba(246, 235, 211, 0.12); }
+
+.chip-paper {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0.2rem 0.8rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(20, 33, 61, 0.4);
+  background: #efe0be;
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms;
+}
+.chip-paper:hover { background: #e6d3a6; }
+@media (pointer: coarse) {
+  .chip-paper { min-height: 44px; padding-inline: 0.9rem; }
+}
+
+.display {
+  font-family: "Big Shoulders Display", "Public Sans", system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.005em;
+  text-transform: none;
+  line-height: 0.95;
+}
+.agate {
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+}
+
+/* Hero stage scales down between 1024 and 1279px so the composition never reflows */
+@media (min-width: 1024px) and (max-width: 1151px) {
+  .hero-stage { zoom: 0.8; }
+}
+@media (min-width: 1152px) and (max-width: 1279px) {
+  .hero-stage { zoom: 0.9; }
+}
+
+/* The composer wrapper draws the focus ring; the textarea inside stays clean */
+.world textarea:focus-visible {
+  outline: none;
+}
+
+/* create ----------------------------------------------------------------- */
+/* Form controls on label paper (Create flow). Wrapper must carry .on-paper. */
+:where(.field) {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid rgba(20, 33, 61, 0.6);
+  border-radius: 8px;
+  background: #fffdf8;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+.field::placeholder { color: #566079; }
+.field:disabled { opacity: 0.6; cursor: not-allowed; }
+.world .field:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.field[aria-invalid="true"] { border-color: #a82e19; }
+
+.chip-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 32px;
+  padding: 0.2rem 0.75rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(20, 33, 61, 0.45);
+  background: #efe0be;
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+/* Selectable chip: pair with a visually hidden input as a `peer` */
+.chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(20, 33, 61, 0.5);
+  background: #fffdf8;
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: background-color 140ms, color 140ms;
+}
+.chip-toggle:hover { background: #efe0be; }
+.peer:checked + .chip-toggle { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.world .peer:focus-visible + .chip-toggle { outline: 3px solid var(--ink); outline-offset: 2px; }
+.peer:disabled + .chip-toggle { opacity: 0.55; cursor: not-allowed; }
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(20, 33, 61, 0.4);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 140ms;
+}
+.icon-btn:hover:not(:disabled) { background: rgba(20, 33, 61, 0.08); }
+.icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.text-vermilion-ink { color: #a82e19; }
+
+@keyframes spin-ring { to { rotate: 360deg; } }
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2.5px solid currentColor;
+  border-right-color: transparent;
+  animation: spin-ring 0.9s linear infinite;
+}
+@keyframes pin-drop {
+  from { opacity: 0; translate: 0 -14px; }
+  to { opacity: 1; translate: 0 0; }
+}
+.pin-drop { animation: pin-drop 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; border-right-color: currentColor; opacity: 0.7; }
+  .pin-drop { animation: none; }
+}
+/* /create */

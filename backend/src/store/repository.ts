@@ -18,6 +18,7 @@ import type {
   SplitMode,
   SyncClientMutation,
   SyncServerDelta,
+  TransitMeta,
   TripDay,
   TripMeta,
   TripWorkspaceResponse,
@@ -77,6 +78,7 @@ export interface SandboxClaimInput {
     sortKey?: string;
     startTime?: string | null;
     durationMins?: number | null;
+    transitMeta?: TransitMeta;
     dietaryFlags?: string[];
     accessibilityNotes?: string;
     elderSummaryI18n?: { en?: string; hi?: string };
@@ -149,18 +151,31 @@ export interface TripStore {
   checkHealth(): Promise<{ ok: boolean; detail: string }>;
 
   // Auth & Users
+  createGuestUser(displayName?: string): Promise<UserPublic>;
+  isGuestUser(userId: string): Promise<boolean>;
   upsertUserByPhone(phone: string, displayName?: string, upiVpa?: string): Promise<UserPublic>;
+  upsertUserByEmail(params: {
+    email: string;
+    displayName?: string;
+    upiVpa?: string;
+  }): Promise<UserPublic>;
   upsertUserByGoogle(params: {
     googleSub: string;
     email: string;
     displayName: string;
     upiVpa?: string;
   }): Promise<UserPublic>;
+  updateUserProfile(
+    userId: string,
+    patch: { displayName?: string; preferredLang?: string; upiVpa?: string | null }
+  ): Promise<UserPublic | null>;
+  mergeGuestIntoUser(guestUserId: string, targetUserId: string): Promise<number>;
   getUserById(userId: string): Promise<UserPublic | null>;
   deleteUser(userId: string): Promise<boolean>;
 
   // Trips & Membership
   listSampleAndUserTrips(userId?: string | null): Promise<TripMeta[]>;
+  listUserTrips(userId: string): Promise<TripMeta[]>;
   createTrip(input: CreateTripInput): Promise<TripWorkspaceResponse>;
   addTripMember(params: {
     tripId: string;

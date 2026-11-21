@@ -21,6 +21,18 @@ import { syncRoutes } from './routes/sync.js';
 import { ingestRoutes } from './routes/ingest.js';
 import { geoRoutes } from './routes/geo.js';
 import { pollsLedgerRoutes } from './routes/polls-ledger.js';
+import { placesRoutes } from './routes/places.js';
+import { exploreRoutes } from './routes/explore.js';
+import { importRoutes } from './routes/import.js';
+import {
+  createPlacesServices,
+  seedPlacesOnStartup,
+  type PlacesServices,
+} from './modules/places/places-module.js';
+import { ExploreService } from './modules/explore/explore-service.js';
+import { ImportJobService } from './modules/import/jobs.js';
+import { createLlmProvider, type LlmProvider } from './modules/import/llm/index.js';
+import type { SafeFetcher } from './modules/import/safe-fetch.js';
 
 export interface BuildAppOptions {
   config?: AppEnv;
@@ -28,12 +40,25 @@ export interface BuildAppOptions {
   bus?: RealtimeAndQueueBus;
   forceLocalStore?: boolean;
   logger?: boolean;
+  /** Inject places services (tests use fake providers; production builds them from env). */
+  places?: PlacesServices;
+  /** Inject LLM provider (FakeProvider / NullProvider in tests). */
+  llm?: LlmProvider;
+  /** Inject SSRF-safe fetcher seam for link import tests. */
+  fetcher?: SafeFetcher;
+  /** Inject fetch seam for auth OIDC / Resend tests. */
+  authFetchImpl?: typeof fetch;
+  explore?: ExploreService;
+  importJobs?: ImportJobService;
 }
 
 export interface BuiltAppBundle {
   app: FastifyInstance;
   store: TripStore;
   bus: RealtimeAndQueueBus;
+  places: PlacesServices;
+  explore: ExploreService;
+  importJobs: ImportJobService;
 }
 
 export async function buildApp(
@@ -86,6 +111,39 @@ export async function buildApp(
     }
   });
 
+  const places =
+    options.places ??
+    createPlacesServices({
+      config,
+      forceLocalStore: options.forceLocalStore,
+      queue: bus,
+    });
+  bus.registerPackProcessor((job) => places.packs.runBuild(job));
+  await seedPlacesOnStartup(places);
+
+  const llm = options.llm ?? createLlmProvider(config);
+
+  const explore =
+    options.explore ??
+    new ExploreService({
+      store,
+      places,
+      databaseUrl: config.DATABASE_URL,
+      forceLocalStore: options.forceLocalStore,
+    });
+
+  const importJobs =
+    options.importJobs ??
+    new ImportJobService({
+      config,
+      store,
+      places,
+      explore,
+      llm,
+      fetcher: options.fetcher,
+      forceLocalStore: options.forceLocalStore,
+    });
+
   const app = Fastify({
     logger: options.logger ?? config.NODE_ENV !== 'test',
     bodyLimit: 15 * 1024 * 1024, // 15MB ceiling to parse base64 PDFs cleanly up to 10MB raw
@@ -132,17 +190,34 @@ export async function buildApp(
   await app.register(websocket);
 
   await app.register(healthRoutes, { store, bus });
-  await app.register(authRoutes, { store, bus });
+  await app.register(authRoutes, {
+    store,
+    bus,
+    config,
+    fetchImpl: options.authFetchImpl,
+  });
   await app.register(tripsRoutes, { store, bus });
   await app.register(syncRoutes, { store, bus });
   await app.register(ingestRoutes, { store, bus });
   await app.register(geoRoutes);
+  await app.register(placesRoutes, { services: places });
+  await app.register(exploreRoutes, { explore, store, config });
+  await app.register(importRoutes, {
+    jobs: importJobs,
+    store,
+    places,
+    llm,
+    config,
+  });
   await app.register(pollsLedgerRoutes, { store, bus });
 
   app.addHook('onClose', async () => {
+    await importJobs.close();
+    await explore.close();
     await bus.close();
     await store.close();
+    await places.close();
   });
 
-  return { app, store, bus };
+  return { app, store, bus, places, explore, importJobs };
 }
