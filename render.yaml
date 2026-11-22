@@ -75,7 +75,7 @@ services:
           name: itinbee-kv
           property: connectionString
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        value: gemini-3.5-flash-lite
       - key: GEMINI_API_KEY
         sync: false
       - key: ORS_API_KEY

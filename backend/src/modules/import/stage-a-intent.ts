@@ -61,7 +61,7 @@ const STAGE_A_SYSTEM_PROMPT = [
   'EXTRACTION RULES:',
   '1. Languages: Understand English, Hindi (Devanagari), and Hinglish (Romanised Hindi, e.g. "mummy papa ke saath", "4 dost", "5 din", "sasta", "aram se").',
   '2. WhatsApp / group chats (`kind="chat"`): Messages are chronological. LAST DECISION WINS — if earlier messages suggest Goa or Shimla and later messages cancel it or agree on Udaipur/Manali, extract ONLY the final agreed destination(s) and put explicitly rejected places in `avoid`. Ignore greetings, jokes, and off-topic chatter.',
-  '3. Origin vs Destination: Do NOT include the traveller departure home city (e.g. "from Delhi", "ex-Bengaluru", "flying out of Mumbai") in `destinations` unless they explicitly plan sightseeing days there.',
+  '3. Origin vs Destination: Do NOT include the traveller departure/return home city (e.g. "from Delhi", "ex-Bengaluru", "flying out of Mumbai", or "<HomeCity> to <Dest> ... ending back at <HomeCity>") in `destinations` unless they explicitly plan sightseeing days there. If the requested transport mode does not directly reach the destination (e.g. train to Leh/Ladakh where nearest railheads are Jammu Tawi / Pathankot / Chandigarh), note the practical railhead + road/flight transfer in `assumptions`.',
   '4. Confirmed Bookings: Align dates and destinations with any deterministic booking anchors supplied in context.',
   '5. Geography: Return real city/region/country names in `destinations`. Never invent fictional places.',
   '6. `mustInclude`: Include specific named attractions, temples, beaches, cafes, or restaurants mentioned in USER_DATA, with a short verbatim `sourceQuote` from USER_DATA. Never emit duplicate entries for the same place.',
@@ -337,15 +337,26 @@ export async function extractBasicModelIntent(
   const assumptions: string[] = [];
   const avoid: string[] = [];
 
-  // Identify origin cities ("from Delhi", "From: Bengaluru", "ex-Bangalore", "out of Mumbai") so we don't confuse origin with destination
+  // Identify origin cities ("from Delhi", "From: Bengaluru", "ex-Bangalore", "Delhi to Leh ... ending back at Delhi") so we don't confuse origin with destination
   const originNames = new Set<string>();
-  for (const m of text.matchAll(
-    /\b(?:[Ff]rom|[Ee]x-|[Dd]eparting(?:\s+from)?|[Ll]eaving|[Ff]lying\s+out\s+of|[Tt]rain\s+from)\s*:?\s*([A-Z][a-zA-Z]+(?:\s+(?!(?:to|in|for|on|at|with|and)\b)[A-Z][a-zA-Z]+)?)/g
-  )) {
-    const candidateOrigin = m[1]!.trim().toLowerCase();
+  const addOrigin = (rawOrigin: string) => {
+    const candidateOrigin = rawOrigin.trim().toLowerCase();
+    if (!candidateOrigin) return;
     originNames.add(candidateOrigin);
     if (candidateOrigin === 'new delhi') originNames.add('delhi');
     if (candidateOrigin === 'bangalore') originNames.add('bengaluru');
+  };
+  for (const m of text.matchAll(
+    /\b(?:[Ff]rom|[Ee]x-|[Dd]eparting(?:\s+from)?|[Ll]eaving|[Ff]lying\s+out\s+of|[Tt]rain\s+from)\s*:?\s*([A-Z][a-zA-Z]+(?:\s+(?!(?:to|in|for|on|at|with|and)\b)[A-Z][a-zA-Z]+)?)/g
+  )) {
+    addOrigin(m[1]!);
+  }
+  for (const m of text.matchAll(
+    /\b([A-Z][a-zA-Z]+)\s+to\s+[A-Z][a-zA-Z]+\b[\s\S]{0,120}?\b(?:ending|returning|finish(?:ing)?|back)\s+(?:back\s+)?(?:at|to|in)\s+([A-Z][a-zA-Z]+)/gi
+  )) {
+    if (m[1]!.toLowerCase() === m[2]!.toLowerCase()) {
+      addOrigin(m[1]!);
+    }
   }
   for (const b of normalized.bookings) {
     if (b.summary.originName) originNames.add(b.summary.originName.toLowerCase());
@@ -425,11 +436,13 @@ export async function extractBasicModelIntent(
           return;
         }
 
-        // Ignore pure departure phrase "from <City> to ..." or ticket "From: <City>"
+        // Ignore pure departure/return phrase ("from <City> to ...", "From: <City>", or "<City> to <Dest> ... ending back at <City>")
         if (
           originNames.has(termLower) &&
-          new RegExp(`\\b(?:from|ex-|out\\s+of)\\s*:?\\s*${escapeRegex(term)}\\b`, 'i').test(line) &&
-          !new RegExp(`\\b(?:in|visit|explore)\\s+${escapeRegex(term)}\\b`, 'i').test(line)
+          (new RegExp(`\\b(?:from|ex-|out\\s+of)\\s*:?\\s*${escapeRegex(term)}\\b`, 'i').test(line) ||
+            new RegExp(`\\b${escapeRegex(term)}\\s+to\\s+[A-Z]`, 'i').test(line) ||
+            new RegExp(`\\b(?:ending|returning|finish(?:ing)?|back)\\s+(?:back\\s+)?(?:at|to|in)\\s+${escapeRegex(term)}\\b`, 'i').test(line)) &&
+          !new RegExp(`\\b(?:in|visit|explore|sightseeing\\s+in)\\s+${escapeRegex(term)}\\b`, 'i').test(line)
         ) {
           return;
         }

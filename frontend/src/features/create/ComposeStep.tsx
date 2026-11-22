@@ -129,7 +129,17 @@ export function ComposeStep({
   const [triedSubmit, setTriedSubmit] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [listening, setListening] = useState(false);
+  const [warmingNotice, setWarmingNotice] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
+  useEffect(() => {
+    if (!submitting) {
+      setWarmingNotice(false);
+      return;
+    }
+    const timer = setTimeout(() => setWarmingNotice(true), 4000);
+    return () => clearTimeout(timer);
+  }, [submitting]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -592,6 +602,12 @@ export function ComposeStep({
                 Start from a template
               </Link>
             </div>
+
+            {warmingNotice ? (
+              <p role="status" aria-live="polite" className="mt-3 text-[14px] font-semibold text-paper-ink">
+                Waking up the live planner service — first connection after idle can take ~15 seconds…
+              </p>
+            ) : null}
 
             {/* Quick-start presets on perforated tear-strip */}
             <div className="perforation -mx-6 mt-6 px-6 pt-5 sm:-mx-10 sm:px-10">

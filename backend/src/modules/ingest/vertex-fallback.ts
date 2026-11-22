@@ -229,43 +229,65 @@ export async function runVertexMumbaiFallback(
   ].join('\n');
 
   // 1. Primary cloud path: GEMINI_API_KEY via generativelanguage.googleapis.com
-  const geminiApiKey =
+  const rawGeminiKey =
     options.geminiApiKey ?? process.env.GEMINI_API_KEY ?? env.GEMINI_API_KEY;
+  const geminiApiKey = rawGeminiKey
+    ?.trim()
+    .replace(/^GEMINI_API_KEY\s*=\s*/i, '')
+    .replace(/^["']+|["']+$/g, '')
+    .trim();
   if (geminiApiKey) {
     try {
-      const model =
+      const primaryModel =
         options.geminiModel ||
         process.env.GEMINI_MODEL ||
         env.GEMINI_MODEL ||
-        'gemini-2.5-flash';
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-      const res = await fetchFn(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': geminiApiKey,
-        },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: promptText }] }],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: 'application/json',
-            responseSchema: STAGE3_RESPONSE_SCHEMA,
-          },
-        }),
-        signal: AbortSignal.timeout(12_000),
-      });
+        'gemini-3.5-flash-lite';
+      const modelsToTry =
+        primaryModel === 'gemini-3.5-flash-lite'
+          ? [primaryModel]
+          : [primaryModel, 'gemini-3.5-flash-lite'];
 
-      if (res.ok) {
-        const payload = (await res.json()) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      for (const model of modelsToTry) {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+        const generationConfig: Record<string, unknown> = {
+          responseMimeType: 'application/json',
+          responseSchema: STAGE3_RESPONSE_SCHEMA,
         };
-        const rawJson = (payload.candidates?.[0]?.content?.parts ?? [])
-          .map((p) => p.text ?? '')
-          .join('');
-        if (rawJson.trim()) {
-          const cand = normalizeModelPayloadToCandidate(rawJson);
-          if (cand) return cand;
+        if (!/^gemini-(?:[3-9]|flash-latest)/i.test(model)) {
+          generationConfig.temperature = 0.1;
+        }
+        const res = await fetchFn(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': geminiApiKey,
+          },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            generationConfig,
+          }),
+          signal: AbortSignal.timeout(12_000),
+        });
+
+        if (res.ok) {
+          const payload = (await res.json()) as {
+            candidates?: Array<{
+              content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+            }>;
+          };
+          const rawJson = (payload.candidates?.[0]?.content?.parts ?? [])
+            .filter((p) => !p.thought)
+            .map((p) => p.text ?? '')
+            .join('');
+          if (rawJson.trim()) {
+            const cand = normalizeModelPayloadToCandidate(rawJson);
+            if (cand) return cand;
+          }
+          break;
+        }
+        if (res.status !== 404 && res.status !== 400) {
+          break;
         }
       }
     } catch {

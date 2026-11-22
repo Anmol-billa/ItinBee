@@ -1,7 +1,10 @@
 import zlib from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { buildApp, type BuiltAppBundle } from '../src/app.js';
 import { FakeProvider } from '../src/modules/import/llm/fake.js';
+import { GeminiProvider } from '../src/modules/import/llm/gemini.js';
+import { extractBasicModelIntent } from '../src/modules/import/stage-a-intent.js';
 import { normalizeInputs, sniffFileMagic } from '../src/modules/import/normalize.js';
 import { SafeFetcher, SsrfBlockedError } from '../src/modules/import/safe-fetch.js';
 import { classifyAndExtractDocument } from '../src/modules/ingest/classifier.js';
@@ -787,5 +790,85 @@ describe('Explore, Smart Import, Guest Auth & Account Merge', () => {
     await expect(
       fetcher.fetch('http://169.254.169.254/latest/meta-data/')
     ).rejects.toBeInstanceOf(SsrfBlockedError);
+  });
+
+  it('automatically falls back from deprecated gemini-2.5-flash 404 to gemini-3.5-flash-lite and omits deprecated temperature', async () => {
+    const calledUrls: string[] = [];
+    const calledConfigs: Array<Record<string, unknown>> = [];
+
+    const provider = new GeminiProvider({
+      apiKey: ' "GEMINI_API_KEY=test-new-ai-studio-key" ',
+      model: 'gemini-2.5-flash',
+      sleep: async () => {},
+      fetchImpl: async (input, init) => {
+        const url = String(input);
+        calledUrls.push(url);
+        const parsedBody = JSON.parse(String(init?.body ?? '{}')) as {
+          generationConfig?: Record<string, unknown>;
+        };
+        calledConfigs.push(parsedBody.generationConfig ?? {});
+
+        if (url.includes('gemini-2.5-flash')) {
+          return new Response(
+            JSON.stringify({ error: { code: 404, message: 'Model no longer available to new users' } }),
+            { status: 404, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                finishReason: 'STOP',
+                content: {
+                  parts: [
+                    { text: 'internal reasoning trace', thought: true },
+                    { text: JSON.stringify({ destination: 'Leh', days: 5 }) },
+                  ],
+                },
+              },
+            ],
+            usageMetadata: { promptTokenCount: 40, candidatesTokenCount: 12 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      },
+    });
+
+    const schema = z.object({ destination: z.string(), days: z.number().int() });
+    const first = await provider.generateStructured({
+      system: 'Extract destination.',
+      userParts: [{ text: 'Leh 5 days' }],
+      schema,
+      temperature: 0.15,
+    });
+    expect(first.data).toEqual({ destination: 'Leh', days: 5 });
+    expect(calledUrls).toEqual([
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent',
+    ]);
+    // Gemini 3.5 Flash-Lite must NOT receive deprecated `temperature`
+    expect(calledConfigs[1]?.temperature).toBeUndefined();
+
+    // Second call skips the deprecated 404 model directly via pinned activeModel
+    await provider.generateStructured({
+      system: 'Extract destination.',
+      userParts: [{ text: 'Leh 5 days' }],
+      schema,
+    });
+    expect(calledUrls[2]).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent'
+    );
+  });
+
+  it('treats round-trip "Delhi to Leh ... ending back at Delhi" as Leh destination (excluding origin Delhi)', async () => {
+    const normalized = await normalizeInputs({
+      text: 'Delhi to Leh by Train 5D, 4N trip ending back at Delhi Railway station - I want budget hotels and want relaxing activities',
+    });
+    const intent = await extractBasicModelIntent(normalized, bundle.places);
+    expect(intent.destinations.map((d) => d.name)).toEqual(['Leh']);
+    expect(intent.dates.lengthDays).toBe(5);
+    expect(intent.budget.tier).toBe('budget');
+    expect(intent.pace).toBe('relaxed');
   });
 });

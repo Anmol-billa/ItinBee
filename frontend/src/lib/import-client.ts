@@ -422,7 +422,11 @@ export async function createImportJob(body: CreateJobBody): Promise<CreateJobRes
     });
     return { jobId, status: 'queued', eventsUrl: `/v1/import/jobs/${jobId}/events` };
   }
-  await createGuestSession();
+  // In live mode, POST /v1/import/jobs atomically mints the HttpOnly guest session cookie if needed,
+  // avoiding an extra cold-start preflight round-trip. Keep explicit preflight only in mock mode.
+  if (IMPORT_MOCK) {
+    await createGuestSession();
+  }
   return request<CreateJobResponse>('/v1/import/jobs', {
     method: 'POST',
     body: JSON.stringify(body),

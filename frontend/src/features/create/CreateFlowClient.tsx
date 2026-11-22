@@ -20,6 +20,7 @@ import {
   confirmJob,
   createImportJob,
   getJob,
+  IMPORT_MOCK,
   ImportApiError,
   isLocalPreviewEnabled,
   setLocalPreviewEnabled,
@@ -97,7 +98,12 @@ export function CreateFlowClient({
   const resumedJobRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setLocalPreview(isLocalPreviewEnabled());
+    const preview = isLocalPreviewEnabled();
+    setLocalPreview(preview);
+    // Proactively wake the Render backend while the traveller composes their prompt
+    if (!IMPORT_MOCK && !preview) {
+      void fetch('/api/proxy/health', { cache: 'no-store' }).catch(() => {});
+    }
     return () => {
       stopStreamRef.current?.();
     };

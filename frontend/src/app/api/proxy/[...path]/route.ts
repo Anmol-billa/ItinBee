@@ -115,12 +115,16 @@ async function handleProxy(
   const bodyBuffer = hasBody ? await req.arrayBuffer() : undefined;
 
   let lastErr: unknown = null;
+  let lastGatewayStatus: number | null = null;
+
   for (let i = 0; i < candidateOrigins.length; i += 1) {
     const backendOrigin = candidateOrigins[i]!;
     const targetUrl = `${backendOrigin}/${path.join('/')}${req.nextUrl.search}`;
 
-    // Allow 1 brief cold-wake retry on the final candidate if connection resets during Render spin-up
-    const maxAttempts = i === candidateOrigins.length - 1 ? 2 : 1;
+    // On the final candidate, retry transient Render cold-wake / rolling-deploy 502/503/504 HTML pages
+    const isFinalCandidate = i === candidateOrigins.length - 1;
+    const maxAttempts = isFinalCandidate ? 5 : 1;
+
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const upstream = await fetch(targetUrl, {
@@ -131,8 +135,24 @@ async function handleProxy(
           signal: isEventStream ? req.signal : AbortSignal.timeout(70_000),
         });
 
+        const upstreamType = upstream.headers.get('content-type') ?? '';
+        const isTransientGatewayHtml =
+          (upstream.status === 502 || upstream.status === 503 || upstream.status === 504) &&
+          !upstreamType.toLowerCase().includes('application/json');
+
+        if (isTransientGatewayHtml) {
+          lastGatewayStatus = upstream.status;
+          // Drain body before retrying or trying next candidate origin
+          await upstream.arrayBuffer().catch(() => {});
+          if (attempt < maxAttempts) {
+            await new Promise((r) => setTimeout(r, attempt * 2000));
+            continue;
+          }
+          // Try next candidate origin if available
+          break;
+        }
+
         const respHeaders = new Headers();
-        const upstreamType = upstream.headers.get('content-type');
         if (upstreamType) respHeaders.set('content-type', upstreamType);
         const contentDisposition = upstream.headers.get('content-disposition');
         if (contentDisposition) respHeaders.set('content-disposition', contentDisposition);
@@ -147,7 +167,7 @@ async function handleProxy(
           respHeaders.append('set-cookie', rewriteSetCookieForFirstParty(c));
         }
 
-        if (upstreamType?.includes('text/event-stream') && upstream.body) {
+        if (upstreamType.includes('text/event-stream') && upstream.body) {
           respHeaders.set('cache-control', 'no-cache, no-transform');
           respHeaders.set('x-accel-buffering', 'no');
           return new Response(upstream.body, {
@@ -164,7 +184,7 @@ async function handleProxy(
       } catch (err) {
         lastErr = err;
         if (attempt < maxAttempts) {
-          await new Promise((r) => setTimeout(r, 1500));
+          await new Promise((r) => setTimeout(r, attempt * 2000));
         }
       }
     }
@@ -178,13 +198,16 @@ async function handleProxy(
     typeof lastErr.cause === 'object' &&
     'code' in lastErr.cause
       ? String((lastErr.cause as { code?: unknown }).code)
-      : undefined;
+      : lastGatewayStatus
+        ? `upstream_${lastGatewayStatus}`
+        : undefined;
 
   return NextResponse.json(
     {
       code: 'backend_unreachable',
-      error:
-        'Could not connect to the Itinbee API service (it may be waking from sleep or finishing a deploy). Wait 10–20 seconds and click Retry connection.',
+      error: 'backend_unreachable',
+      message:
+        'The Itinbee API service is finishing a deploy or waking from idle on Render. Wait 10–15 seconds and click Retry connection.',
       ...(causeCode ? { detail: causeCode } : {}),
     },
     { status: 502 }
