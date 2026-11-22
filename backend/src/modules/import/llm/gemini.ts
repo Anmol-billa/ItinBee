@@ -104,7 +104,7 @@ export class GeminiProvider implements LlmProvider {
   async generateStructured<T>(args: GenerateStructuredArgs<T>): Promise<GenerateStructuredResult<T>> {
     const responseSchema = args.responseSchema ?? toGeminiSchema(args.schema);
     const contents: GeminiContent[] = [{ role: 'user', parts: args.userParts }];
-    const maxRepairs = this.options.maxRepairs ?? 2;
+    const maxRepairs = this.options.maxRepairs ?? 1;
     let lastIssue = '';
     let promptTokens = 0;
     let outputTokens = 0;
@@ -157,7 +157,7 @@ export class GeminiProvider implements LlmProvider {
     temperature: number;
     maxOutputTokens: number;
   }): Promise<{ text: string; usage?: GeminiResponse['usageMetadata'] }> {
-    const attempts = this.options.maxHttpAttempts ?? 4;
+    const attempts = this.options.maxHttpAttempts ?? 2;
     const base = (this.options.baseUrl ?? DEFAULT_BASE).replace(/\/$/, '');
     const models = this.candidateModels();
 
@@ -186,7 +186,7 @@ export class GeminiProvider implements LlmProvider {
 
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 45_000);
+        const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 25_000);
         let res: Response;
         try {
           res = await this.fetchImpl(url, {

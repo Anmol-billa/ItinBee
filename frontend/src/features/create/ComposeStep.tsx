@@ -101,9 +101,6 @@ interface ComposeStepProps {
   submitting: boolean;
   error: FlowError | null;
   onClearError: () => void;
-  localPreview: boolean;
-  onSwitchToLocalPreview: () => void;
-  onDisableLocalPreview: () => void;
   focusAttachOnMount?: boolean;
 }
 
@@ -114,9 +111,6 @@ export function ComposeStep({
   submitting,
   error,
   onClearError,
-  localPreview,
-  onSwitchToLocalPreview,
-  onDisableLocalPreview,
   focusAttachOnMount = false,
 }: ComposeStepProps) {
   const formId = useId();
@@ -308,21 +302,6 @@ export function ComposeStep({
             Type a sentence, paste a messy WhatsApp group chat in English, Hinglish or Hindi, drop a blog or Reel link,
             or attach an IRCTC, flight or bus ticket.
           </p>
-
-          {localPreview ? (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border-[1.5px] border-navy/40 bg-[#efe0be] px-4 py-2.5 text-[14px] text-navy">
-              <span className="font-semibold">
-                Offline preview mode active — using local deterministic parser while the backend server is offline.
-              </span>
-              <button
-                type="button"
-                onClick={onDisableLocalPreview}
-                className="min-h-[36px] font-bold text-vermilion-ink underline underline-offset-2"
-              >
-                Reconnect to live server
-              </button>
-            </div>
-          ) : null}
 
           {baseLabel ? (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border-[1.5px] border-navy/35 bg-[#efe0be] px-3.5 py-2 text-[14px] text-navy">
@@ -565,19 +544,10 @@ export function ComposeStep({
                 <div className="mt-3 flex flex-wrap gap-2.5">
                   <button
                     type="submit"
-                    className="btn-line min-h-[44px] px-4 py-2 text-[14px] text-navy"
+                    className="btn-stamp min-h-[44px] px-4 py-2 text-[14px]"
                   >
-                    Retry connection
+                    Try again
                   </button>
-                  {error.kind === 'network' ? (
-                    <button
-                      type="button"
-                      onClick={onSwitchToLocalPreview}
-                      className="btn-stamp min-h-[44px] px-4 py-2 text-[14px]"
-                    >
-                      Continue in offline preview mode
-                    </button>
-                  ) : null}
                   <Link href="/create/manual" className="btn-line min-h-[44px] px-4 py-2 text-[14px] text-navy">
                     Build manually
                   </Link>
@@ -605,7 +575,7 @@ export function ComposeStep({
 
             {warmingNotice ? (
               <p role="status" aria-live="polite" className="mt-3 text-[14px] font-semibold text-paper-ink">
-                Waking up the live planner service — first connection after idle can take ~15 seconds…
+                Reading your trip details and preparing your itinerary workspace…
               </p>
             ) : null}
 

@@ -85,7 +85,6 @@ interface ReviewStepProps {
 
 export function ReviewStep({
   intent,
-  mode,
   notice,
   error,
   submitting,
@@ -142,12 +141,6 @@ export function ReviewStep({
           Review the plan brief before we build your day-by-day route. Every inferred detail is marked{' '}
           <strong>Assumed</strong> so you stay in control.
         </p>
-
-        {mode === 'basic' ? (
-          <p className="mt-4 rounded-lg border-[1.5px] border-navy/45 bg-[#efe0be] px-4 py-3 text-[15px] font-semibold text-navy">
-            Building in Basic mode — deterministic parser + open map places.
-          </p>
-        ) : null}
 
         {notice ? (
           <p

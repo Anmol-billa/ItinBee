@@ -52,7 +52,6 @@ export function BuildingStep({
   days,
   intent,
   tripId,
-  mode,
   connection,
   error,
   onStop,
@@ -157,12 +156,6 @@ export function BuildingStep({
               ? 'Opening your trip editor now. Use the button below if your browser does not redirect automatically.'
               : 'Clustering stops geographically, checking travel times, and slotting meals and rest buffers.'}
           </p>
-
-          {mode === 'basic' ? (
-            <p className="mt-3 rounded-lg border-[1.5px] border-navy/40 bg-[#efe0be] px-3.5 py-2 text-[14px] font-semibold text-navy">
-              Basic mode — deterministic route from open map places.
-            </p>
-          ) : null}
 
           {connection !== 'live' && !tripId && !error ? (
             <p className="mt-2 text-[13px] font-semibold text-paper-ink">

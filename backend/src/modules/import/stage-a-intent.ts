@@ -16,6 +16,7 @@ import {
   modelExtractedBookingToCandidate,
   ModelIntentSchema,
   modelIntentGeminiSchema,
+  modelIntentVisionGeminiSchema,
   modelIntentToTripIntent,
   TripIntentSchema,
   type ModelIntent,
@@ -63,10 +64,10 @@ const STAGE_A_SYSTEM_PROMPT = [
   '2. WhatsApp / group chats (`kind="chat"`): Messages are chronological. LAST DECISION WINS — if earlier messages suggest Goa or Shimla and later messages cancel it or agree on Udaipur/Manali, extract ONLY the final agreed destination(s) and put explicitly rejected places in `avoid`. Ignore greetings, jokes, and off-topic chatter.',
   '3. Origin vs Destination: Do NOT include the traveller departure/return home city (e.g. "from Delhi", "ex-Bengaluru", "flying out of Mumbai", or "<HomeCity> to <Dest> ... ending back at <HomeCity>") in `destinations` unless they explicitly plan sightseeing days there. If the requested transport mode does not directly reach the destination (e.g. train to Leh/Ladakh where nearest railheads are Jammu Tawi / Pathankot / Chandigarh), note the practical railhead + road/flight transfer in `assumptions`.',
   '4. Confirmed Bookings: Align dates and destinations with any deterministic booking anchors supplied in context.',
-  '5. Geography: Return real city/region/country names in `destinations`. Never invent fictional places.',
-  '6. `mustInclude`: Include specific named attractions, temples, beaches, cafes, or restaurants mentioned in USER_DATA, with a short verbatim `sourceQuote` from USER_DATA. Never emit duplicate entries for the same place.',
-  '7. `diet`: Use canonical labels (`Vegetarian`, `Jain`, `Vegan`, `Halal`, `Gluten-free`) when dietary needs are mentioned.',
-  '8. `extractedBookings`: When an attached screenshot/image or scanned PDF shows a flight, train, bus, or hotel confirmation/ticket, populate `extractedBookings` with all visible fields (masking any 12-digit Aadhaar IDs as `XXXX-XXXX-last4`). Leave null/empty if no new visual ticket is attached.',
+  '5. Template Customisation: If USER_DATA begins with `Based on "<Template>", but ...` and names a new destination (e.g. Leh instead of South Goa), use ONLY the new destination(s) requested by the traveller rather than keeping the old template city.',
+  '6. Geography: Return real city/region/country names in `destinations`. Never invent fictional places.',
+  '7. `mustInclude`: Include specific named attractions, temples, beaches, cafes, or restaurants mentioned in USER_DATA, with a short verbatim `sourceQuote` from USER_DATA. Never emit duplicate entries for the same place.',
+  '8. `diet`: Use canonical labels (`Vegetarian`, `Jain`, `Vegan`, `Halal`, `Gluten-free`) when dietary needs are mentioned.',
   '9. `assumptions`: Add one concise plain-English note for EVERY value you inferred rather than read explicitly.',
   '10. `clarifyingQuestions`: Ask at most 3 high-impact questions (0 if destination, approximate dates/length, and group are already clear).',
 ].join('\n');
@@ -330,7 +331,8 @@ export async function extractBasicModelIntent(
   baseTemplate?: BaseTemplateContext | null
 ): Promise<ModelIntent> {
   const { sanitized } = stripPromptInjectionLines(normalized.corpus);
-  const text = sanitized;
+  // Strip prefilled `Based on "<Template>", but ` wrapper so an overridden template title doesn't pollute new destinations
+  const text = sanitized.replace(/^Based\s+on\s+["“][^"”]{1,120}["”]\s*,?\s*(?:but\s+)?/i, '');
   const lines = text.split('\n').filter((l) => l.trim().length > 0);
   const allDests = await places.repo.listDestinations({});
 
@@ -1028,12 +1030,19 @@ export async function extractTripIntent(
       });
     }
 
+    const hasVisualMedia = normalized.media.length > 0;
+    const systemPrompt = hasVisualMedia
+      ? `${STAGE_A_SYSTEM_PROMPT}\n11. \`extractedBookings\`: Populate structured ticket fields read from attached screenshots/scanned PDFs (masking any 12-digit Aadhaar IDs as \`XXXX-XXXX-last4\`), or \`[]\` if none.`
+      : STAGE_A_SYSTEM_PROMPT;
+
     try {
       const res = await deps.llm.generateStructured({
-        system: STAGE_A_SYSTEM_PROMPT,
+        system: systemPrompt,
         userParts,
         schema: ModelIntentSchema,
-        responseSchema: modelIntentGeminiSchema,
+        responseSchema: hasVisualMedia
+          ? modelIntentVisionGeminiSchema
+          : modelIntentGeminiSchema,
         temperature: 0.15,
         label: 'intent',
         fakeContext: { normalized, baseTemplate: deps.baseTemplate },
@@ -1043,9 +1052,7 @@ export async function extractTripIntent(
     } catch (err) {
       mode = 'basic';
       if (err instanceof LlmError && err.reason !== 'no_api_key') {
-        extraAssumptions.push(
-          'AI extraction was unavailable; extracted trip details using deterministic Basic mode.'
-        );
+        console.warn(`[itinbee:import] Stage A fell back to deterministic mode (${err.reason}): ${err.message}`);
       }
     }
   }

@@ -92,90 +92,101 @@ export type TripIntent = z.infer<typeof TripIntentSchema>;
 
 export const ModelExtractedBookingSchema = z.object({
   itemKind: z.enum(['stay', 'transit', 'activity', 'meal']),
-  title: z.string().max(160),
-  provider: z.string().max(40).nullable(),
-  pnr: z.string().max(40).nullable(),
-  vehicleNumber: z.string().max(40).nullable(),
-  originName: z.string().max(120).nullable(),
-  destinationName: z.string().max(120).nullable(),
-  startIso: z.string().max(40).nullable(),
-  endIso: z.string().max(40).nullable(),
-  coach: z.string().max(40).nullable(),
-  seatOrBerth: z.string().max(60).nullable(),
-  passengerNames: z.array(z.string().max(80)).max(12).nullable(),
+  title: z.string(),
+  provider: z.string().nullable(),
+  pnr: z.string().nullable(),
+  vehicleNumber: z.string().nullable(),
+  originName: z.string().nullable(),
+  destinationName: z.string().nullable(),
+  startIso: z.string().nullable(),
+  endIso: z.string().nullable(),
+  coach: z.string().nullable(),
+  seatOrBerth: z.string().nullable(),
+  passengerNames: z.array(z.string()).max(12).nullable(),
 });
 export type ModelExtractedBooking = z.infer<typeof ModelExtractedBookingSchema>;
 
-/**
- * What we ask the model for in Stage A. Deliberately has NO coordinates, NO slugs, and NO `resolved` flags
- * (those come from grounding). `extractedBookings` captures tickets/vouchers read from attached images or scanned PDFs.
- */
-export const ModelIntentSchema = z.object({
-  title: z.string().max(140).describe('Short trip title, e.g. "Jaipur & Udaipur long weekend".'),
+const ModelIntentBaseFields = {
+  title: z.string().describe('Short trip title, e.g. "Leh & Nubra Valley (5 Days)".'),
   destinations: z
     .array(
       z.object({
-        name: z.string().max(120).describe('Place name exactly as a traveller would type it (city, region or country).'),
-        country: z.string().max(80).nullable().describe('Country name if stated or obvious, else null.'),
-        nights: z.number().int().min(0).max(60).nullable().describe('Nights spent here if stated, else null.'),
+        name: z.string().describe('Place name as a traveller would type it (city, region or country).'),
+        country: z.string().nullable().describe('Country name if stated or obvious, else null.'),
+        nights: z.number().int().nullable().describe('Nights spent here if stated, else null.'),
         order: z.number().int().describe('1-based visiting order.'),
-        confidence: z.number().min(0).max(1).describe('0..1 confidence that this is a real destination the user wants.'),
+        confidence: z.number().describe('0..1 confidence that this is a sightseeing destination.'),
       })
     )
     .max(12),
   dates: z.object({
-    start: IsoDate.nullable().describe('YYYY-MM-DD, only if the input states or clearly implies it.'),
-    end: IsoDate.nullable().describe('YYYY-MM-DD'),
-    lengthDays: z.number().int().min(1).max(60).nullable(),
-    flexibleMonth: z.number().int().min(1).max(12).nullable().describe('Month number if only a month is known.'),
+    start: z.string().nullable().describe('YYYY-MM-DD if stated, else null.'),
+    end: z.string().nullable().describe('YYYY-MM-DD if stated, else null.'),
+    lengthDays: z.number().int().nullable(),
+    flexibleMonth: z.number().int().nullable().describe('1..12 month number if only a month is known, else null.'),
   }),
   travellers: z.object({
-    count: z.number().int().min(1).max(100).nullable(),
+    count: z.number().int().nullable(),
     group: z.enum(GROUPS).nullable(),
     hasChildren: z.boolean().nullable(),
     hasSeniors: z.boolean().nullable(),
   }),
   budget: z.object({
-    amount: z.number().nonnegative().nullable(),
-    currency: z.string().max(8).nullable().describe('ISO code such as INR, USD.'),
+    amount: z.number().nullable(),
+    currency: z.string().nullable().describe('ISO code such as INR, USD, else null.'),
     tier: z.enum(BUDGET_TIERS).nullable(),
   }),
-  interests: z.array(z.string().max(60)).max(20).describe('e.g. food, heritage, trekking, nightlife, beaches.'),
+  interests: z.array(z.string()).max(20).describe('e.g. food, heritage, trekking, cafes, beaches.'),
   pace: z.enum(PACES).nullable(),
-  diet: z.array(z.string().max(40)).max(10).describe('e.g. Vegetarian, Jain, Vegan, Halal, Gluten-free.'),
+  diet: z.array(z.string()).max(10).describe('e.g. Vegetarian, Jain, Vegan, Halal, Gluten-free.'),
   mustInclude: z
     .array(
       z.object({
-        name: z.string().max(160).describe('Specific named place/attraction/restaurant the user wants to visit.'),
-        sourceQuote: z.string().max(400).describe('Short VERBATIM excerpt from the input that mentions it.'),
+        name: z.string().describe('Specific named place/attraction/restaurant the user wants to visit.'),
+        sourceQuote: z.string().describe('Short VERBATIM excerpt from the input that mentions it.'),
       })
     )
-    .max(40),
-  avoid: z.array(z.string().max(120)).max(20),
-  extractedBookings: z
-    .array(ModelExtractedBookingSchema)
-    .max(20)
-    .nullable()
-    .optional()
-    .describe('Structured tickets/bookings read from attached screenshots or scanned PDFs (null if none).'),
+    .max(30),
+  avoid: z.array(z.string()).max(20),
   assumptions: z
-    .array(z.string().max(300))
-    .max(30)
-    .describe('One short sentence for EVERY value you inferred rather than read from the input.'),
+    .array(z.string())
+    .max(20)
+    .describe('Concise plain-English notes for values inferred from the input.'),
   clarifyingQuestions: z
     .array(
       z.object({
-        id: z.string().max(40),
-        question: z.string().max(300),
-        options: z.array(z.string().max(80)).max(6).nullable(),
+        id: z.string(),
+        question: z.string(),
+        options: z.array(z.string()).max(6).nullable(),
       })
     )
     .max(3)
-    .describe('At most 3, only questions whose answer would change the plan.'),
+    .describe('At most 3 high-impact questions.'),
+};
+
+/** Lean Stage-A schema used when no images/scanned PDFs are attached (fast grammar compilation). */
+export const ModelIntentTextOnlySchema = z.object(ModelIntentBaseFields);
+
+/** Vision Stage-A schema used when ticket screenshots or scanned PDFs are attached (all properties required). */
+export const ModelIntentVisionOnlySchema = z.object({
+  ...ModelIntentBaseFields,
+  extractedBookings: z
+    .array(ModelExtractedBookingSchema)
+    .max(12)
+    .describe('Structured tickets/bookings read from attached screenshots or scanned PDFs ([] if none).'),
+});
+
+/**
+ * Unified Zod parser for Stage A outputs (accepts both text-only and vision responses).
+ */
+export const ModelIntentSchema = z.object({
+  ...ModelIntentBaseFields,
+  extractedBookings: z.array(ModelExtractedBookingSchema).max(20).nullable().optional(),
 });
 export type ModelIntent = z.infer<typeof ModelIntentSchema>;
 
-export const modelIntentGeminiSchema = toGeminiSchema(ModelIntentSchema);
+export const modelIntentGeminiSchema = toGeminiSchema(ModelIntentTextOnlySchema);
+export const modelIntentVisionGeminiSchema = toGeminiSchema(ModelIntentVisionOnlySchema);
 
 /** Strips markup and control characters from model-written free text, redacts Aadhaar, and caps length. */
 export function cleanText(input: string, max = 300): string {
@@ -359,6 +370,24 @@ export function modelExtractedBookingToCandidate(
   };
 }
 
+function normalizeIsoDateOrNull(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(trimmed);
+  return m ? m[1]! : null;
+}
+
+function clampNullableInt(
+  raw: number | null | undefined,
+  min: number,
+  max: number
+): number | null {
+  if (raw === null || raw === undefined || !Number.isFinite(raw)) return null;
+  const rounded = Math.round(raw);
+  if (rounded < min) return null;
+  return Math.min(max, rounded);
+}
+
 /** Maps the model's nullable output to the contract's TripIntent shape (grounding fields start unresolved). */
 export function modelIntentToTripIntent(
   m: ModelIntent,
@@ -366,14 +395,20 @@ export function modelIntentToTripIntent(
 ): Omit<TripIntent, 'destinations'> & { destinations: IntentDestination[] } {
   const dests = [...m.destinations]
     .sort((a, b) => a.order - b.order)
-    .map((d, i) => ({
-      name: cleanText(d.name, 120),
-      ...(d.country ? { country: cleanText(d.country, 80) } : {}),
-      ...(d.nights !== null && d.nights !== undefined ? { nights: d.nights } : {}),
-      order: i + 1,
-      confidence: d.confidence,
-      resolved: false,
-    }))
+    .map((d, i) => {
+      const nights = clampNullableInt(d.nights, 0, 60);
+      const conf = Number.isFinite(d.confidence)
+        ? Math.max(0, Math.min(1, d.confidence))
+        : 0.85;
+      return {
+        name: cleanText(d.name, 120),
+        ...(d.country && cleanText(d.country, 80) ? { country: cleanText(d.country, 80) } : {}),
+        ...(nights !== null ? { nights } : {}),
+        order: i + 1,
+        confidence: conf,
+        resolved: false,
+      };
+    })
     .filter((d) => d.name.length > 0);
   const rawMust = m.mustInclude
     .map((p) => ({
@@ -383,24 +418,54 @@ export function modelIntentToTripIntent(
     }))
     .filter((p) => p.name.length > 0);
 
+  const normStart = normalizeIsoDateOrNull(m.dates.start);
+  const normEnd = normalizeIsoDateOrNull(m.dates.end);
+  const normCurrency = m.budget.currency ? cleanText(m.budget.currency, 8).toUpperCase() || null : null;
+  const normAmount =
+    m.budget.amount !== null && Number.isFinite(m.budget.amount) && m.budget.amount > 0
+      ? m.budget.amount
+      : null;
+
   return {
     title: cleanText(m.title, 140) || 'My trip',
     destinations: dests,
-    dates: { ...m.dates },
-    travellers: { ...m.travellers },
-    budget: { ...m.budget },
-    interests: dedupe(m.interests.map((s) => cleanText(s, 60)).filter(Boolean)),
+    dates: {
+      start: normStart,
+      end: normEnd && (!normStart || normEnd >= normStart) ? normEnd : null,
+      lengthDays: clampNullableInt(m.dates.lengthDays, 1, 60),
+      flexibleMonth: clampNullableInt(m.dates.flexibleMonth, 1, 12),
+    },
+    travellers: {
+      count: clampNullableInt(m.travellers.count, 1, 100),
+      group: m.travellers.group,
+      hasChildren: m.travellers.hasChildren,
+      hasSeniors: m.travellers.hasSeniors,
+    },
+    budget: {
+      amount: normAmount,
+      currency: normCurrency,
+      tier: m.budget.tier,
+    },
+    interests: dedupe(m.interests.map((s) => cleanText(s, 60)).filter(Boolean)).slice(0, 20),
     pace: m.pace,
     diet: canonicalizeDiet(m.diet),
     mustInclude: dedupeMustInclude(rawMust).slice(0, 40),
-    avoid: dedupe(m.avoid.map((s) => cleanText(s, 120)).filter(Boolean)),
+    avoid: dedupe(m.avoid.map((s) => cleanText(s, 120)).filter(Boolean)).slice(0, 20),
     bookings: extras.bookings ?? [],
-    assumptions: [...m.assumptions.map((s) => cleanText(s, 300)).filter(Boolean), ...(extras.extraAssumptions ?? [])],
-    clarifyingQuestions: m.clarifyingQuestions.slice(0, 3).map((q) => ({
-      id: cleanText(q.id, 40) || 'q',
-      question: cleanText(q.question, 300),
-      ...(q.options && q.options.length > 0 ? { options: q.options.map((o) => cleanText(o, 80)) } : {}),
-    })),
+    assumptions: [
+      ...m.assumptions.map((s) => cleanText(s, 300)).filter(Boolean),
+      ...(extras.extraAssumptions ?? []).map((s) => cleanText(s, 300)).filter(Boolean),
+    ].slice(0, 30),
+    clarifyingQuestions: m.clarifyingQuestions
+      .map((q) => ({
+        id: cleanText(q.id, 40) || 'q',
+        question: cleanText(q.question, 300),
+        ...(q.options && q.options.length > 0
+          ? { options: q.options.map((o) => cleanText(o, 80)).filter(Boolean).slice(0, 6) }
+          : {}),
+      }))
+      .filter((q) => q.question.length > 0)
+      .slice(0, 3),
   };
 }
 

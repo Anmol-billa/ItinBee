@@ -23,7 +23,6 @@ import {
   IMPORT_MOCK,
   ImportApiError,
   isLocalPreviewEnabled,
-  setLocalPreviewEnabled,
   streamJob,
   type ConfirmBody,
   type CreateJobBody,
@@ -37,6 +36,16 @@ const STEPS: Array<{ id: Step; label: string }> = [
   { id: 'building', label: 'Build' },
 ];
 
+function sanitizeProductionErrorMessage(raw: string | undefined): string {
+  if (!raw) {
+    return "We couldn't connect right now. Please check your connection and try again.";
+  }
+  if (/render|backend|api service|fetch failed|waking|redeploy|http_5\d\d/i.test(raw)) {
+    return "We couldn't start your trip plan just now. Please try again in a moment.";
+  }
+  return raw;
+}
+
 function toFlowError(err: unknown): FlowError {
   if (err instanceof ImportApiError) {
     if (
@@ -45,15 +54,13 @@ function toFlowError(err: unknown): FlowError {
       err.status === 503 ||
       err.status === 504 ||
       err.code === 'network' ||
-      err.code === 'backend_unreachable'
+      err.code === 'backend_unreachable' ||
+      err.code === 'service_unavailable'
     ) {
       return {
         kind: 'network',
         code: err.code || 'network',
-        message:
-          err.message && err.message !== 'fetch failed'
-            ? err.message
-            : 'Could not reach the Itinbee backend service (it may be waking up or redeploying). Wait a few seconds and click Retry connection.',
+        message: sanitizeProductionErrorMessage(err.message),
       };
     }
     if (err.status === 429 || err.code === 'quota_exceeded') {
@@ -65,11 +72,11 @@ function toFlowError(err: unknown): FlowError {
     if (err.status === 404 || err.code === 'not_found') {
       return { kind: 'expired', code: 'not_found', message: 'This trip request has expired. Start a fresh one below.' };
     }
-    return errorFromEvent(err.code, err.message, err.resetAt);
+    return errorFromEvent(err.code, sanitizeProductionErrorMessage(err.message), err.resetAt);
   }
   return {
     kind: 'failed',
-    message: err instanceof Error ? err.message : 'Something went wrong. Please try again.',
+    message: sanitizeProductionErrorMessage(err instanceof Error ? err.message : undefined),
   };
 }
 
@@ -93,14 +100,11 @@ export function CreateFlowClient({
     files: [],
     baseTripSlug: initialBaseSlug,
   });
-  const [localPreview, setLocalPreview] = useState(false);
   const stopStreamRef = useRef<(() => void) | null>(null);
   const resumedJobRef = useRef<string | null>(null);
 
   useEffect(() => {
     const preview = isLocalPreviewEnabled();
-    setLocalPreview(preview);
-    // Proactively wake the Render backend while the traveller composes their prompt
     if (!IMPORT_MOCK && !preview) {
       void fetch('/api/proxy/health', { cache: 'no-store' }).catch(() => {});
     }
@@ -175,45 +179,37 @@ export function CreateFlowClient({
     };
   }, [initialJobId, openUnderstandingStream, openBuildingStream]);
 
-  const startImportWithMode = useCallback(
-    async (forceLocalPreview = false) => {
-      if (forceLocalPreview) {
-        setLocalPreviewEnabled(true);
-        setLocalPreview(true);
+  const startImport = useCallback(async () => {
+    dispatch({ type: 'submitting' });
+    try {
+      const urls = extractUrls(draft.text);
+      const filesPayload: ImportFilePayload[] = await Promise.all(
+        draft.files.map(async (item) => ({
+          name: item.file.name,
+          mimeType: item.file.type || 'application/octet-stream',
+          dataBase64: await toBase64(item.file),
+        }))
+      );
+
+      const body: CreateJobBody = {
+        ...(draft.text.trim() && !isUrlsOnly(draft.text) ? { text: draft.text.trim() } : {}),
+        ...(urls.length > 0 ? { urls } : {}),
+        ...(filesPayload.length > 0 ? { files: filesPayload } : {}),
+        ...(draft.baseTripSlug ? { baseTripSlug: draft.baseTripSlug } : {}),
+        locale: 'en',
+      };
+      if (!body.text && !body.urls && !body.files && draft.text.trim()) {
+        body.text = draft.text.trim();
       }
 
-      dispatch({ type: 'submitting' });
-      try {
-        const urls = extractUrls(draft.text);
-        const filesPayload: ImportFilePayload[] = await Promise.all(
-          draft.files.map(async (item) => ({
-            name: item.file.name,
-            mimeType: item.file.type || 'application/octet-stream',
-            dataBase64: await toBase64(item.file),
-          }))
-        );
-
-        const body: CreateJobBody = {
-          ...(draft.text.trim() && !isUrlsOnly(draft.text) ? { text: draft.text.trim() } : {}),
-          ...(urls.length > 0 ? { urls } : {}),
-          ...(filesPayload.length > 0 ? { files: filesPayload } : {}),
-          ...(draft.baseTripSlug ? { baseTripSlug: draft.baseTripSlug } : {}),
-          locale: 'en',
-        };
-        if (!body.text && !body.urls && !body.files && draft.text.trim()) {
-          body.text = draft.text.trim();
-        }
-
-        const res = await createImportJob(body);
-        dispatch({ type: 'submitted', jobId: res.jobId });
-        syncJobInUrl(res.jobId);
-        openUnderstandingStream(res.jobId);
-      } catch (err) {
-        dispatch({ type: 'error', error: toFlowError(err) });
-      }
-    },
-    [draft, openUnderstandingStream, syncJobInUrl]
-  );
+      const res = await createImportJob(body);
+      dispatch({ type: 'submitted', jobId: res.jobId });
+      syncJobInUrl(res.jobId);
+      openUnderstandingStream(res.jobId);
+    } catch (err) {
+      dispatch({ type: 'error', error: toFlowError(err) });
+    }
+  }, [draft, openUnderstandingStream, syncJobInUrl]);
 
   const handleConfirm = useCallback(
     async (payload: ConfirmBody) => {
@@ -303,30 +299,22 @@ export function CreateFlowClient({
           <ComposeStep
             draft={draft}
             onDraftChange={setDraft}
-            onSubmit={() => void startImportWithMode(false)}
+            onSubmit={() => void startImport()}
             submitting={state.submitting}
             error={state.error}
             onClearError={() => dispatch({ type: 'clearError' })}
-            localPreview={localPreview}
-            onSwitchToLocalPreview={() => void startImportWithMode(true)}
-            onDisableLocalPreview={() => {
-              setLocalPreviewEnabled(false);
-              setLocalPreview(false);
-            }}
             focusAttachOnMount={initialAttach}
           />
         ) : null}
 
         {state.step === 'understanding' ? (
           <UnderstandingStep
-            mode={state.mode}
             connection={state.connection}
             lines={state.lines}
             detected={state.detected}
             error={state.error}
             onBackToEdit={handleBackToCompose}
-            onRetry={() => void startImportWithMode(false)}
-            onSwitchToLocalPreview={() => void startImportWithMode(true)}
+            onRetry={() => void startImport()}
           />
         ) : null}
 

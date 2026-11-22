@@ -20,17 +20,15 @@ import type {
   FlowError,
   FlowLine,
 } from '@/features/create/flow-reducer';
-import type { ConnectionState, DetectedKind, JobMode } from '@/lib/import-types';
+import type { ConnectionState, DetectedKind } from '@/lib/import-types';
 
 interface UnderstandingStepProps {
-  mode: JobMode;
   connection: ConnectionState;
   lines: FlowLine[];
   detected: FlowDetected[];
   error: FlowError | null;
   onBackToEdit: () => void;
   onRetry: () => void;
-  onSwitchToLocalPreview: () => void;
 }
 
 function DetectedIcon({ kind }: { kind: DetectedKind }) {
@@ -53,14 +51,12 @@ function DetectedIcon({ kind }: { kind: DetectedKind }) {
 }
 
 export function UnderstandingStep({
-  mode,
   connection,
   lines,
   detected,
   error,
   onBackToEdit,
   onRetry,
-  onSwitchToLocalPreview,
 }: UnderstandingStepProps) {
   return (
     <div className="mx-auto max-w-[760px] px-5 pb-16 pt-6 md:px-8">
@@ -84,15 +80,6 @@ export function UnderstandingStep({
         <p className="mt-2 max-w-[62ch] text-[17px] text-paper-ink">
           Matching your destinations on the open map, checking any attached tickets, and preparing a reviewable plan.
         </p>
-
-        {mode === 'basic' ? (
-          <p
-            role="status"
-            className="mt-4 rounded-lg border-[1.5px] border-navy/45 bg-[#efe0be] px-4 py-3 text-[15px] font-semibold text-navy"
-          >
-            Building in Basic mode — deterministic parser + open map places.
-          </p>
-        ) : null}
 
         {/* Live progress stream */}
         <ol
@@ -168,15 +155,6 @@ export function UnderstandingStep({
                 <button type="button" onClick={onRetry} className="btn-stamp">
                   Try again
                 </button>
-                {error.kind === 'network' ? (
-                  <button
-                    type="button"
-                    onClick={onSwitchToLocalPreview}
-                    className="btn-line text-navy"
-                  >
-                    Continue in offline preview mode
-                  </button>
-                ) : null}
                 <button type="button" onClick={onBackToEdit} className="btn-line text-navy">
                   Edit my input
                 </button>

@@ -861,9 +861,9 @@ describe('Explore, Smart Import, Guest Auth & Account Merge', () => {
     );
   });
 
-  it('treats round-trip "Delhi to Leh ... ending back at Delhi" as Leh destination (excluding origin Delhi)', async () => {
+  it('treats round-trip "Delhi to Leh ... ending back at Delhi" (even with Based on template prefix) as Leh destination', async () => {
     const normalized = await normalizeInputs({
-      text: 'Delhi to Leh by Train 5D, 4N trip ending back at Delhi Railway station - I want budget hotels and want relaxing activities',
+      text: 'Based on "South Goa Monsoon Crew", but Delhi to Leh by Train 5D, 4N trip ending back at Delhi Railway station - I want budget hotels and want relaxing activities',
     });
     const intent = await extractBasicModelIntent(normalized, bundle.places);
     expect(intent.destinations.map((d) => d.name)).toEqual(['Leh']);

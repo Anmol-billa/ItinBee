@@ -130,14 +130,14 @@ export async function runSqlMigrations(
 
     const entries = await fs.readdir(migrationsDir);
     const sqlFiles = entries.filter((f) => f.endsWith('.sql')).sort();
+    const appliedRes = await pool.query<{ filename: string }>(
+      'SELECT filename FROM schema_migrations'
+    );
+    const alreadyApplied = new Set(appliedRes.rows.map((r) => r.filename));
     const applied: string[] = [];
 
     for (const file of sqlFiles) {
-      const check = await pool.query(
-        'SELECT 1 FROM schema_migrations WHERE filename = $1',
-        [file]
-      );
-      if (check.rowCount && check.rowCount > 0) {
+      if (alreadyApplied.has(file)) {
         continue;
       }
 
@@ -176,6 +176,15 @@ export async function ensureSeedDataInPostgres(
   });
   try {
     const seed = buildPreSeededSampleDataset();
+    // Fast-path: if all pre-seeded sample trips already exist, skip KMS encryption & multi-query transaction (~10ms vs ~3s)
+    const fastCheck = await pool.query<{ cnt: number }>(
+      'SELECT COUNT(*)::int AS cnt FROM trips WHERE id = ANY($1::uuid[])',
+      [seed.trips.map((t) => t.id)]
+    );
+    if ((fastCheck.rows[0]?.cnt ?? 0) >= seed.trips.length) {
+      return;
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');

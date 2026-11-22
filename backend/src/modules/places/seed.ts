@@ -213,6 +213,24 @@ export async function seedCuratedPlaces(
 }
 
 export async function seedPlacesData(repo: PlacesRepository): Promise<{ destinations: number; curated: number }> {
+  // Fast-path for warm PostgreSQL startups: avoid 600+ sequential PostGIS ON CONFLICT DO UPDATE queries on every boot
+  if (repo.kind === 'postgres') {
+    const seeds = loadDestinationSeeds();
+    const existingDests = await repo.listDestinations({});
+    if (existingDests.length >= seeds.length) {
+      const sentinel = existingDests.find((d) => d.slug === 'leh') ?? existingDests[0];
+      if (sentinel) {
+        const checkPlaces = await repo.queryPlaces({
+          destinationIds: [sentinel.id],
+          limit: 1,
+          offset: 0,
+        });
+        if (checkPlaces.rows.length > 0) {
+          return { destinations: 0, curated: 0 };
+        }
+      }
+    }
+  }
   const destinations = await seedDestinations(repo);
   const curated = await seedCuratedPlaces(repo);
   return { destinations, curated };

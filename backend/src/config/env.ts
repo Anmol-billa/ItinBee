@@ -75,7 +75,7 @@ const EnvSchema = z.object({
   // Phase 3 Smart Import & Gemini
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-3.5-flash-lite'),
-  GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),
+  GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().default(25000),
   IMPORT_DAILY_LIMIT_GUEST: z.coerce.number().int().nonnegative().default(15),
   IMPORT_DAILY_LIMIT_USER: z.coerce.number().int().nonnegative().default(50),
   IMPORT_DAILY_LIMIT_IP: z.coerce.number().int().nonnegative().default(60),

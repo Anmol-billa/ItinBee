@@ -60,6 +60,17 @@ export function syncImportAuthToken(token: string | null): void {
 }
 
 export function isLocalPreviewEnabled(): boolean {
+  // Never activate dev-only offline preview in production builds; clear any stale sessionStorage flag
+  if (process.env.NEXT_PUBLIC_ENABLE_OFFLINE_PREVIEW !== '1') {
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.removeItem(LOCAL_PREVIEW_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+    return false;
+  }
   if (IMPORT_MOCK) return false;
   if (localPreviewMemory) return true;
   if (typeof window === 'undefined') return false;
@@ -121,28 +132,63 @@ async function parseError(res: Response): Promise<ImportApiError> {
   );
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(importUrl(path), {
-      ...init,
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-        ...authHeaders(),
-        ...(init.headers as Record<string, string> | undefined),
-      },
-    });
-  } catch {
-    throw new ImportApiError(
+async function request<T>(path: string, init: RequestInit = {}, maxAttempts = 2): Promise<T> {
+  let lastError: ImportApiError | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetch(importUrl(path), {
+        ...init,
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+          ...authHeaders(),
+          ...(init.headers as Record<string, string> | undefined),
+        },
+      });
+    } catch {
+      if (init.signal?.aborted) {
+        throw new ImportApiError(0, 'aborted', 'Request cancelled.');
+      }
+      lastError = new ImportApiError(
+        0,
+        'network',
+        "We couldn't connect right now. Please check your internet connection and try again."
+      );
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 2500));
+        continue;
+      }
+      throw lastError;
+    }
+
+    if (res.ok) {
+      return (await res.json()) as T;
+    }
+
+    const parsedErr = await parseError(res);
+    if (
+      (res.status === 502 || res.status === 503 || res.status === 504) &&
+      attempt < maxAttempts &&
+      !init.signal?.aborted
+    ) {
+      lastError = parsedErr;
+      await new Promise((r) => setTimeout(r, 2500));
+      continue;
+    }
+    throw parsedErr;
+  }
+
+  throw (
+    lastError ??
+    new ImportApiError(
       0,
       'network',
-      'Could not reach the Itinbee API server. Check that the backend is running, retry, or switch to offline preview.'
-    );
-  }
-  if (!res.ok) throw await parseError(res);
-  return (await res.json()) as T;
+      "We couldn't connect right now. Please check your internet connection and try again."
+    )
+  );
 }
 
 /* ----- Explicit user-activated offline preview engine (never silent) ----- */
