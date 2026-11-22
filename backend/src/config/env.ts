@@ -36,7 +36,7 @@ const EnvSchema = z.object({
   KMS_KEY_ID: z.string().optional(),
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
-  DEV_MASTER_KEY_HEX: z.string().default(DEV_DEFAULT_MASTER_KEY_HEX),
+  DEV_MASTER_KEY_HEX: z.string().optional(),
   // Stage 3 Structured LLM Fallback
   GCP_VERTEX_LOCATION: z.string().default('asia-south1'),
   GCP_VERTEX_PROJECT_ID: z.string().optional(),
@@ -125,8 +125,8 @@ export function loadEnv(overrides: Record<string, string | undefined> = {}): App
     const rawMasterKey = parsed.DEV_MASTER_KEY_HEX?.trim() ?? '';
     if (
       !hasKmsKey &&
-      (!rawMasterKey ||
-        rawMasterKey.length < 32 ||
+      rawMasterKey.length > 0 &&
+      (rawMasterKey.length < 32 ||
         rawMasterKey.toLowerCase() === DEV_DEFAULT_MASTER_KEY_HEX)
     ) {
       throw new Error(
@@ -141,11 +141,27 @@ export function loadEnv(overrides: Record<string, string | undefined> = {}): App
     }
   }
 
-  // If DEV_MASTER_KEY_HEX was generated via Render `generateValue: true` (base64, >=32 chars),
-  // derive a deterministic 64-hex-char 256-bit key so KmsEnvelopeService uses it directly.
-  let normalizedMasterKeyHex = parsed.DEV_MASTER_KEY_HEX;
-  if (
-    normalizedMasterKeyHex &&
+  // Derive a 256-bit vault KEK cleanly:
+  // - If explicit 64-hex-char DEV_MASTER_KEY_HEX is set -> use directly.
+  // - If Render `generateValue: true` base64 (>=32 chars) is set -> SHA-256 to 64 hex chars.
+  // - If omitted in production -> HKDF-SHA256 domain-separated from the strong JWT_SECRET so existing Render deploys never crash on boot.
+  // - In dev/test -> fall back to DEV_DEFAULT_MASTER_KEY_HEX.
+  let normalizedMasterKeyHex = parsed.DEV_MASTER_KEY_HEX?.trim() || '';
+  if (!normalizedMasterKeyHex) {
+    if (parsed.NODE_ENV === 'production') {
+      normalizedMasterKeyHex = Buffer.from(
+        crypto.hkdfSync(
+          'sha256',
+          parsed.JWT_SECRET,
+          'itinbee-dpdpa-vault-salt-v1',
+          'aes-256-gcm-kek',
+          32
+        )
+      ).toString('hex');
+    } else {
+      normalizedMasterKeyHex = DEV_DEFAULT_MASTER_KEY_HEX;
+    }
+  } else if (
     !/^[0-9a-fA-F]{64}$/.test(normalizedMasterKeyHex) &&
     normalizedMasterKeyHex.length >= 32
   ) {

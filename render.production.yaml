@@ -46,6 +46,16 @@ services:
         generateValue: true
       - key: RUN_INLINE_WORKER
         value: "false"
+      - key: APP_PUBLIC_URL
+        fromService:
+          type: web
+          name: itinbee-frontend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: PUBLIC_BACKEND_URL
+        fromService:
+          type: web
+          name: itinbee-backend
+          envVarKey: RENDER_EXTERNAL_URL
       - key: FRONTEND_HOST
         fromService:
           type: web
@@ -185,6 +195,11 @@ services:
           type: web
           name: itinbee-backend
           property: hostport
+      - key: PUBLIC_BACKEND_URL
+        fromService:
+          type: web
+          name: itinbee-backend
+          envVarKey: RENDER_EXTERNAL_URL
       - key: PUBLIC_BACKEND_HOST
         fromService:
           type: web

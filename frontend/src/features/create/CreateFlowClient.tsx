@@ -38,8 +38,22 @@ const STEPS: Array<{ id: Step; label: string }> = [
 
 function toFlowError(err: unknown): FlowError {
   if (err instanceof ImportApiError) {
-    if (err.status === 0 || err.code === 'network') {
-      return { kind: 'network', code: 'network', message: err.message };
+    if (
+      err.status === 0 ||
+      err.status === 502 ||
+      err.status === 503 ||
+      err.status === 504 ||
+      err.code === 'network' ||
+      err.code === 'backend_unreachable'
+    ) {
+      return {
+        kind: 'network',
+        code: err.code || 'network',
+        message:
+          err.message && err.message !== 'fetch failed'
+            ? err.message
+            : 'Could not reach the Itinbee backend service (it may be waking up or redeploying). Wait a few seconds and click Retry connection.',
+      };
     }
     if (err.status === 429 || err.code === 'quota_exceeded') {
       return { kind: 'quota', code: err.code, message: err.message, resetAt: err.resetAt };

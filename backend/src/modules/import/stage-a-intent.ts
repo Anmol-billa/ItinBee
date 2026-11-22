@@ -754,7 +754,7 @@ export async function extractBasicModelIntent(
 
   // Pace
   let pace: ModelIntent['pace'] = null;
-  if (/\b(relaxed|slow|chill|easy|aram\s+se|leisurely|unhurried|no\s+rush)\b/i.test(text) || hasSeniors) {
+  if (/\b(relax(?:ed|ing)?|slow|chill|easy|aram\s+se|leisurely|unhurried|no\s+rush)\b/i.test(text) || hasSeniors) {
     pace = 'relaxed';
   } else if (/\b(packed|fast|cover\s+everything|jam-packed|hectic)\b/i.test(text)) {
     pace = 'packed';
