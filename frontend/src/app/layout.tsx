@@ -5,6 +5,7 @@ function resolveSiteUrl(): URL {
   const raw =
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
     process.env.RENDER_EXTERNAL_URL?.trim() ||
+    process.env.FRONTEND_HOST?.trim() ||
     'http://localhost:3000';
   try {
     return new URL(raw.startsWith('http') ? raw : `https://${raw}`);

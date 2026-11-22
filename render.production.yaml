@@ -141,6 +141,22 @@ services:
           type: keyvalue
           name: itinbee-kv
           property: connectionString
+      - key: S3_ENDPOINT
+        sync: false
+      - key: AWS_REGION
+        value: ap-south-1
+      - key: AWS_S3_VAULT_REGION
+        value: ap-south-1
+      - key: AWS_S3_VAULT_BUCKET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: KMS_KEY_ID
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
 
   # 3. Always-On Next.js App Router SSR + PWA Frontend (Private Singapore Internal Hop)
   - type: web
@@ -159,6 +175,11 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: FRONTEND_HOST
+        fromService:
+          type: web
+          name: itinbee-frontend
+          property: host
       - key: INTERNAL_API_URL
         fromService:
           type: web
@@ -172,6 +193,8 @@ services:
       - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
         sync: false
       - key: NEXT_PUBLIC_TURNSTILE_SITE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
         sync: false
       - key: SENTRY_DSN
         sync: false

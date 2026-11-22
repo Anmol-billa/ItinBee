@@ -836,10 +836,40 @@ export class ImportJobService {
     const channel = `job:${job.id}`;
     this.emitter.on(channel, onEvent);
 
+    // Cross-instance SSE tailing: when connected to a peer web replica where this job is not
+    // executing in local memory, poll PostgreSQL `import_jobs.events` until a terminal/pause state.
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let sentCount = history.length;
+    const isStoppedStatus = (s: JobStatus) =>
+      s === 'needs_review' || s === 'done' || s === 'failed';
+
+    if (this.pool && !this.activeLocalJobIds.has(job.id) && !isStoppedStatus(job.status)) {
+      pollTimer = setInterval(() => {
+        void (async () => {
+          const refreshed = await this.loadJobFromDbIfNeeded(job.id);
+          if (!refreshed) return;
+          while (sentCount < refreshed.events.length) {
+            const ev = refreshed.events[sentCount]!;
+            sentCount += 1;
+            onEvent(ev);
+          }
+          if (isStoppedStatus(refreshed.status) && pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+          }
+        })();
+      }, 800);
+      pollTimer.unref?.();
+    }
+
     return {
       history,
       status: job.status,
       unsubscribe: () => {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
         this.emitter.off(channel, onEvent);
       },
     };
