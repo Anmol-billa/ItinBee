@@ -31,6 +31,7 @@ import {
   type TripIntent,
 } from '@/lib/import-types';
 import { backoffDelay, createSseParser, runSse, type SseMessage } from '@/lib/sse-stream';
+import { resolveCandidateBackendOrigins } from '@/lib/backend-origin';
 
 function sampleIntent(): TripIntent {
   return {
@@ -479,5 +480,47 @@ describe('intent-reducer.ts', () => {
     expect(form.intent.roundTrip).toBe(false);
     expect(form.intent.returnPoint).toBeNull();
     expect(form.intent.selectedReturnOptionId).toBeNull();
+  });
+});
+
+describe('backend-origin.ts & cold-wake flow resilience', () => {
+  it('prioritizes public HTTPS wake-capable Render URLs ahead of private non-local HTTP hostports', () => {
+    const prevInternal = process.env.INTERNAL_API_URL;
+    const prevPublic = process.env.PUBLIC_BACKEND_URL;
+    try {
+      process.env.INTERNAL_API_URL = 'itinbee-backend:10000';
+      process.env.PUBLIC_BACKEND_URL = 'https://itinbee-backend.onrender.com';
+
+      const origins = resolveCandidateBackendOrigins('itinbee-frontend.onrender.com');
+      expect(origins[0]).toBe('https://itinbee-backend.onrender.com');
+      expect(origins[origins.length - 1]).toBe('http://itinbee-backend:10000');
+    } finally {
+      if (prevInternal === undefined) delete process.env.INTERNAL_API_URL;
+      else process.env.INTERNAL_API_URL = prevInternal;
+      if (prevPublic === undefined) delete process.env.PUBLIC_BACKEND_URL;
+      else process.env.PUBLIC_BACKEND_URL = prevPublic;
+    }
+  });
+
+  it('transitions immediately to understanding step on starting action and returns to compose on invalid input', () => {
+    let s = flowReducer(initialFlowState, { type: 'starting' });
+    expect(s.step).toBe('understanding');
+    expect(s.jobId).toBeNull();
+    expect(s.lines[0]?.text).toContain('Starting trip planner');
+
+    // Validation error before job creation returns user to compose to fix input
+    const invalid = flowReducer(s, {
+      type: 'error',
+      error: { kind: 'invalid', message: 'Text exceeds limit.' },
+    });
+    expect(invalid.step).toBe('compose');
+
+    // Network/quota error after starting stays on understanding with Try again / Edit recovery controls
+    const netErr = flowReducer(s, {
+      type: 'error',
+      error: { kind: 'network', message: "We couldn't connect right now." },
+    });
+    expect(netErr.step).toBe('understanding');
+    expect(netErr.error?.kind).toBe('network');
   });
 });

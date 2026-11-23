@@ -6,6 +6,11 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+/** Keep every single proxy wave strictly under Cloudflare/Render edge gateway timeouts (~60-100s). */
+const MAX_PROXY_WAVE_MS = 26_000;
+const PER_ATTEMPT_TIMEOUT_MS = 22_000;
+const RETRY_DELAY_MS = 1_800;
+
 function resolveBrowserWsBaseUrl(): string {
   const toWs = (httpUrl: string) =>
     httpUrl.replace(/\/+$/, '').replace(/^https:/i, 'wss:').replace(/^http:/i, 'ws:');
@@ -75,22 +80,33 @@ async function handleProxy(
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
   const bodyBuffer = hasBody ? await req.arrayBuffer() : undefined;
 
+  const waveStartedAt = Date.now();
+
   for (let i = 0; i < candidateOrigins.length; i += 1) {
     const backendOrigin = candidateOrigins[i]!;
     const targetUrl = `${backendOrigin}/${path.join('/')}${req.nextUrl.search}`;
 
-    // Transparently ride out any brief container restart or wakeup (up to ~30s on final candidate)
-    const isFinalCandidate = i === candidateOrigins.length - 1;
-    const maxAttempts = isFinalCandidate ? 12 : 1;
+    // Give the primary public HTTPS wake origin multiple retries within the 26s wave budget
+    const maxAttempts = i === 0 ? 6 : 2;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const elapsed = Date.now() - waveStartedAt;
+      const remainingMs = MAX_PROXY_WAVE_MS - elapsed;
+      if (!isEventStream && remainingMs < 2_500) {
+        break;
+      }
+
+      const attemptTimeoutMs = isEventStream
+        ? 65_000
+        : Math.min(PER_ATTEMPT_TIMEOUT_MS, Math.max(2_500, remainingMs));
+
       try {
         const upstream = await fetch(targetUrl, {
           method: req.method,
           headers,
           body: bodyBuffer,
           cache: 'no-store',
-          signal: isEventStream ? req.signal : AbortSignal.timeout(65_000),
+          signal: isEventStream ? req.signal : AbortSignal.timeout(attemptTimeoutMs),
         });
 
         const upstreamType = upstream.headers.get('content-type') ?? '';
@@ -100,8 +116,8 @@ async function handleProxy(
 
         if (isTransientGatewayHtml) {
           await upstream.arrayBuffer().catch(() => {});
-          if (attempt < maxAttempts) {
-            await new Promise((r) => setTimeout(r, 2500));
+          if (attempt < maxAttempts && Date.now() - waveStartedAt + RETRY_DELAY_MS < MAX_PROXY_WAVE_MS) {
+            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
             continue;
           }
           break;
@@ -137,8 +153,9 @@ async function handleProxy(
           headers: respHeaders,
         });
       } catch {
-        if (attempt < maxAttempts) {
-          await new Promise((r) => setTimeout(r, 2500));
+        if (req.signal.aborted) break;
+        if (attempt < maxAttempts && Date.now() - waveStartedAt + RETRY_DELAY_MS < MAX_PROXY_WAVE_MS) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
         }
       }
     }
@@ -146,11 +163,16 @@ async function handleProxy(
 
   return NextResponse.json(
     {
-      code: 'service_unavailable',
-      error: 'service_unavailable',
+      code: 'service_warming',
+      error: 'service_warming',
       message: "We couldn't start your trip plan just now. Please try again in a moment.",
     },
-    { status: 503 }
+    {
+      status: 503,
+      headers: {
+        'Retry-After': '2',
+      },
+    }
   );
 }
 

@@ -34,8 +34,15 @@ export function Composer({
   const [text, setText] = useState('');
   const [emptyError, setEmptyError] = useState(false);
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const warmedRef = useRef(false);
   const labelId = useId();
   const errId = `${labelId}-empty-err`;
+
+  const triggerPrewarm = () => {
+    if (warmedRef.current) return;
+    warmedRef.current = true;
+    void fetch('/api/keepalive', { cache: 'no-store' }).catch(() => {});
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     if (!text.trim()) {
@@ -63,7 +70,9 @@ export function Composer({
           value={text}
           aria-invalid={emptyError ? 'true' : 'false'}
           aria-describedby={emptyError ? errId : undefined}
+          onFocus={triggerPrewarm}
           onChange={(e) => {
+            triggerPrewarm();
             setText(e.target.value);
             if (emptyError && e.target.value.trim()) {
               setEmptyError(false);

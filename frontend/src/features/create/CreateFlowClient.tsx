@@ -55,7 +55,8 @@ function toFlowError(err: unknown): FlowError {
       err.status === 504 ||
       err.code === 'network' ||
       err.code === 'backend_unreachable' ||
-      err.code === 'service_unavailable'
+      err.code === 'service_unavailable' ||
+      err.code === 'service_warming'
     ) {
       return {
         kind: 'network',
@@ -101,14 +102,17 @@ export function CreateFlowClient({
     baseTripSlug: initialBaseSlug,
   });
   const stopStreamRef = useRef<(() => void) | null>(null);
+  const startCtrlRef = useRef<AbortController | null>(null);
+  const prewarmedOnTypeRef = useRef(false);
   const resumedJobRef = useRef<string | null>(null);
 
   useEffect(() => {
     const preview = isLocalPreviewEnabled();
     if (!IMPORT_MOCK && !preview) {
-      void fetch('/api/proxy/health', { cache: 'no-store' }).catch(() => {});
+      void fetch('/api/keepalive', { cache: 'no-store' }).catch(() => {});
     }
     return () => {
+      startCtrlRef.current?.abort();
       stopStreamRef.current?.();
     };
   }, []);
@@ -180,7 +184,12 @@ export function CreateFlowClient({
   }, [initialJobId, openUnderstandingStream, openBuildingStream]);
 
   const startImport = useCallback(async () => {
-    dispatch({ type: 'submitting' });
+    startCtrlRef.current?.abort();
+    const ctrl = new AbortController();
+    startCtrlRef.current = ctrl;
+
+    // Transition immediately to Step 2 so cold wakeups or deploy swaps ride out seamlessly with live progress
+    dispatch({ type: 'starting' });
     try {
       const urls = extractUrls(draft.text);
       const filesPayload: ImportFilePayload[] = await Promise.all(
@@ -202,11 +211,15 @@ export function CreateFlowClient({
         body.text = draft.text.trim();
       }
 
-      const res = await createImportJob(body);
+      const res = await createImportJob(body, ctrl.signal);
+      if (ctrl.signal.aborted) return;
       dispatch({ type: 'submitted', jobId: res.jobId });
       syncJobInUrl(res.jobId);
       openUnderstandingStream(res.jobId);
     } catch (err) {
+      if (ctrl.signal.aborted || (err instanceof ImportApiError && err.code === 'aborted')) {
+        return;
+      }
       dispatch({ type: 'error', error: toFlowError(err) });
     }
   }, [draft, openUnderstandingStream, syncJobInUrl]);
@@ -220,6 +233,7 @@ export function CreateFlowClient({
         dispatch({ type: 'confirmed' });
         openBuildingStream(state.jobId);
       } catch (err) {
+        if (err instanceof ImportApiError && err.code === 'aborted') return;
         dispatch({ type: 'error', error: toFlowError(err) });
       }
     },
@@ -227,12 +241,15 @@ export function CreateFlowClient({
   );
 
   const handleStopBuilding = useCallback(() => {
+    startCtrlRef.current?.abort();
     stopStreamRef.current?.();
     stopStreamRef.current = null;
     dispatch({ type: 'stopped' });
   }, []);
 
   const handleBackToCompose = useCallback(() => {
+    startCtrlRef.current?.abort();
+    startCtrlRef.current = null;
     stopStreamRef.current?.();
     stopStreamRef.current = null;
     dispatch({ type: 'reset' });
@@ -298,7 +315,15 @@ export function CreateFlowClient({
         {state.step === 'compose' ? (
           <ComposeStep
             draft={draft}
-            onDraftChange={setDraft}
+            onDraftChange={(next) => {
+              if (!prewarmedOnTypeRef.current && (next.text.trim() || next.files.length > 0)) {
+                prewarmedOnTypeRef.current = true;
+                if (!IMPORT_MOCK && !isLocalPreviewEnabled()) {
+                  void fetch('/api/keepalive', { cache: 'no-store' }).catch(() => {});
+                }
+              }
+              setDraft(next);
+            }}
             onSubmit={() => void startImport()}
             submitting={state.submitting}
             error={state.error}

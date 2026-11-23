@@ -26,6 +26,19 @@ export const healthRoutes: FastifyPluginAsyncZod<HealthPluginOpts> = async (
   opts
 ) => {
   app.get(
+    '/livez',
+    {
+      schema: {
+        hide: true,
+        response: {
+          200: z.object({ ok: z.literal(true) }),
+        },
+      },
+    },
+    async () => ({ ok: true as const })
+  );
+
+  app.get(
     '/health',
     {
       schema: {

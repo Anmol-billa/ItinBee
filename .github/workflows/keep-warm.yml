@@ -1,0 +1,18 @@
+name: Keep Production Services Warm
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake and verify backend & frontend
+        run: |
+          curl -fsSL --retry 3 --retry-delay 4 --retry-all-errors --max-time 55 \
+            "https://itinbee-backend.onrender.com/health" > /dev/null || true
+          curl -fsSL --retry 2 --retry-delay 3 --retry-all-errors --max-time 55 \
+            "https://itinbee-frontend.onrender.com/api/keepalive?wait=1" > /dev/null || true

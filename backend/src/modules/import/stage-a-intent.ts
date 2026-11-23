@@ -1080,7 +1080,10 @@ export async function extractTripIntent(
 
   if (canUseAi) {
     const userParts: LlmPart[] = [];
-    const contextLines: string[] = [];
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const contextLines: string[] = [
+      `Current UTC Date: ${todayIso}. Resolve relative dates, months, and holidays (e.g. "Christmas weekend", "next month", "in December") to the NEXT upcoming occurrence on or after ${todayIso} — NEVER pick a past year.`,
+    ];
     if (deps.locale === 'hi') {
       contextLines.push('Preferred traveller UI locale: Hindi/English.');
     }

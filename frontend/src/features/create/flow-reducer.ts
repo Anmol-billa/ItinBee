@@ -70,6 +70,7 @@ export const initialFlowState: FlowState = {
 
 export type FlowAction =
   | { type: 'submitting' }
+  | { type: 'starting' }
   | { type: 'submitted'; jobId: string }
   | { type: 'event'; event: JobEvent }
   | { type: 'connection'; state: ConnectionState }
@@ -116,6 +117,13 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
   switch (action.type) {
     case 'submitting':
       return { ...state, submitting: true, error: null };
+    case 'starting':
+      return {
+        ...initialFlowState,
+        step: 'understanding',
+        jobId: null,
+        lines: [{ id: 'status:starting', text: 'Starting trip planner & reading your notes…' }],
+      };
     case 'submitted':
       return {
         ...initialFlowState,
@@ -126,6 +134,9 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
     case 'connection':
       return state.connection === action.state ? state : { ...state, connection: action.state };
     case 'error':
+      if (!state.jobId && action.error.kind === 'invalid') {
+        return { ...state, step: 'compose', submitting: false, error: action.error };
+      }
       return { ...state, submitting: false, error: action.error };
     case 'clearError':
       return { ...state, error: null };

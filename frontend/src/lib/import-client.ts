@@ -135,10 +135,37 @@ async function parseError(res: Response): Promise<ImportApiError> {
   );
 }
 
-async function request<T>(path: string, init: RequestInit = {}, maxAttempts = 2): Promise<T> {
+function abortableSleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new ImportApiError(0, 'aborted', 'Request cancelled.'));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new ImportApiError(0, 'aborted', 'Request cancelled.'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  maxAttempts = 2,
+  retryDelayMs = 2200
+): Promise<T> {
   let lastError: ImportApiError | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (init.signal?.aborted) {
+      throw new ImportApiError(0, 'aborted', 'Request cancelled.');
+    }
+
     let res: Response;
     try {
       res = await fetch(importUrl(path), {
@@ -160,8 +187,11 @@ async function request<T>(path: string, init: RequestInit = {}, maxAttempts = 2)
         'network',
         "We couldn't connect right now. Please check your internet connection and try again."
       );
+      if (attempt === 1 && typeof window !== 'undefined' && !IMPORT_MOCK) {
+        void fetch('/api/keepalive', { cache: 'no-store' }).catch(() => {});
+      }
       if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 2500));
+        await abortableSleep(retryDelayMs, init.signal);
         continue;
       }
       throw lastError;
@@ -172,13 +202,18 @@ async function request<T>(path: string, init: RequestInit = {}, maxAttempts = 2)
     }
 
     const parsedErr = await parseError(res);
-    if (
-      (res.status === 502 || res.status === 503 || res.status === 504) &&
-      attempt < maxAttempts &&
-      !init.signal?.aborted
-    ) {
+    const isTransientServerWake =
+      res.status === 502 ||
+      res.status === 503 ||
+      res.status === 504 ||
+      parsedErr.code === 'service_warming';
+
+    if (isTransientServerWake && attempt < maxAttempts && !init.signal?.aborted) {
       lastError = parsedErr;
-      await new Promise((r) => setTimeout(r, 2500));
+      if (attempt === 1 && typeof window !== 'undefined' && !IMPORT_MOCK) {
+        void fetch('/api/keepalive', { cache: 'no-store' }).catch(() => {});
+      }
+      await abortableSleep(retryDelayMs, init.signal);
       continue;
     }
     throw parsedErr;
@@ -460,7 +495,10 @@ export function createGuestSession(): Promise<void> {
   return guestPromise;
 }
 
-export async function createImportJob(body: CreateJobBody): Promise<CreateJobResponse> {
+export async function createImportJob(
+  body: CreateJobBody,
+  signal?: AbortSignal
+): Promise<CreateJobResponse> {
   if (isLocalPreviewEnabled()) {
     const jobId = `preview_${Math.random().toString(36).slice(2, 9)}`;
     previewJobs.set(jobId, {
@@ -476,10 +514,17 @@ export async function createImportJob(body: CreateJobBody): Promise<CreateJobRes
   if (IMPORT_MOCK) {
     await createGuestSession();
   }
-  return request<CreateJobResponse>('/v1/import/jobs', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+  // Up to 6 waves (~90s total resilience across cold-wake or zero-downtime deploy swaps)
+  return request<CreateJobResponse>(
+    '/v1/import/jobs',
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal,
+    },
+    6,
+    2000
+  );
 }
 
 export function getJob(jobId: string): Promise<JobState> {
@@ -504,18 +549,30 @@ export function getJob(jobId: string): Promise<JobState> {
   return request<JobState>(`/v1/import/jobs/${encodeURIComponent(jobId)}`);
 }
 
-export async function confirmJob(jobId: string, body: ConfirmBody): Promise<{ status: 'building' }> {
+export async function confirmJob(
+  jobId: string,
+  body: ConfirmBody,
+  signal?: AbortSignal
+): Promise<{ status: 'building' }> {
   if (jobId.startsWith('preview_')) {
     const pj = previewJobs.get(jobId);
     if (!pj) throw new ImportApiError(404, 'not_found', 'This local preview session ended.');
     pj.confirmedIntent = body.intent;
     return { status: 'building' };
   }
-  await createGuestSession();
-  return request<{ status: 'building' }>(`/v1/import/jobs/${encodeURIComponent(jobId)}/confirm`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+  if (IMPORT_MOCK) {
+    await createGuestSession();
+  }
+  return request<{ status: 'building' }>(
+    `/v1/import/jobs/${encodeURIComponent(jobId)}/confirm`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal,
+    },
+    6,
+    2000
+  );
 }
 
 export interface FetchTransitOptionsBody {
