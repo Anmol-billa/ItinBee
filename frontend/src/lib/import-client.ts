@@ -15,6 +15,9 @@ import {
   type IntentDestination,
   type JobEvent,
   type JobState,
+  type JourneyPlace,
+  type TransitRouteOption,
+  type TransportMode,
   type TripIntent,
 } from '@/lib/import-types';
 
@@ -513,6 +516,65 @@ export async function confirmJob(jobId: string, body: ConfirmBody): Promise<{ st
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+export interface FetchTransitOptionsBody {
+  origin?: JourneyPlace | null;
+  returnPoint?: JourneyPlace | null;
+  roundTrip?: boolean;
+  transportMode?: TransportMode;
+  firstDestination?: {
+    name: string;
+    destinationSlug?: string;
+    lat?: number;
+    lng?: number;
+  } | null;
+  lastDestination?: {
+    name: string;
+    destinationSlug?: string;
+    lat?: number;
+    lng?: number;
+  } | null;
+  departureDate?: string | null;
+  returnDate?: string | null;
+}
+
+export interface FetchTransitOptionsResponse {
+  origin: JourneyPlace | null;
+  returnPoint: JourneyPlace | null;
+  roundTrip: boolean;
+  routeOptions: {
+    outbound: TransitRouteOption[];
+    return: TransitRouteOption[];
+  };
+  selectedOutboundOptionId: string | null;
+  selectedReturnOptionId: string | null;
+}
+
+export async function fetchTransitOptions(
+  body: FetchTransitOptionsBody,
+  signal?: AbortSignal
+): Promise<FetchTransitOptionsResponse | null> {
+  if (isLocalPreviewEnabled() || IMPORT_MOCK) {
+    return null;
+  }
+  try {
+    return await request<FetchTransitOptionsResponse>(
+      '/v1/transit/options',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        signal,
+      },
+      1
+    );
+  } catch (err) {
+    if (signal?.aborted) return null;
+    if (err instanceof ImportApiError && (err.status === 0 || err.status === 404 || err.status >= 500)) {
+      return null;
+    }
+    return null;
+  }
 }
 
 export async function geoAutocomplete(q: string, signal?: AbortSignal): Promise<GeoSuggestion[]> {

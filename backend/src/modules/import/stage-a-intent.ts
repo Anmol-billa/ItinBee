@@ -20,6 +20,7 @@ import {
   modelIntentToTripIntent,
   TripIntentSchema,
   type ModelIntent,
+  type TransportMode,
   type TripIntent,
 } from './intent.js';
 import { LlmError, type LlmPart, type LlmProvider } from './llm/types.js';
@@ -62,7 +63,7 @@ const STAGE_A_SYSTEM_PROMPT = [
   'EXTRACTION RULES:',
   '1. Languages: Understand English, Hindi (Devanagari), and Hinglish (Romanised Hindi, e.g. "mummy papa ke saath", "4 dost", "5 din", "sasta", "aram se").',
   '2. WhatsApp / group chats (`kind="chat"`): Messages are chronological. LAST DECISION WINS — if earlier messages suggest Goa or Shimla and later messages cancel it or agree on Udaipur/Manali, extract ONLY the final agreed destination(s) and put explicitly rejected places in `avoid`. Ignore greetings, jokes, and off-topic chatter.',
-  '3. Origin vs Destination: Do NOT include the traveller departure/return home city (e.g. "from Delhi", "ex-Bengaluru", "flying out of Mumbai", or "<HomeCity> to <Dest> ... ending back at <HomeCity>") in `destinations` unless they explicitly plan sightseeing days there. If the requested transport mode does not directly reach the destination (e.g. train to Leh/Ladakh where nearest railheads are Jammu Tawi / Pathankot / Chandigarh), note the practical railhead + road/flight transfer in `assumptions`.',
+  '3. Origin, Return Hub & Transport Mode: Put the traveller starting city/station/airport (e.g. "Delhi", "New Delhi Railway Station", "Bengaluru", "Mumbai") in `origin` — NEVER include the starting home city in `destinations` unless they explicitly plan sightseeing days there. If they mention a specific ending station/city (e.g. "ending back at Delhi Railway station"), put that exact station/city in `returnPoint` and set `roundTrip: true` (or `false` if one-way). Set `transportMode` to `"train"`, `"flight"`, `"drive"`, `"bus"`, `"combo"`, or `"any"` matching their stated preference.',
   '4. Confirmed Bookings: Align dates and destinations with any deterministic booking anchors supplied in context.',
   '5. Template Customisation: If USER_DATA begins with `Based on "<Template>", but ...` and names a new destination (e.g. Leh instead of South Goa), use ONLY the new destination(s) requested by the traveller rather than keeping the old template city.',
   '6. Geography: Return real city/region/country names in `destinations`. Never invent fictional places.',
@@ -339,29 +340,85 @@ export async function extractBasicModelIntent(
   const assumptions: string[] = [];
   const avoid: string[] = [];
 
-  // Identify origin cities ("from Delhi", "From: Bengaluru", "ex-Bangalore", "Delhi to Leh ... ending back at Delhi") so we don't confuse origin with destination
+  // Identify origin cities, explicit return hubs & preferred inter-city transport mode
   const originNames = new Set<string>();
+  let detectedOriginLabel: string | null = null;
+  let detectedReturnLabel: string | null = null;
+  const isOneWay = /\b(?:one[\s-]*way|not\s+returning|ending\s+in\s+(?!back))\b/i.test(text);
+
+  let transportMode: TransportMode = 'any';
+  if (/\b(?:train\s*(?:\+|and|&)\s*flight|flight\s*(?:\+|and|&)\s*train)\b/i.test(text)) {
+    transportMode = 'combo';
+  } else if (/\b(?:by\s+train|via\s+train|train\s+trip|vande\s+bharat|rajdhani|shatabdi|irctc|by\s+rail)\b/i.test(text)) {
+    transportMode = 'train';
+  } else if (/\b(?:by\s+flight|via\s+flight|by\s+air|fly(?:ing)?\s+(?:to|from)|nonstop\s+flight)\b/i.test(text)) {
+    transportMode = 'flight';
+  } else if (/\b(?:by\s+car|by\s+road|road\s+trip|self[\s-]*drive|driving\s+(?:to|from)|by\s+bike|motorcycle\s+trip)\b/i.test(text)) {
+    transportMode = 'drive';
+  } else if (/\b(?:by\s+bus|volvo|overnight\s+bus|ksrtc|hrtc|rsrtc)\b/i.test(text)) {
+    transportMode = 'bus';
+  }
+
   const addOrigin = (rawOrigin: string) => {
-    const candidateOrigin = rawOrigin.trim().toLowerCase();
+    const cleaned = rawOrigin.trim();
+    const candidateOrigin = cleaned.toLowerCase();
     if (!candidateOrigin) return;
+    if (!detectedOriginLabel) detectedOriginLabel = cleaned;
     originNames.add(candidateOrigin);
-    if (candidateOrigin === 'new delhi') originNames.add('delhi');
-    if (candidateOrigin === 'bangalore') originNames.add('bengaluru');
+    const cityOnly = candidateOrigin
+      .replace(/\b(?:railway\s+station|train\s+station|junction|station|airport)\b/g, '')
+      .trim();
+    if (cityOnly) originNames.add(cityOnly);
+    if (cityOnly === 'new delhi' || candidateOrigin === 'new delhi') originNames.add('delhi');
+    if (cityOnly === 'bangalore' || candidateOrigin === 'bangalore') originNames.add('bengaluru');
   };
+
   for (const m of text.matchAll(
-    /\b(?:[Ff]rom|[Ee]x-|[Dd]eparting(?:\s+from)?|[Ll]eaving|[Ff]lying\s+out\s+of|[Tt]rain\s+from)\s*:?\s*([A-Z][a-zA-Z]+(?:\s+(?!(?:to|in|for|on|at|with|and)\b)[A-Z][a-zA-Z]+)?)/g
+    /\b(?:[Ff]rom|[Ee]x-|[Dd]eparting(?:\s+from)?|[Ll]eaving|[Ff]lying\s+out\s+of|[Tt]rain\s+from|[Ss]tarting\s+(?:from|at|in))\s*:?\s*([A-Z][a-zA-Z]+(?:\s+(?!(?:to|in|for|on|at|with|and|next)\b)[A-Z][a-zA-Z]+){0,2})/g
   )) {
     addOrigin(m[1]!);
   }
+
+  // "<Origin> to <Dest>" when paired with a travel mode, road/train trip phrasing, or return clause
+  const modeLeadOrigin =
+    /\b([A-Z][a-zA-Z]+(?:\s+(?:Railway\s+Station|Airport))?)\s+to\s+([A-Z][a-zA-Z]+)(?:\s+(?:road\s+trip|train\s+trip|bike\s+trip|flight|drive|(?:by|via)\s+(?:train|rail|flight|air|road|car|bus|bike|driving)))?/i.exec(
+      text
+    );
+  if (
+    modeLeadOrigin &&
+    (transportMode !== 'any' ||
+      /\b(?:road\s+trip|train\s+trip|round\s+trip|ending\s+back|returning\s+to|(?:by|via)\s+(?:train|rail|flight|air|road|car|bus|bike|driving))\b/i.test(
+        text
+      ))
+  ) {
+    addOrigin(modeLeadOrigin[1]!);
+  }
+
+  // Explicit return / ending station or city: "ending back at Delhi Railway station", "returning to Bengaluru"
+  const returnMatch =
+    /\b(?:ending|returning|finish(?:ing)?|back)\s+(?:back\s+)?(?:at|to|in)\s+([A-Z][a-zA-Z]+(?:\s+(?:Railway\s+[Ss]tation|[Ss]tation|[Jj]unction|[Aa]irport|[Tt]erminal))?)/i.exec(
+      text
+    );
+  if (returnMatch) {
+    detectedReturnLabel = returnMatch[1]!.trim();
+  }
+
   for (const m of text.matchAll(
-    /\b([A-Z][a-zA-Z]+)\s+to\s+[A-Z][a-zA-Z]+\b[\s\S]{0,120}?\b(?:ending|returning|finish(?:ing)?|back)\s+(?:back\s+)?(?:at|to|in)\s+([A-Z][a-zA-Z]+)/gi
+    /\b([A-Z][a-zA-Z]+)\s+to\s+[A-Z][a-zA-Z]+\b[\s\S]{0,120}?\b(?:ending|returning|finish(?:ing)?|back)\s+(?:back\s+)?(?:at|to|in)\s+([A-Z][a-zA-Z]+(?:\s+(?:Railway\s+[Ss]tation|[Ss]tation|[Aa]irport))?)/gi
   )) {
-    if (m[1]!.toLowerCase() === m[2]!.toLowerCase()) {
-      addOrigin(m[1]!);
+    const origCity = m[1]!.trim().toLowerCase();
+    const retPhrase = m[2]!.trim();
+    if (retPhrase.toLowerCase().startsWith(origCity)) {
+      addOrigin(retPhrase.toLowerCase().includes('station') || retPhrase.toLowerCase().includes('airport') ? retPhrase : m[1]!);
+      if (!detectedReturnLabel) detectedReturnLabel = retPhrase;
     }
   }
+
   for (const b of normalized.bookings) {
-    if (b.summary.originName) originNames.add(b.summary.originName.toLowerCase());
+    if (b.summary.originName) {
+      originNames.add(b.summary.originName.toLowerCase());
+      if (!detectedOriginLabel) detectedOriginLabel = b.summary.originName;
+    }
   }
 
   // Identify explicitly cancelled/rejected places (especially in WhatsApp chats)
@@ -907,6 +964,10 @@ export async function extractBasicModelIntent(
 
   return {
     title,
+    origin: detectedOriginLabel,
+    returnPoint: detectedReturnLabel ?? (detectedOriginLabel && !isOneWay ? detectedOriginLabel : null),
+    roundTrip: detectedOriginLabel ? !isOneWay : null,
+    transportMode,
     destinations: rankedDests.map((d, idx) => ({
       name: d.name,
       country: d.country,
@@ -929,6 +990,18 @@ export async function extractBasicModelIntent(
 
 function collectDetectedEvents(intent: TripIntent): DetectedEvent[] {
   const events: DetectedEvent[] = [];
+
+  if (intent.origin?.name) {
+    const modeSuffix =
+      intent.transportMode && intent.transportMode !== 'any'
+        ? ` · by ${intent.transportMode}`
+        : '';
+    events.push({
+      kind: 'booking',
+      label: `Start: ${intent.origin.name}${modeSuffix}${intent.roundTrip ? ' (round trip)' : ''}`,
+      resolved: intent.origin.resolved,
+    });
+  }
 
   for (const d of intent.destinations) {
     events.push({
@@ -1113,6 +1186,7 @@ export async function extractTripIntent(
 
   const grounded = await groundIntent(ungrounded as TripIntent, deps.places, {
     trustAlreadyResolved: false,
+    llm: deps.llm,
   });
 
   const validated = TripIntentSchema.parse(grounded);

@@ -25,6 +25,7 @@ import { tripsRoutes } from './routes/trips.js';
 import { syncRoutes } from './routes/sync.js';
 import { ingestRoutes } from './routes/ingest.js';
 import { geoRoutes } from './routes/geo.js';
+import { transitRoutes } from './routes/transit.js';
 import { pollsLedgerRoutes } from './routes/polls-ledger.js';
 import { placesRoutes } from './routes/places.js';
 import { exploreRoutes } from './routes/explore.js';
@@ -281,6 +282,7 @@ export async function buildApp(
   await app.register(syncRoutes, { store, bus, config });
   await app.register(ingestRoutes, { store, bus, config, vault });
   await app.register(geoRoutes);
+  await app.register(transitRoutes, { places, llm, config });
   await app.register(placesRoutes, { services: places });
   await app.register(exploreRoutes, { explore, store, config });
   await app.register(importRoutes, {

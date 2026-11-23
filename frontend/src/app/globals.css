@@ -78,8 +78,13 @@
   --font-public-sans: "Public Sans";
   --font-jetbrains-mono: "JetBrains Mono";
   --font-devanagari: "Kohinoor Devanagari", "Noto Sans Devanagari", "Devanagari Sangam MN";
+  --brand-accent: #0E5A47;
   --target-size: 24px;
   color-scheme: light;
+}
+
+body {
+  accent-color: var(--brand-accent);
 }
 
 @media (pointer: coarse) {
@@ -97,10 +102,18 @@ html {
 }
 
 body {
+  accent-color: var(--brand-accent);
   background-color: #FAF4E6;
   color: #14213D;
   overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
+}
+
+@supports not (accent-color: #0E5A47) {
+  input[type="checkbox"]:not(.sr-only),
+  input[type="radio"]:not(.sr-only) {
+    border: 2px solid #14213D;
+  }
 }
 
 /* Browser surface theming */

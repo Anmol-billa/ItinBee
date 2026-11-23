@@ -45,9 +45,14 @@ const EnvSchema = z.object({
   TURNSTILE_SECRET_KEY: z.string().optional(),
   WEBHOOK_HMAC_SECRET: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
-  // Open-data geospatial & places engine
+  // Open-data geospatial, routing & optional live rail/flight schedule APIs
   PHOTON_BASE_URL: z.string().optional(),
   ORS_API_KEY: z.string().optional(),
+  RAILRADAR_API_KEY: z.string().optional(),
+  RAPIDAPI_IRCTC_KEY: z.string().optional(),
+  RAPIDAPI_IRCTC_HOST: z.string().default('indian-railway-irctc.p.rapidapi.com'),
+  SERPAPI_KEY: z.string().optional(),
+  AERODATABOX_RAPIDAPI_KEY: z.string().optional(),
   WIKIMEDIA_USER_AGENT: z.string().default('Itinbee/1.0 (contact via itinbee.com)'),
   OVERPASS_ENDPOINTS: z
     .string()

@@ -37,8 +37,14 @@ export function getOrderedStopsForDay(
     .filter((i) => i.dayId === dayId && !i.deletedAt && !i.isShortlist)
     .sort((a, b) =>
       a.sortKey === b.sortKey
-        ? a.id.localeCompare(b.id)
-        : a.sortKey.localeCompare(b.sortKey)
+        ? a.id < b.id
+          ? -1
+          : a.id > b.id
+            ? 1
+            : 0
+        : a.sortKey < b.sortKey
+          ? -1
+          : 1
     );
 }
 
@@ -67,29 +73,56 @@ export function computeDayPacingWarning(params: {
   };
 
   let totalTransitMins = 0;
+  let intraCityTransitMins = 0;
+  let intercityRoadMins = 0;
+
   for (let i = 0; i < activeStops.length; i++) {
     const curr = activeStops[i]!;
+    const isIntercityRailOrAir =
+      curr.transitMeta?.mode === 'flight' || curr.transitMeta?.mode === 'rail';
+    const isIntercityLeg = Boolean(curr.transitMeta?.isIntercityLeg) || isIntercityRailOrAir;
+
     if (curr.kind === 'transit' && typeof curr.durationMins === 'number' && curr.durationMins > 0) {
       totalTransitMins += curr.durationMins;
+      if (!isIntercityLeg) {
+        intraCityTransitMins += curr.durationMins;
+      } else if (!isIntercityRailOrAir) {
+        intercityRoadMins += curr.durationMins;
+      }
+      // Avoid double-counting the connector leading into an explicit intercity transit stop
+      if (isIntercityLeg) continue;
     }
+
     if (i > 0) {
       const prev = activeStops[i - 1]!;
       const pairMins = lookupPair(`${prev.id}->${curr.id}`);
       if (typeof pairMins === 'number' && Number.isFinite(pairMins)) {
-        totalTransitMins += Math.round(pairMins);
+        const rounded = Math.round(pairMins);
+        totalTransitMins += rounded;
+        if (!isIntercityLeg) intraCityTransitMins += rounded;
+        else if (!isIntercityRailOrAir) intercityRoadMins += rounded;
       } else if (
         typeof curr.transitMeta?.estimatedDurationMins === 'number' &&
         curr.transitMeta.estimatedDurationMins > 0
       ) {
         totalTransitMins += curr.transitMeta.estimatedDurationMins;
+        if (!isIntercityLeg) {
+          intraCityTransitMins += curr.transitMeta.estimatedDurationMins;
+        } else if (!isIntercityRailOrAir) {
+          intercityRoadMins += curr.transitMeta.estimatedDurationMins;
+        }
       }
     }
   }
 
   const messages: string[] = [];
-  if (totalTransitMins > 240) {
+  if (intraCityTransitMins > 240) {
     messages.push(
-      `${formatMinutesHuman(totalTransitMins)} of travel scheduled (recommended max 4h)`
+      `${formatMinutesHuman(intraCityTransitMins)} of travel scheduled (recommended max 4h)`
+    );
+  } else if (intercityRoadMins > 600) {
+    messages.push(
+      `${formatMinutesHuman(intercityRoadMins)} of road driving in one day (consider an overnight halt)`
     );
   }
   if (params.elderModeEnabled && stopCount > 4) {

@@ -1966,7 +1966,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -1977,6 +1986,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -1991,6 +2005,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -2167,7 +2195,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -2178,6 +2215,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -2192,6 +2234,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -3366,7 +3422,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -3377,6 +3442,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -3391,6 +3461,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -3567,7 +3651,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -3578,6 +3671,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -3592,6 +3690,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -4570,7 +4682,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -4581,6 +4702,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -4595,6 +4721,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -4771,7 +4911,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -4782,6 +4931,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -4796,6 +4950,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -7138,7 +7306,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -7149,6 +7326,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -7163,6 +7345,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -7339,7 +7535,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -7350,6 +7555,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -7364,6 +7574,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -8060,7 +8284,16 @@
                                   "vehicleCode": {
                                     "type": "string"
                                   },
+                                  "carrierName": {
+                                    "type": "string"
+                                  },
+                                  "originCode": {
+                                    "type": "string"
+                                  },
                                   "originName": {
+                                    "type": "string"
+                                  },
+                                  "destinationCode": {
                                     "type": "string"
                                   },
                                   "destinationName": {
@@ -8071,6 +8304,11 @@
                                   },
                                   "arrivalTime": {
                                     "type": "string"
+                                  },
+                                  "arrivalDayOffset": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 5
                                   },
                                   "coachOrTerminal": {
                                     "type": "string"
@@ -8085,6 +8323,20 @@
                                     "type": "number"
                                   },
                                   "estimatedDurationMins": {
+                                    "type": "integer"
+                                  },
+                                  "isIntercityLeg": {
+                                    "type": "boolean"
+                                  },
+                                  "legDirection": {
+                                    "type": "string",
+                                    "enum": [
+                                      "outbound",
+                                      "intercity",
+                                      "return"
+                                    ]
+                                  },
+                                  "approxFareInr": {
                                     "type": "integer"
                                   },
                                   "advisory": {
@@ -8261,7 +8513,16 @@
                                   "vehicleCode": {
                                     "type": "string"
                                   },
+                                  "carrierName": {
+                                    "type": "string"
+                                  },
+                                  "originCode": {
+                                    "type": "string"
+                                  },
                                   "originName": {
+                                    "type": "string"
+                                  },
+                                  "destinationCode": {
                                     "type": "string"
                                   },
                                   "destinationName": {
@@ -8272,6 +8533,11 @@
                                   },
                                   "arrivalTime": {
                                     "type": "string"
+                                  },
+                                  "arrivalDayOffset": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 5
                                   },
                                   "coachOrTerminal": {
                                     "type": "string"
@@ -8286,6 +8552,20 @@
                                     "type": "number"
                                   },
                                   "estimatedDurationMins": {
+                                    "type": "integer"
+                                  },
+                                  "isIntercityLeg": {
+                                    "type": "boolean"
+                                  },
+                                  "legDirection": {
+                                    "type": "string",
+                                    "enum": [
+                                      "outbound",
+                                      "intercity",
+                                      "return"
+                                    ]
+                                  },
+                                  "approxFareInr": {
                                     "type": "integer"
                                   },
                                   "advisory": {
@@ -9648,7 +9928,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -9659,6 +9948,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -9673,6 +9967,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -9849,7 +10157,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -9860,6 +10177,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -9874,6 +10196,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -10481,7 +10817,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -10492,6 +10837,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -10506,6 +10856,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -11221,7 +11585,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -11232,6 +11605,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -11246,6 +11624,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -11776,7 +12168,16 @@
                               "vehicleCode": {
                                 "type": "string"
                               },
+                              "carrierName": {
+                                "type": "string"
+                              },
+                              "originCode": {
+                                "type": "string"
+                              },
                               "originName": {
+                                "type": "string"
+                              },
+                              "destinationCode": {
                                 "type": "string"
                               },
                               "destinationName": {
@@ -11787,6 +12188,11 @@
                               },
                               "arrivalTime": {
                                 "type": "string"
+                              },
+                              "arrivalDayOffset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 5
                               },
                               "coachOrTerminal": {
                                 "type": "string"
@@ -11801,6 +12207,20 @@
                                 "type": "number"
                               },
                               "estimatedDurationMins": {
+                                "type": "integer"
+                              },
+                              "isIntercityLeg": {
+                                "type": "boolean"
+                              },
+                              "legDirection": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "intercity",
+                                  "return"
+                                ]
+                              },
+                              "approxFareInr": {
                                 "type": "integer"
                               },
                               "advisory": {
@@ -12504,6 +12924,746 @@
                     "advisories",
                     "googleMapsUrl",
                     "attribution"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/transit/options": {
+      "post": {
+        "summary": "Resolves real multi-modal outbound and return transit options (train, flight, drive, combo) between an origin and destination(s)",
+        "tags": [
+          "Geo",
+          "Import"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "origin": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 140
+                      },
+                      "city": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "hubCode": {
+                        "type": "string",
+                        "maxLength": 16
+                      },
+                      "country": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "destinationSlug": {
+                        "type": "string"
+                      },
+                      "lat": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "lng": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                      },
+                      "resolved": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "resolved"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "returnPoint": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 140
+                      },
+                      "city": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "hubCode": {
+                        "type": "string",
+                        "maxLength": 16
+                      },
+                      "country": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "destinationSlug": {
+                        "type": "string"
+                      },
+                      "lat": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "lng": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                      },
+                      "resolved": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "resolved"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "roundTrip": {
+                    "type": "boolean"
+                  },
+                  "transportMode": {
+                    "type": "string",
+                    "enum": [
+                      "any",
+                      "train",
+                      "flight",
+                      "drive",
+                      "bus",
+                      "combo"
+                    ]
+                  },
+                  "firstDestination": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "destinationSlug": {
+                        "type": "string"
+                      },
+                      "lat": {
+                        "type": "number"
+                      },
+                      "lng": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "lastDestination": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "destinationSlug": {
+                        "type": "string"
+                      },
+                      "lat": {
+                        "type": "number"
+                      },
+                      "lng": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "startDateIso": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "endDateIso": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "origin": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 140
+                        },
+                        "city": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "hubCode": {
+                          "type": "string",
+                          "maxLength": 16
+                        },
+                        "country": {
+                          "type": "string",
+                          "maxLength": 80
+                        },
+                        "destinationSlug": {
+                          "type": "string"
+                        },
+                        "lat": {
+                          "type": "number",
+                          "minimum": -90,
+                          "maximum": 90
+                        },
+                        "lng": {
+                          "type": "number",
+                          "minimum": -180,
+                          "maximum": 180
+                        },
+                        "resolved": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "resolved"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "returnPoint": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 140
+                        },
+                        "city": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "hubCode": {
+                          "type": "string",
+                          "maxLength": 16
+                        },
+                        "country": {
+                          "type": "string",
+                          "maxLength": 80
+                        },
+                        "destinationSlug": {
+                          "type": "string"
+                        },
+                        "lat": {
+                          "type": "number",
+                          "minimum": -90,
+                          "maximum": 90
+                        },
+                        "lng": {
+                          "type": "number",
+                          "minimum": -180,
+                          "maximum": 180
+                        },
+                        "resolved": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "resolved"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "roundTrip": {
+                      "type": "boolean"
+                    },
+                    "selectedOutboundOptionId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "selectedReturnOptionId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "routeOptions": {
+                      "type": "object",
+                      "properties": {
+                        "outbound": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "direction": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "return"
+                                ]
+                              },
+                              "modeCategory": {
+                                "type": "string",
+                                "enum": [
+                                  "train",
+                                  "flight",
+                                  "drive",
+                                  "bus",
+                                  "combo"
+                                ]
+                              },
+                              "summaryLabel": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "totalDurationMins": {
+                                "type": "integer",
+                                "exclusiveMinimum": true,
+                                "minimum": 0
+                              },
+                              "transitDaysRequired": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 6
+                              },
+                              "totalDistanceKm": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "approxFareInr": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "recommended": {
+                                "type": "boolean",
+                                "default": false
+                              },
+                              "feasibilityWarning": {
+                                "type": "string",
+                                "maxLength": 360
+                              },
+                              "legs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "mode": {
+                                      "type": "string",
+                                      "enum": [
+                                        "rail",
+                                        "flight",
+                                        "bus",
+                                        "highway_cab",
+                                        "hill_cab",
+                                        "ferry"
+                                      ]
+                                    },
+                                    "title": {
+                                      "type": "string",
+                                      "maxLength": 220
+                                    },
+                                    "carrierName": {
+                                      "type": "string",
+                                      "maxLength": 120
+                                    },
+                                    "vehicleCode": {
+                                      "type": "string",
+                                      "maxLength": 40
+                                    },
+                                    "fromName": {
+                                      "type": "string",
+                                      "maxLength": 140
+                                    },
+                                    "fromCode": {
+                                      "type": "string",
+                                      "maxLength": 16
+                                    },
+                                    "fromLat": {
+                                      "type": "number",
+                                      "minimum": -90,
+                                      "maximum": 90
+                                    },
+                                    "fromLng": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "toName": {
+                                      "type": "string",
+                                      "maxLength": 140
+                                    },
+                                    "toCode": {
+                                      "type": "string",
+                                      "maxLength": 16
+                                    },
+                                    "toLat": {
+                                      "type": "number",
+                                      "minimum": -90,
+                                      "maximum": 90
+                                    },
+                                    "toLng": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "departureTime": {
+                                      "type": "string",
+                                      "maxLength": 16
+                                    },
+                                    "arrivalTime": {
+                                      "type": "string",
+                                      "maxLength": 16
+                                    },
+                                    "durationMins": {
+                                      "type": "integer",
+                                      "exclusiveMinimum": true,
+                                      "minimum": 0
+                                    },
+                                    "distanceKm": {
+                                      "type": "number",
+                                      "minimum": 0
+                                    },
+                                    "dayOffset": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 6,
+                                      "default": 0
+                                    },
+                                    "overnightHaltCity": {
+                                      "type": "string",
+                                      "maxLength": 100
+                                    },
+                                    "coachOrTerminal": {
+                                      "type": "string",
+                                      "maxLength": 80
+                                    },
+                                    "approxFareInr": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "advisory": {
+                                      "type": "string",
+                                      "maxLength": 320
+                                    },
+                                    "source": {
+                                      "type": "string",
+                                      "enum": [
+                                        "live_api",
+                                        "verified_timetable",
+                                        "ors_road",
+                                        "ai_grounded"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "mode",
+                                    "title",
+                                    "fromName",
+                                    "fromLat",
+                                    "fromLng",
+                                    "toName",
+                                    "toLat",
+                                    "toLng",
+                                    "departureTime",
+                                    "arrivalTime",
+                                    "durationMins",
+                                    "distanceKm",
+                                    "source"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "minItems": 1,
+                                "maxItems": 4
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "direction",
+                              "modeCategory",
+                              "summaryLabel",
+                              "totalDurationMins",
+                              "transitDaysRequired",
+                              "totalDistanceKm",
+                              "legs"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "return": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "direction": {
+                                "type": "string",
+                                "enum": [
+                                  "outbound",
+                                  "return"
+                                ]
+                              },
+                              "modeCategory": {
+                                "type": "string",
+                                "enum": [
+                                  "train",
+                                  "flight",
+                                  "drive",
+                                  "bus",
+                                  "combo"
+                                ]
+                              },
+                              "summaryLabel": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "totalDurationMins": {
+                                "type": "integer",
+                                "exclusiveMinimum": true,
+                                "minimum": 0
+                              },
+                              "transitDaysRequired": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 6
+                              },
+                              "totalDistanceKm": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "approxFareInr": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "recommended": {
+                                "type": "boolean",
+                                "default": false
+                              },
+                              "feasibilityWarning": {
+                                "type": "string",
+                                "maxLength": 360
+                              },
+                              "legs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "mode": {
+                                      "type": "string",
+                                      "enum": [
+                                        "rail",
+                                        "flight",
+                                        "bus",
+                                        "highway_cab",
+                                        "hill_cab",
+                                        "ferry"
+                                      ]
+                                    },
+                                    "title": {
+                                      "type": "string",
+                                      "maxLength": 220
+                                    },
+                                    "carrierName": {
+                                      "type": "string",
+                                      "maxLength": 120
+                                    },
+                                    "vehicleCode": {
+                                      "type": "string",
+                                      "maxLength": 40
+                                    },
+                                    "fromName": {
+                                      "type": "string",
+                                      "maxLength": 140
+                                    },
+                                    "fromCode": {
+                                      "type": "string",
+                                      "maxLength": 16
+                                    },
+                                    "fromLat": {
+                                      "type": "number",
+                                      "minimum": -90,
+                                      "maximum": 90
+                                    },
+                                    "fromLng": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "toName": {
+                                      "type": "string",
+                                      "maxLength": 140
+                                    },
+                                    "toCode": {
+                                      "type": "string",
+                                      "maxLength": 16
+                                    },
+                                    "toLat": {
+                                      "type": "number",
+                                      "minimum": -90,
+                                      "maximum": 90
+                                    },
+                                    "toLng": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "departureTime": {
+                                      "type": "string",
+                                      "maxLength": 16
+                                    },
+                                    "arrivalTime": {
+                                      "type": "string",
+                                      "maxLength": 16
+                                    },
+                                    "durationMins": {
+                                      "type": "integer",
+                                      "exclusiveMinimum": true,
+                                      "minimum": 0
+                                    },
+                                    "distanceKm": {
+                                      "type": "number",
+                                      "minimum": 0
+                                    },
+                                    "dayOffset": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 6,
+                                      "default": 0
+                                    },
+                                    "overnightHaltCity": {
+                                      "type": "string",
+                                      "maxLength": 100
+                                    },
+                                    "coachOrTerminal": {
+                                      "type": "string",
+                                      "maxLength": 80
+                                    },
+                                    "approxFareInr": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "advisory": {
+                                      "type": "string",
+                                      "maxLength": 320
+                                    },
+                                    "source": {
+                                      "type": "string",
+                                      "enum": [
+                                        "live_api",
+                                        "verified_timetable",
+                                        "ors_road",
+                                        "ai_grounded"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "mode",
+                                    "title",
+                                    "fromName",
+                                    "fromLat",
+                                    "fromLng",
+                                    "toName",
+                                    "toLat",
+                                    "toLng",
+                                    "departureTime",
+                                    "arrivalTime",
+                                    "durationMins",
+                                    "distanceKm",
+                                    "source"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "minItems": 1,
+                                "maxItems": 4
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "direction",
+                              "modeCategory",
+                              "summaryLabel",
+                              "totalDurationMins",
+                              "transitDaysRequired",
+                              "totalDistanceKm",
+                              "legs"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "outbound",
+                        "return"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "origin",
+                    "returnPoint",
+                    "roundTrip",
+                    "selectedOutboundOptionId",
+                    "selectedReturnOptionId",
+                    "routeOptions"
                   ],
                   "additionalProperties": false
                 }
@@ -16249,6 +17409,546 @@
                           "minLength": 1,
                           "maxLength": 140
                         },
+                        "origin": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 140
+                            },
+                            "city": {
+                              "type": "string",
+                              "maxLength": 100
+                            },
+                            "hubCode": {
+                              "type": "string",
+                              "maxLength": 16
+                            },
+                            "country": {
+                              "type": "string",
+                              "maxLength": 80
+                            },
+                            "destinationSlug": {
+                              "type": "string"
+                            },
+                            "lat": {
+                              "type": "number",
+                              "minimum": -90,
+                              "maximum": 90
+                            },
+                            "lng": {
+                              "type": "number",
+                              "minimum": -180,
+                              "maximum": 180
+                            },
+                            "resolved": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "resolved"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "returnPoint": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 140
+                            },
+                            "city": {
+                              "type": "string",
+                              "maxLength": 100
+                            },
+                            "hubCode": {
+                              "type": "string",
+                              "maxLength": 16
+                            },
+                            "country": {
+                              "type": "string",
+                              "maxLength": 80
+                            },
+                            "destinationSlug": {
+                              "type": "string"
+                            },
+                            "lat": {
+                              "type": "number",
+                              "minimum": -90,
+                              "maximum": 90
+                            },
+                            "lng": {
+                              "type": "number",
+                              "minimum": -180,
+                              "maximum": 180
+                            },
+                            "resolved": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "resolved"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "roundTrip": {
+                          "type": "boolean"
+                        },
+                        "transportMode": {
+                          "type": "string",
+                          "enum": [
+                            "any",
+                            "train",
+                            "flight",
+                            "drive",
+                            "bus",
+                            "combo"
+                          ]
+                        },
+                        "selectedOutboundOptionId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 80
+                        },
+                        "selectedReturnOptionId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 80
+                        },
+                        "routeOptions": {
+                          "type": "object",
+                          "properties": {
+                            "outbound": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "direction": {
+                                    "type": "string",
+                                    "enum": [
+                                      "outbound",
+                                      "return"
+                                    ]
+                                  },
+                                  "modeCategory": {
+                                    "type": "string",
+                                    "enum": [
+                                      "train",
+                                      "flight",
+                                      "drive",
+                                      "bus",
+                                      "combo"
+                                    ]
+                                  },
+                                  "summaryLabel": {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  },
+                                  "totalDurationMins": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": true,
+                                    "minimum": 0
+                                  },
+                                  "transitDaysRequired": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 6
+                                  },
+                                  "totalDistanceKm": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "approxFareInr": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "recommended": {
+                                    "type": "boolean",
+                                    "default": false
+                                  },
+                                  "feasibilityWarning": {
+                                    "type": "string",
+                                    "maxLength": 360
+                                  },
+                                  "legs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "mode": {
+                                          "type": "string",
+                                          "enum": [
+                                            "rail",
+                                            "flight",
+                                            "bus",
+                                            "highway_cab",
+                                            "hill_cab",
+                                            "ferry"
+                                          ]
+                                        },
+                                        "title": {
+                                          "type": "string",
+                                          "maxLength": 220
+                                        },
+                                        "carrierName": {
+                                          "type": "string",
+                                          "maxLength": 120
+                                        },
+                                        "vehicleCode": {
+                                          "type": "string",
+                                          "maxLength": 40
+                                        },
+                                        "fromName": {
+                                          "type": "string",
+                                          "maxLength": 140
+                                        },
+                                        "fromCode": {
+                                          "type": "string",
+                                          "maxLength": 16
+                                        },
+                                        "fromLat": {
+                                          "type": "number",
+                                          "minimum": -90,
+                                          "maximum": 90
+                                        },
+                                        "fromLng": {
+                                          "type": "number",
+                                          "minimum": -180,
+                                          "maximum": 180
+                                        },
+                                        "toName": {
+                                          "type": "string",
+                                          "maxLength": 140
+                                        },
+                                        "toCode": {
+                                          "type": "string",
+                                          "maxLength": 16
+                                        },
+                                        "toLat": {
+                                          "type": "number",
+                                          "minimum": -90,
+                                          "maximum": 90
+                                        },
+                                        "toLng": {
+                                          "type": "number",
+                                          "minimum": -180,
+                                          "maximum": 180
+                                        },
+                                        "departureTime": {
+                                          "type": "string",
+                                          "maxLength": 16
+                                        },
+                                        "arrivalTime": {
+                                          "type": "string",
+                                          "maxLength": 16
+                                        },
+                                        "durationMins": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": true,
+                                          "minimum": 0
+                                        },
+                                        "distanceKm": {
+                                          "type": "number",
+                                          "minimum": 0
+                                        },
+                                        "dayOffset": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 6,
+                                          "default": 0
+                                        },
+                                        "overnightHaltCity": {
+                                          "type": "string",
+                                          "maxLength": 100
+                                        },
+                                        "coachOrTerminal": {
+                                          "type": "string",
+                                          "maxLength": 80
+                                        },
+                                        "approxFareInr": {
+                                          "type": "integer",
+                                          "minimum": 0
+                                        },
+                                        "advisory": {
+                                          "type": "string",
+                                          "maxLength": 320
+                                        },
+                                        "source": {
+                                          "type": "string",
+                                          "enum": [
+                                            "live_api",
+                                            "verified_timetable",
+                                            "ors_road",
+                                            "ai_grounded"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "mode",
+                                        "title",
+                                        "fromName",
+                                        "fromLat",
+                                        "fromLng",
+                                        "toName",
+                                        "toLat",
+                                        "toLng",
+                                        "departureTime",
+                                        "arrivalTime",
+                                        "durationMins",
+                                        "distanceKm",
+                                        "source"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 4
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "direction",
+                                  "modeCategory",
+                                  "summaryLabel",
+                                  "totalDurationMins",
+                                  "transitDaysRequired",
+                                  "totalDistanceKm",
+                                  "legs"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "maxItems": 6
+                            },
+                            "return": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "direction": {
+                                    "type": "string",
+                                    "enum": [
+                                      "outbound",
+                                      "return"
+                                    ]
+                                  },
+                                  "modeCategory": {
+                                    "type": "string",
+                                    "enum": [
+                                      "train",
+                                      "flight",
+                                      "drive",
+                                      "bus",
+                                      "combo"
+                                    ]
+                                  },
+                                  "summaryLabel": {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  },
+                                  "totalDurationMins": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": true,
+                                    "minimum": 0
+                                  },
+                                  "transitDaysRequired": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 6
+                                  },
+                                  "totalDistanceKm": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "approxFareInr": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "recommended": {
+                                    "type": "boolean",
+                                    "default": false
+                                  },
+                                  "feasibilityWarning": {
+                                    "type": "string",
+                                    "maxLength": 360
+                                  },
+                                  "legs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "mode": {
+                                          "type": "string",
+                                          "enum": [
+                                            "rail",
+                                            "flight",
+                                            "bus",
+                                            "highway_cab",
+                                            "hill_cab",
+                                            "ferry"
+                                          ]
+                                        },
+                                        "title": {
+                                          "type": "string",
+                                          "maxLength": 220
+                                        },
+                                        "carrierName": {
+                                          "type": "string",
+                                          "maxLength": 120
+                                        },
+                                        "vehicleCode": {
+                                          "type": "string",
+                                          "maxLength": 40
+                                        },
+                                        "fromName": {
+                                          "type": "string",
+                                          "maxLength": 140
+                                        },
+                                        "fromCode": {
+                                          "type": "string",
+                                          "maxLength": 16
+                                        },
+                                        "fromLat": {
+                                          "type": "number",
+                                          "minimum": -90,
+                                          "maximum": 90
+                                        },
+                                        "fromLng": {
+                                          "type": "number",
+                                          "minimum": -180,
+                                          "maximum": 180
+                                        },
+                                        "toName": {
+                                          "type": "string",
+                                          "maxLength": 140
+                                        },
+                                        "toCode": {
+                                          "type": "string",
+                                          "maxLength": 16
+                                        },
+                                        "toLat": {
+                                          "type": "number",
+                                          "minimum": -90,
+                                          "maximum": 90
+                                        },
+                                        "toLng": {
+                                          "type": "number",
+                                          "minimum": -180,
+                                          "maximum": 180
+                                        },
+                                        "departureTime": {
+                                          "type": "string",
+                                          "maxLength": 16
+                                        },
+                                        "arrivalTime": {
+                                          "type": "string",
+                                          "maxLength": 16
+                                        },
+                                        "durationMins": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": true,
+                                          "minimum": 0
+                                        },
+                                        "distanceKm": {
+                                          "type": "number",
+                                          "minimum": 0
+                                        },
+                                        "dayOffset": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 6,
+                                          "default": 0
+                                        },
+                                        "overnightHaltCity": {
+                                          "type": "string",
+                                          "maxLength": 100
+                                        },
+                                        "coachOrTerminal": {
+                                          "type": "string",
+                                          "maxLength": 80
+                                        },
+                                        "approxFareInr": {
+                                          "type": "integer",
+                                          "minimum": 0
+                                        },
+                                        "advisory": {
+                                          "type": "string",
+                                          "maxLength": 320
+                                        },
+                                        "source": {
+                                          "type": "string",
+                                          "enum": [
+                                            "live_api",
+                                            "verified_timetable",
+                                            "ors_road",
+                                            "ai_grounded"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "mode",
+                                        "title",
+                                        "fromName",
+                                        "fromLat",
+                                        "fromLng",
+                                        "toName",
+                                        "toLat",
+                                        "toLng",
+                                        "departureTime",
+                                        "arrivalTime",
+                                        "durationMins",
+                                        "distanceKm",
+                                        "source"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 4
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "direction",
+                                  "modeCategory",
+                                  "summaryLabel",
+                                  "totalDurationMins",
+                                  "transitDaysRequired",
+                                  "totalDistanceKm",
+                                  "legs"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "maxItems": 6
+                            }
+                          },
+                          "required": [
+                            "outbound",
+                            "return"
+                          ],
+                          "additionalProperties": false
+                        },
                         "destinations": {
                           "type": "array",
                           "items": {
@@ -16859,6 +18559,546 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 140
+                      },
+                      "origin": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 140
+                          },
+                          "city": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "hubCode": {
+                            "type": "string",
+                            "maxLength": 16
+                          },
+                          "country": {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          "destinationSlug": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          },
+                          "lng": {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "resolved"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "returnPoint": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 140
+                          },
+                          "city": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "hubCode": {
+                            "type": "string",
+                            "maxLength": 16
+                          },
+                          "country": {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          "destinationSlug": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          },
+                          "lng": {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "resolved"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "roundTrip": {
+                        "type": "boolean"
+                      },
+                      "transportMode": {
+                        "type": "string",
+                        "enum": [
+                          "any",
+                          "train",
+                          "flight",
+                          "drive",
+                          "bus",
+                          "combo"
+                        ]
+                      },
+                      "selectedOutboundOptionId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 80
+                      },
+                      "selectedReturnOptionId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 80
+                      },
+                      "routeOptions": {
+                        "type": "object",
+                        "properties": {
+                          "outbound": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 80
+                                },
+                                "direction": {
+                                  "type": "string",
+                                  "enum": [
+                                    "outbound",
+                                    "return"
+                                  ]
+                                },
+                                "modeCategory": {
+                                  "type": "string",
+                                  "enum": [
+                                    "train",
+                                    "flight",
+                                    "drive",
+                                    "bus",
+                                    "combo"
+                                  ]
+                                },
+                                "summaryLabel": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                },
+                                "totalDurationMins": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": true,
+                                  "minimum": 0
+                                },
+                                "transitDaysRequired": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 6
+                                },
+                                "totalDistanceKm": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "approxFareInr": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "recommended": {
+                                  "type": "boolean",
+                                  "default": false
+                                },
+                                "feasibilityWarning": {
+                                  "type": "string",
+                                  "maxLength": 360
+                                },
+                                "legs": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "mode": {
+                                        "type": "string",
+                                        "enum": [
+                                          "rail",
+                                          "flight",
+                                          "bus",
+                                          "highway_cab",
+                                          "hill_cab",
+                                          "ferry"
+                                        ]
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "maxLength": 220
+                                      },
+                                      "carrierName": {
+                                        "type": "string",
+                                        "maxLength": 120
+                                      },
+                                      "vehicleCode": {
+                                        "type": "string",
+                                        "maxLength": 40
+                                      },
+                                      "fromName": {
+                                        "type": "string",
+                                        "maxLength": 140
+                                      },
+                                      "fromCode": {
+                                        "type": "string",
+                                        "maxLength": 16
+                                      },
+                                      "fromLat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "fromLng": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "toName": {
+                                        "type": "string",
+                                        "maxLength": 140
+                                      },
+                                      "toCode": {
+                                        "type": "string",
+                                        "maxLength": 16
+                                      },
+                                      "toLat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "toLng": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "departureTime": {
+                                        "type": "string",
+                                        "maxLength": 16
+                                      },
+                                      "arrivalTime": {
+                                        "type": "string",
+                                        "maxLength": 16
+                                      },
+                                      "durationMins": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": true,
+                                        "minimum": 0
+                                      },
+                                      "distanceKm": {
+                                        "type": "number",
+                                        "minimum": 0
+                                      },
+                                      "dayOffset": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 6,
+                                        "default": 0
+                                      },
+                                      "overnightHaltCity": {
+                                        "type": "string",
+                                        "maxLength": 100
+                                      },
+                                      "coachOrTerminal": {
+                                        "type": "string",
+                                        "maxLength": 80
+                                      },
+                                      "approxFareInr": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                      },
+                                      "advisory": {
+                                        "type": "string",
+                                        "maxLength": 320
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "enum": [
+                                          "live_api",
+                                          "verified_timetable",
+                                          "ors_road",
+                                          "ai_grounded"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "mode",
+                                      "title",
+                                      "fromName",
+                                      "fromLat",
+                                      "fromLng",
+                                      "toName",
+                                      "toLat",
+                                      "toLng",
+                                      "departureTime",
+                                      "arrivalTime",
+                                      "durationMins",
+                                      "distanceKm",
+                                      "source"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "minItems": 1,
+                                  "maxItems": 4
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "direction",
+                                "modeCategory",
+                                "summaryLabel",
+                                "totalDurationMins",
+                                "transitDaysRequired",
+                                "totalDistanceKm",
+                                "legs"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "maxItems": 6
+                          },
+                          "return": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 80
+                                },
+                                "direction": {
+                                  "type": "string",
+                                  "enum": [
+                                    "outbound",
+                                    "return"
+                                  ]
+                                },
+                                "modeCategory": {
+                                  "type": "string",
+                                  "enum": [
+                                    "train",
+                                    "flight",
+                                    "drive",
+                                    "bus",
+                                    "combo"
+                                  ]
+                                },
+                                "summaryLabel": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                },
+                                "totalDurationMins": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": true,
+                                  "minimum": 0
+                                },
+                                "transitDaysRequired": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 6
+                                },
+                                "totalDistanceKm": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "approxFareInr": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "recommended": {
+                                  "type": "boolean",
+                                  "default": false
+                                },
+                                "feasibilityWarning": {
+                                  "type": "string",
+                                  "maxLength": 360
+                                },
+                                "legs": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "mode": {
+                                        "type": "string",
+                                        "enum": [
+                                          "rail",
+                                          "flight",
+                                          "bus",
+                                          "highway_cab",
+                                          "hill_cab",
+                                          "ferry"
+                                        ]
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "maxLength": 220
+                                      },
+                                      "carrierName": {
+                                        "type": "string",
+                                        "maxLength": 120
+                                      },
+                                      "vehicleCode": {
+                                        "type": "string",
+                                        "maxLength": 40
+                                      },
+                                      "fromName": {
+                                        "type": "string",
+                                        "maxLength": 140
+                                      },
+                                      "fromCode": {
+                                        "type": "string",
+                                        "maxLength": 16
+                                      },
+                                      "fromLat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "fromLng": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "toName": {
+                                        "type": "string",
+                                        "maxLength": 140
+                                      },
+                                      "toCode": {
+                                        "type": "string",
+                                        "maxLength": 16
+                                      },
+                                      "toLat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "toLng": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "departureTime": {
+                                        "type": "string",
+                                        "maxLength": 16
+                                      },
+                                      "arrivalTime": {
+                                        "type": "string",
+                                        "maxLength": 16
+                                      },
+                                      "durationMins": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": true,
+                                        "minimum": 0
+                                      },
+                                      "distanceKm": {
+                                        "type": "number",
+                                        "minimum": 0
+                                      },
+                                      "dayOffset": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 6,
+                                        "default": 0
+                                      },
+                                      "overnightHaltCity": {
+                                        "type": "string",
+                                        "maxLength": 100
+                                      },
+                                      "coachOrTerminal": {
+                                        "type": "string",
+                                        "maxLength": 80
+                                      },
+                                      "approxFareInr": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                      },
+                                      "advisory": {
+                                        "type": "string",
+                                        "maxLength": 320
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "enum": [
+                                          "live_api",
+                                          "verified_timetable",
+                                          "ors_road",
+                                          "ai_grounded"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "mode",
+                                      "title",
+                                      "fromName",
+                                      "fromLat",
+                                      "fromLng",
+                                      "toName",
+                                      "toLat",
+                                      "toLng",
+                                      "departureTime",
+                                      "arrivalTime",
+                                      "durationMins",
+                                      "distanceKm",
+                                      "source"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "minItems": 1,
+                                  "maxItems": 4
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "direction",
+                                "modeCategory",
+                                "summaryLabel",
+                                "totalDurationMins",
+                                "transitDaysRequired",
+                                "totalDistanceKm",
+                                "legs"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "maxItems": 6
+                          }
+                        },
+                        "required": [
+                          "outbound",
+                          "return"
+                        ],
+                        "additionalProperties": false
                       },
                       "destinations": {
                         "type": "array",

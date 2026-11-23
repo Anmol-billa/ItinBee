@@ -6,6 +6,57 @@
 export type GroupType = 'solo' | 'couple' | 'family' | 'friends' | 'seniors' | 'mixed';
 export type BudgetTier = 'budget' | 'mid' | 'premium';
 export type Pace = 'relaxed' | 'moderate' | 'packed';
+export type TransportMode = 'any' | 'train' | 'flight' | 'drive' | 'bus' | 'combo';
+
+export interface JourneyPlace {
+  name: string;
+  city?: string;
+  hubCode?: string;
+  country?: string;
+  destinationSlug?: string;
+  lat?: number;
+  lng?: number;
+  resolved: boolean;
+}
+
+export interface TransitLegSpec {
+  mode: 'rail' | 'flight' | 'bus' | 'highway_cab' | 'hill_cab' | 'ferry';
+  title: string;
+  carrierName?: string;
+  vehicleCode?: string;
+  fromName: string;
+  fromCode?: string;
+  fromLat: number;
+  fromLng: number;
+  toName: string;
+  toCode?: string;
+  toLat: number;
+  toLng: number;
+  departureTime: string;
+  arrivalTime: string;
+  durationMins: number;
+  distanceKm: number;
+  dayOffset?: number;
+  overnightHaltCity?: string;
+  coachOrTerminal?: string;
+  approxFareInr?: number;
+  advisory?: string;
+  source: 'live_api' | 'verified_timetable' | 'ors_road' | 'ai_grounded';
+}
+
+export interface TransitRouteOption {
+  id: string;
+  direction: 'outbound' | 'return';
+  modeCategory: 'train' | 'flight' | 'drive' | 'bus' | 'combo';
+  summaryLabel: string;
+  totalDurationMins: number;
+  transitDaysRequired: number;
+  totalDistanceKm: number;
+  approxFareInr?: number;
+  recommended?: boolean;
+  feasibilityWarning?: string;
+  legs: TransitLegSpec[];
+}
 
 export interface IntentDestination {
   name: string;
@@ -93,6 +144,16 @@ export interface IntentQuestion {
 
 export interface TripIntent {
   title: string;
+  origin?: JourneyPlace | null;
+  returnPoint?: JourneyPlace | null;
+  roundTrip?: boolean;
+  transportMode?: TransportMode;
+  selectedOutboundOptionId?: string | null;
+  selectedReturnOptionId?: string | null;
+  routeOptions?: {
+    outbound: TransitRouteOption[];
+    return: TransitRouteOption[];
+  };
   destinations: IntentDestination[];
   dates: {
     start: string | null;

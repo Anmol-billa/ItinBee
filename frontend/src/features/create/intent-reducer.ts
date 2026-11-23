@@ -3,11 +3,15 @@ import type {
   GeoSuggestion,
   GroupType,
   IntentDestination,
+  JourneyPlace,
   Pace,
+  TransitRouteOption,
+  TransportMode,
   TripIntent,
 } from '@/lib/import-types';
 
 export type DateMode = 'dates' | 'days';
+export type ReturnMode = 'round_trip' | 'one_way' | 'custom';
 
 export interface IntentFormState {
   intent: TripIntent;
@@ -17,8 +21,25 @@ export interface IntentFormState {
 
 export function initIntentForm(intent: TripIntent): IntentFormState {
   const sorted = [...intent.destinations].sort((a, b) => a.order - b.order);
+  const hasOrigin = Boolean(intent.origin?.name);
+  const roundTrip = intent.roundTrip ?? hasOrigin;
   return {
-    intent: { ...intent, destinations: renumber(sorted) },
+    intent: {
+      ...intent,
+      destinations: renumber(sorted),
+      origin: intent.origin ?? null,
+      returnPoint:
+        intent.returnPoint !== undefined
+          ? intent.returnPoint
+          : roundTrip && intent.origin
+            ? { ...intent.origin }
+            : null,
+      roundTrip,
+      transportMode: intent.transportMode ?? 'any',
+      selectedOutboundOptionId: intent.selectedOutboundOptionId ?? null,
+      selectedReturnOptionId: intent.selectedReturnOptionId ?? null,
+      routeOptions: intent.routeOptions ?? { outbound: [], return: [] },
+    },
     answers: {},
     dateMode: intent.dates.start && intent.dates.end ? 'dates' : 'days',
   };
@@ -26,6 +47,24 @@ export function initIntentForm(intent: TripIntent): IntentFormState {
 
 export type IntentAction =
   | { type: 'title'; value: string }
+  | { type: 'originSet'; suggestion: GeoSuggestion | { name: string } | null }
+  | { type: 'returnPointSet'; suggestion: GeoSuggestion | { name: string } | null }
+  | { type: 'roundTripSet'; value: boolean }
+  | { type: 'returnMode'; mode: ReturnMode }
+  | { type: 'transportMode'; mode: TransportMode }
+  | { type: 'selectOutboundOption'; id: string }
+  | { type: 'selectReturnOption'; id: string }
+  | {
+      type: 'routeOptionsResolved';
+      payload: {
+        origin: JourneyPlace | null;
+        returnPoint: JourneyPlace | null;
+        roundTrip: boolean;
+        routeOptions: { outbound: TransitRouteOption[]; return: TransitRouteOption[] };
+        selectedOutboundOptionId: string | null;
+        selectedReturnOptionId: string | null;
+      };
+    }
   | { type: 'destRemove'; index: number }
   | { type: 'destMove'; index: number; dir: -1 | 1 }
   | { type: 'destAdd'; suggestion: GeoSuggestion | { name: string } }
@@ -86,6 +125,36 @@ function fromSuggestion(s: GeoSuggestion | { name: string }, order: number, prev
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+function toJourneyPlace(s: GeoSuggestion | { name: string }): JourneyPlace {
+  if ('lat' in s) {
+    return {
+      name: s.name.trim(),
+      country: s.countryCode ?? undefined,
+      destinationSlug: s.slug ?? undefined,
+      lat: s.lat,
+      lng: s.lng,
+      resolved: true,
+    };
+  }
+  return {
+    name: s.name.trim(),
+    resolved: false,
+  };
+}
+
+function pickBestOptionForMode(
+  options: TransitRouteOption[],
+  mode: TransportMode
+): string | null {
+  if (options.length === 0) return null;
+  if (mode !== 'any') {
+    const exact = options.find((o) => o.modeCategory === mode);
+    if (exact) return exact.id;
+  }
+  const recommended = options.find((o) => o.recommended);
+  return (recommended ?? options[0])?.id ?? null;
+}
+
 export function intentReducer(state: IntentFormState, action: IntentAction): IntentFormState {
   const { intent } = state;
   const set = (patch: Partial<TripIntent>): IntentFormState => ({ ...state, intent: { ...intent, ...patch } });
@@ -93,6 +162,121 @@ export function intentReducer(state: IntentFormState, action: IntentAction): Int
   switch (action.type) {
     case 'title':
       return set({ title: action.value });
+
+    case 'originSet': {
+      if (!action.suggestion || !action.suggestion.name.trim()) {
+        return set({
+          origin: null,
+          returnPoint: intent.roundTrip ? null : intent.returnPoint ?? null,
+          roundTrip: false,
+          selectedOutboundOptionId: null,
+          selectedReturnOptionId: null,
+          routeOptions: { outbound: [], return: [] },
+        });
+      }
+      const nextOrigin = toJourneyPlace(action.suggestion);
+      const keepRoundTrip = intent.origin ? Boolean(intent.roundTrip) : true;
+      return set({
+        origin: nextOrigin,
+        roundTrip: keepRoundTrip,
+        returnPoint: keepRoundTrip ? { ...nextOrigin } : intent.returnPoint ?? null,
+      });
+    }
+
+    case 'returnPointSet': {
+      if (!action.suggestion || !action.suggestion.name.trim()) {
+        return set({
+          returnPoint: null,
+          roundTrip: false,
+          selectedReturnOptionId: null,
+        });
+      }
+      const nextReturn = toJourneyPlace(action.suggestion);
+      const isSameOrigin = Boolean(
+        intent.origin?.name && sameName(intent.origin.name, nextReturn.name)
+      );
+      return set({
+        returnPoint: nextReturn,
+        roundTrip: isSameOrigin,
+      });
+    }
+
+    case 'roundTripSet': {
+      if (action.value) {
+        return set({
+          roundTrip: true,
+          returnPoint: intent.origin ? { ...intent.origin } : null,
+        });
+      }
+      return set({
+        roundTrip: false,
+        returnPoint: null,
+        selectedReturnOptionId: null,
+      });
+    }
+
+    case 'returnMode': {
+      if (action.mode === 'round_trip') {
+        return set({
+          roundTrip: true,
+          returnPoint: intent.origin ? { ...intent.origin } : null,
+        });
+      }
+      if (action.mode === 'one_way') {
+        return set({
+          roundTrip: false,
+          returnPoint: null,
+          selectedReturnOptionId: null,
+        });
+      }
+      return set({
+        roundTrip: false,
+      });
+    }
+
+    case 'transportMode': {
+      const outbound = intent.routeOptions?.outbound ?? [];
+      const ret = intent.routeOptions?.return ?? [];
+      return set({
+        transportMode: action.mode,
+        selectedOutboundOptionId:
+          pickBestOptionForMode(outbound, action.mode) ??
+          intent.selectedOutboundOptionId ??
+          null,
+        selectedReturnOptionId:
+          intent.roundTrip || intent.returnPoint
+            ? pickBestOptionForMode(ret, action.mode) ??
+              intent.selectedReturnOptionId ??
+              null
+            : null,
+      });
+    }
+
+    case 'selectOutboundOption':
+      return set({ selectedOutboundOptionId: action.id });
+
+    case 'selectReturnOption':
+      return set({ selectedReturnOptionId: action.id });
+
+    case 'routeOptionsResolved': {
+      const { payload } = action;
+      const outbound = payload.routeOptions.outbound;
+      const ret = payload.routeOptions.return;
+      const keepOut = outbound.some((o) => o.id === intent.selectedOutboundOptionId)
+        ? intent.selectedOutboundOptionId ?? null
+        : payload.selectedOutboundOptionId;
+      const keepRet = ret.some((o) => o.id === intent.selectedReturnOptionId)
+        ? intent.selectedReturnOptionId ?? null
+        : payload.selectedReturnOptionId;
+      return set({
+        origin: payload.origin ?? intent.origin ?? null,
+        returnPoint: payload.returnPoint,
+        roundTrip: payload.roundTrip,
+        routeOptions: payload.routeOptions,
+        selectedOutboundOptionId: keepOut,
+        selectedReturnOptionId: keepRet,
+      });
+    }
 
     case 'destRemove':
       return set({ destinations: renumber(intent.destinations.filter((_, i) => i !== action.index)) });

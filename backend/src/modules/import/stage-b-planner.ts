@@ -19,8 +19,16 @@ import type {
 } from '../../types/domain.js';
 import { toGeminiSchema } from './gemini-schema.js';
 import { groundIntent } from './grounding.js';
-import type { BookingAnchor, IntentDestination, TripIntent } from './intent.js';
+import type {
+  BookingAnchor,
+  IntentDestination,
+  TransitLegSpec,
+  TransitRouteOption,
+  TripIntent,
+} from './intent.js';
 import type { LlmProvider } from './llm/types.js';
+import { buildGoogleMapsDirectionsUrl } from '../geo/curated-india-pois.js';
+import { resolveIntercityTransferLeg } from '../transit/corridor-service.js';
 
 export interface CandidatePlace {
   placeRefId: string;
@@ -142,10 +150,372 @@ function pad2(n: number): string {
 }
 
 function formatHHMM(totalMinutes: number): string {
-  const clamped = Math.max(6 * 60, Math.min(22 * 60 + 30, Math.round(totalMinutes / 15) * 15));
-  const hh = Math.floor(clamped / 60);
-  const mm = clamped % 60;
+  const wrapped = ((Math.round(totalMinutes / 5) * 5) % 1440 + 1440) % 1440;
+  const hh = Math.floor(wrapped / 60);
+  const mm = wrapped % 60;
   return `${pad2(hh)}:${pad2(mm)}`;
+}
+
+const HIGH_ALTITUDE_SLUGS = new Set(['leh', 'ladakh', 'spiti-valley', 'nubra-valley', 'pangong']);
+
+interface DayTransitPlan {
+  isPureTransitDay: boolean;
+  customDayTitle?: string;
+  preStops: PlannedStop[];
+  postStops: PlannedStop[];
+  earliestSightseeingMins: number;
+  latestSightseeingEndMins: number;
+  maxSightseeingStops: number | null;
+}
+
+function legToPlannedStop(
+  leg: TransitLegSpec,
+  refId: string,
+  direction: 'outbound' | 'intercity' | 'return',
+  useOriginPin = false
+): PlannedStop {
+  const lat = useOriginPin ? leg.fromLat : leg.toLat;
+  const lng = useOriginPin ? leg.fromLng : leg.toLng;
+  const gmapsMode = leg.mode === 'rail' || leg.mode === 'bus' ? 'transit' : 'driving';
+  const googleMapsUrl =
+    leg.mode === 'flight'
+      ? `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`
+      : buildGoogleMapsDirectionsUrl(
+          { lat: leg.fromLat, lng: leg.fromLng },
+          { lat: leg.toLat, lng: leg.toLng },
+          gmapsMode === 'transit' ? 'driving' : 'driving'
+        );
+
+  const timeSummary = `${leg.departureTime} → ${leg.arrivalTime}${leg.dayOffset ? ` (+${leg.dayOffset}d)` : ''}`;
+  const noteParts = [
+    `${timeSummary} · ${Math.floor(leg.durationMins / 60)}h ${leg.durationMins % 60 ? `${leg.durationMins % 60}m` : ''}`.trim(),
+    leg.coachOrTerminal ? leg.coachOrTerminal : null,
+    leg.advisory ? leg.advisory : null,
+  ].filter(Boolean);
+
+  return {
+    kind: 'transit',
+    title: leg.title,
+    notes: noteParts.join(' · '),
+    lat,
+    lng,
+    placeRefId: refId,
+    startTime: leg.departureTime,
+    durationMins: leg.durationMins,
+    dietaryFlags: [],
+    accessibilityNotes: leg.overnightHaltCity
+      ? `Overnight halt in ${leg.overnightHaltCity}.`
+      : '',
+    transitMeta: {
+      mode: leg.mode,
+      vehicleCode: leg.vehicleCode,
+      carrierName: leg.carrierName,
+      originCode: leg.fromCode,
+      originName: leg.fromName,
+      destinationCode: leg.toCode,
+      destinationName: leg.toName,
+      departureTime: leg.departureTime,
+      arrivalTime: leg.arrivalTime,
+      arrivalDayOffset: leg.dayOffset,
+      coachOrTerminal: leg.coachOrTerminal,
+      distanceKm: leg.distanceKm,
+      estimatedDurationMins: leg.durationMins,
+      isIntercityLeg: true,
+      legDirection: direction,
+      approxFareInr: leg.approxFareInr,
+      advisory: leg.advisory,
+      googleMapsUrl,
+    },
+  };
+}
+
+function buildDoorToDoorDayPlans(params: {
+  totalDays: number;
+  dayDestinations: IntentDestination[];
+  intent: TripIntent;
+  intercityLegsByDay: Map<number, TransitLegSpec>;
+  registerTransitRef: (refId: string) => void;
+}): Map<number, DayTransitPlan> {
+  const { totalDays, dayDestinations, intent, intercityLegsByDay, registerTransitRef } = params;
+  const plans = new Map<number, DayTransitPlan>();
+
+  const getPlan = (dayNum: number): DayTransitPlan => {
+    let p = plans.get(dayNum);
+    if (!p) {
+      p = {
+        isPureTransitDay: false,
+        preStops: [],
+        postStops: [],
+        earliestSightseeingMins: 9 * 60 + 15,
+        latestSightseeingEndMins: 20 * 60 + 30,
+        maxSightseeingStops: null,
+      };
+      plans.set(dayNum, p);
+    }
+    return p;
+  };
+
+  const hasUploadedTransitBookings = intent.bookings.some((b) => b.itemKind === 'transit');
+  if (hasUploadedTransitBookings) {
+    return plans;
+  }
+
+  const outboundList = intent.routeOptions?.outbound ?? [];
+  const returnList = intent.routeOptions?.return ?? [];
+
+  const outboundOpt: TransitRouteOption | undefined =
+    (intent.selectedOutboundOptionId
+      ? outboundList.find((o) => o.id === intent.selectedOutboundOptionId)
+      : undefined) ?? outboundList.find((o) => o.recommended) ?? outboundList[0];
+
+  const returnOpt: TransitRouteOption | undefined =
+    intent.roundTrip !== false
+      ? (intent.selectedReturnOptionId
+          ? returnList.find((o) => o.id === intent.selectedReturnOptionId)
+          : undefined) ?? returnList.find((o) => o.recommended) ?? returnList[0]
+      : undefined;
+
+  const firstDest = dayDestinations[0];
+  const isHighAltitudeArrival = Boolean(
+    firstDest &&
+      ((firstDest.destinationSlug && HIGH_ALTITUDE_SLUGS.has(firstDest.destinationSlug)) ||
+        /\b(?:leh|ladakh|spiti|kaza|nubra|tawang)\b/i.test(firstDest.name))
+  );
+
+  // 1. OUTBOUND DOOR-TO-DOOR LEGS (Starting at Origin Hub on Day 1!)
+  if (outboundOpt && outboundOpt.legs.length > 0) {
+    const firstLeg = outboundOpt.legs[0]!;
+    const originCityLabel = intent.origin?.city ?? intent.origin?.name ?? firstLeg.fromName;
+    const destName = firstDest?.name ?? outboundOpt.legs[outboundOpt.legs.length - 1]!.toName;
+
+    // Multi-day outbound (e.g. Delhi -> Jammu/Srinagar -> Leh by Train+Road or 2-day Drive) when totalDays >= 3
+    const useTwoDayOutbound =
+      totalDays >= 3 &&
+      outboundOpt.transitDaysRequired >= 1.0 &&
+      outboundOpt.legs.length >= 2;
+
+    const depLeadMins = firstLeg.mode === 'flight' ? 90 : 35;
+    const departRefId = `transit:origin:depart:${outboundOpt.id}`;
+    registerTransitRef(departRefId);
+    const originDepartureStop: PlannedStop = {
+      kind: 'transit',
+      title: `Depart ${firstLeg.fromName}${firstLeg.fromCode ? ` (${firstLeg.fromCode})` : ''}`,
+      notes: `Check-in & boarding at ${firstLeg.fromName} for ${outboundOpt.summaryLabel}.`,
+      lat: firstLeg.fromLat,
+      lng: firstLeg.fromLng,
+      placeRefId: departRefId,
+      startTime: formatHHMM(parseHHMM(firstLeg.departureTime, 7 * 60) - depLeadMins),
+      durationMins: depLeadMins,
+      dietaryFlags: [],
+      accessibilityNotes: '',
+      transitMeta: {
+        mode: firstLeg.mode,
+        originCode: firstLeg.fromCode,
+        originName: firstLeg.fromName,
+        destinationCode: firstLeg.fromCode,
+        destinationName: firstLeg.fromName,
+        departureTime: formatHHMM(parseHHMM(firstLeg.departureTime, 7 * 60) - depLeadMins),
+        arrivalTime: firstLeg.departureTime,
+        distanceKm: 0,
+        estimatedDurationMins: depLeadMins,
+        isIntercityLeg: true,
+        legDirection: 'outbound',
+      },
+    };
+
+    if (useTwoDayOutbound) {
+      const day1Plan = getPlan(1);
+      day1Plan.isPureTransitDay = true;
+      day1Plan.maxSightseeingStops = 0;
+      const splitIdx = Math.max(1, outboundOpt.legs.length - 1);
+      const day1Legs = outboundOpt.legs.slice(0, splitIdx);
+      const day2Legs = outboundOpt.legs.slice(splitIdx);
+      const haltName =
+        day1Legs[day1Legs.length - 1]?.overnightHaltCity ??
+        day1Legs[day1Legs.length - 1]?.toName ??
+        'Transit Hub';
+
+      day1Plan.customDayTitle = `${originCityLabel} → ${haltName}: Outbound ${outboundOpt.modeCategory === 'train' ? 'Rail' : 'Road'} Journey`;
+      day1Plan.preStops.push(originDepartureStop);
+      day1Legs.forEach((leg, i) => {
+        const refId = `transit:out:${outboundOpt.id}:d1:${i}`;
+        registerTransitRef(refId);
+        day1Plan.preStops.push(legToPlannedStop(leg, refId, 'outbound'));
+      });
+
+      const day2Plan = getPlan(2);
+      day2Plan.customDayTitle = `${haltName} → ${destName}: Scenic Arrival`;
+      day2Legs.forEach((leg, i) => {
+        const refId = `transit:out:${outboundOpt.id}:d2:${i}`;
+        registerTransitRef(refId);
+        day2Plan.preStops.push(legToPlannedStop(leg, refId, 'outbound'));
+      });
+      const lastDay2Leg = day2Legs[day2Legs.length - 1]!;
+      const arrMins = parseHHMM(lastDay2Leg.arrivalTime, 17 * 60);
+      day2Plan.earliestSightseeingMins = Math.max(12 * 60, arrMins + 60);
+      day2Plan.maxSightseeingStops = arrMins >= 16 * 60 ? 1 : 2;
+    } else {
+      const day1Plan = getPlan(1);
+      day1Plan.customDayTitle = `${originCityLabel} → ${destName}: Arrival & Orientation`;
+      day1Plan.preStops.push(originDepartureStop);
+      outboundOpt.legs.forEach((leg, i) => {
+        const refId = `transit:out:${outboundOpt.id}:d1:${i}`;
+        registerTransitRef(refId);
+        day1Plan.preStops.push(legToPlannedStop(leg, refId, 'outbound'));
+      });
+
+      const lastLeg = outboundOpt.legs[outboundOpt.legs.length - 1]!;
+      const arrMins = parseHHMM(lastLeg.arrivalTime, 10 * 60);
+
+      // High-altitude air arrival (Leh 3,500m): mandatory 3h acclimatization rest before gentle sunset sightseeing
+      if (
+        isHighAltitudeArrival &&
+        (outboundOpt.modeCategory === 'flight' || outboundOpt.modeCategory === 'combo')
+      ) {
+        const acclimRef = `transit:acclimatize:${firstDest?.destinationSlug ?? 'high-alt'}`;
+        registerTransitRef(acclimRef);
+        const restStart = arrMins + 45;
+        day1Plan.preStops.push({
+          kind: 'stay',
+          title: `${destName} Hotel Check-in & Altitude Acclimatization Rest`,
+          notes:
+            'Mandatory 3-hour rest & hydration at 3,500m after flying in from low altitude before gentle evening sightseeing.',
+          lat: firstDest?.lat ?? lastLeg.toLat,
+          lng: firstDest?.lng ?? lastLeg.toLng,
+          placeRefId: acclimRef,
+          startTime: formatHHMM(restStart),
+          durationMins: 180,
+          dietaryFlags: [],
+          accessibilityNotes: 'High-altitude acclimatization buffer — avoid exertion on Day 1.',
+          transitMeta: {},
+        });
+        day1Plan.earliestSightseeingMins = Math.max(13 * 60 + 30, restStart + 195);
+        day1Plan.maxSightseeingStops = 2;
+      } else if (outboundOpt.transitDaysRequired >= 0.85 || arrMins >= 18 * 60) {
+        day1Plan.earliestSightseeingMins = Math.min(20 * 60, arrMins + 45);
+        day1Plan.maxSightseeingStops = 1;
+      } else {
+        day1Plan.earliestSightseeingMins = Math.max(10 * 60, arrMins + 60);
+        day1Plan.maxSightseeingStops = arrMins >= 14 * 60 ? 2 : null;
+      }
+    }
+  }
+
+  // 2. INTER-CITY TRANSFERS ON DESTINATION CHANGE DAYS (e.g. Jaipur -> Udaipur on Day 3)
+  for (const [dayNum, leg] of intercityLegsByDay.entries()) {
+    const plan = getPlan(dayNum);
+    if (plan.isPureTransitDay) continue;
+    const refId = `transit:intercity:d${dayNum}`;
+    registerTransitRef(refId);
+    plan.preStops.push(legToPlannedStop(leg, refId, 'intercity'));
+    const arrMins = parseHHMM(leg.arrivalTime, 12 * 60 + 30);
+    plan.earliestSightseeingMins = Math.max(plan.earliestSightseeingMins, arrMins + 45);
+    if (arrMins >= 14 * 60) {
+      plan.maxSightseeingStops = Math.min(plan.maxSightseeingStops ?? 3, 2);
+    }
+  }
+
+  // 3. RETURN JOURNEY TO ENDING STATION / HUB
+  if (returnOpt && returnOpt.legs.length > 0 && totalDays >= 2) {
+    const lastLeg = returnOpt.legs[returnOpt.legs.length - 1]!;
+    const returnTargetLabel = intent.returnPoint?.name ?? lastLeg.toName;
+    const lastDestName = dayDestinations[totalDays - 1]?.name ?? returnOpt.legs[0]!.fromName;
+
+    // Multi-day return when transitDaysRequired >= 1.0 AND totalDays >= 5 (keeps >= 1 full sightseeing day in middle!)
+    const useTwoDayReturn =
+      totalDays >= 5 &&
+      returnOpt.transitDaysRequired >= 1.0 &&
+      returnOpt.legs.length >= 2;
+
+    const finalArrivalRef = `transit:return:arrive:${returnOpt.id}`;
+    registerTransitRef(finalArrivalRef);
+    const finalArrivalStop: PlannedStop = {
+      kind: 'transit',
+      title: `Arrive ${returnTargetLabel}${lastLeg.toCode ? ` (${lastLeg.toCode})` : ''}`,
+      notes: `Trip concludes back at ${returnTargetLabel}.`,
+      lat: intent.returnPoint?.lat ?? lastLeg.toLat,
+      lng: intent.returnPoint?.lng ?? lastLeg.toLng,
+      placeRefId: finalArrivalRef,
+      startTime: lastLeg.arrivalTime,
+      durationMins: 20,
+      dietaryFlags: [],
+      accessibilityNotes: '',
+      transitMeta: {
+        mode: lastLeg.mode,
+        originCode: lastLeg.toCode,
+        originName: returnTargetLabel,
+        destinationCode: lastLeg.toCode,
+        destinationName: returnTargetLabel,
+        departureTime: lastLeg.arrivalTime,
+        arrivalTime: lastLeg.arrivalTime,
+        distanceKm: 0,
+        estimatedDurationMins: 20,
+        isIntercityLeg: true,
+        legDirection: 'return',
+      },
+    };
+
+    if (useTwoDayReturn) {
+      const penultDayNum = totalDays - 1;
+      const finalDayNum = totalDays;
+      const penultPlan = getPlan(penultDayNum);
+      const finalPlan = getPlan(finalDayNum);
+
+      const splitIdx = Math.max(1, returnOpt.legs.length - 1);
+      const dayNMinus1Legs = returnOpt.legs.slice(0, splitIdx);
+      const dayNLegs = returnOpt.legs.slice(splitIdx);
+
+      const firstRetDep = parseHHMM(dayNMinus1Legs[0]!.departureTime, 7 * 60 + 30);
+      if (firstRetDep <= 10 * 60 + 30) {
+        penultPlan.isPureTransitDay = true;
+        penultPlan.maxSightseeingStops = 0;
+      } else {
+        penultPlan.latestSightseeingEndMins = firstRetDep - 60;
+        penultPlan.maxSightseeingStops = 1;
+      }
+      penultPlan.customDayTitle = `${lastDestName} → ${dayNMinus1Legs[dayNMinus1Legs.length - 1]!.toName}: Return Journey`;
+      dayNMinus1Legs.forEach((leg, i) => {
+        const refId = `transit:ret:${returnOpt.id}:d${penultDayNum}:${i}`;
+        registerTransitRef(refId);
+        penultPlan.postStops.push(legToPlannedStop(leg, refId, 'return'));
+      });
+
+      finalPlan.isPureTransitDay = true;
+      finalPlan.maxSightseeingStops = 0;
+      finalPlan.customDayTitle = `Return Arrival at ${returnTargetLabel}`;
+      dayNLegs.forEach((leg, i) => {
+        const refId = `transit:ret:${returnOpt.id}:d${finalDayNum}:${i}`;
+        registerTransitRef(refId);
+        finalPlan.preStops.push(legToPlannedStop(leg, refId, 'return'));
+      });
+      finalPlan.postStops.push(finalArrivalStop);
+    } else {
+      const finalPlan = getPlan(totalDays);
+      const firstRetLeg = returnOpt.legs[0]!;
+      const firstRetDep = parseHHMM(firstRetLeg.departureTime, 16 * 60);
+      const bufferBeforeDep = firstRetLeg.mode === 'flight' ? 120 : 50;
+      const cutoff = firstRetDep - bufferBeforeDep;
+
+      finalPlan.customDayTitle = `${lastDestName} & Return to ${returnTargetLabel}`;
+      finalPlan.latestSightseeingEndMins = Math.max(9 * 60 + 30, cutoff);
+      if (cutoff <= 10 * 60) {
+        finalPlan.maxSightseeingStops = 1;
+        finalPlan.earliestSightseeingMins = 8 * 60;
+      } else if (cutoff <= 14 * 60) {
+        finalPlan.maxSightseeingStops = 2;
+        finalPlan.earliestSightseeingMins = 8 * 60 + 30;
+      }
+
+      returnOpt.legs.forEach((leg, i) => {
+        const refId = `transit:ret:${returnOpt.id}:d${totalDays}:${i}`;
+        registerTransitRef(refId);
+        finalPlan.postStops.push(legToPlannedStop(leg, refId, 'return'));
+      });
+      finalPlan.postStops.push(finalArrivalStop);
+    }
+  }
+
+  return plans;
 }
 
 function parseHHMM(hhmm: string | null | undefined, fallbackMins: number): number {
@@ -865,8 +1235,9 @@ function attachBookingsAndScheduleTimes(params: {
     }>;
   }>;
   intent: TripIntent;
+  transitPlansByDay?: Map<number, DayTransitPlan>;
 }): PlannedDay[] {
-  const { rawDays, intent } = params;
+  const { rawDays, intent, transitPlansByDay } = params;
   const totalDays = rawDays.length;
   const hasSeniors = Boolean(
     intent.travellers.hasSeniors || intent.travellers.group === 'seniors'
@@ -901,7 +1272,9 @@ function attachBookingsAndScheduleTimes(params: {
   return rawDays.map((rawDay, idx) => {
     const date = dayDates[idx] ?? null;
     const dayBookings = bookingsByDay.get(rawDay.dayNumber) ?? [];
-    const stops: PlannedStop[] = [];
+    const dayTransit = transitPlansByDay?.get(rawDay.dayNumber);
+    const bookingStops: PlannedStop[] = [];
+    const sightseeingStops: PlannedStop[] = [];
 
     // Fixed booking anchors first so we know blocked windows
     const blockedWindows: Array<[number, number]> = [];
@@ -919,7 +1292,7 @@ function attachBookingsAndScheduleTimes(params: {
       const dur = anchor.itemKind === 'stay' ? 45 : 120;
       blockedWindows.push([startMins, startMins + dur]);
 
-      stops.push({
+      bookingStops.push({
         kind: anchor.itemKind,
         title: anchor.title,
         notes: anchor.summary.headline,
@@ -943,104 +1316,134 @@ function attachBookingsAndScheduleTimes(params: {
       });
     }
 
-    // Starting clock: arrival buffer on Day 1, gentle start for seniors
-    let cursorMins =
-      rawDay.dayNumber === 1
+    const defaultDayStart =
+      rawDay.dayNumber === 1 && !dayTransit
         ? 10 * 60 + 30
         : hasSeniors || intent.pace === 'relaxed'
           ? 9 * 60 + 30
           : 9 * 60;
 
+    let cursorMins = dayTransit
+      ? Math.max(defaultDayStart, dayTransit.earliestSightseeingMins)
+      : defaultDayStart;
+    const latestEndMins = dayTransit?.latestSightseeingEndMins ?? 21 * 60 + 30;
+    const maxSightStops = dayTransit?.maxSightseeingStops ?? null;
+
     let prevCoord: { lat: number; lng: number; title: string } | null = null;
+    if (!dayTransit?.isPureTransitDay) {
+      for (const entry of rawDay.candidates) {
+        if (maxSightStops !== null && sightseeingStops.length >= maxSightStops) {
+          break;
+        }
+        const { cand } = entry;
+        let transitMeta: TransitMeta = {};
+        let legMins = 20;
 
-    for (const entry of rawDay.candidates) {
-      const { cand } = entry;
-      let transitMeta: TransitMeta = {};
-      let legMins = 20;
+        if (prevCoord) {
+          const est = estimateLegTransit({
+            origin: { lat: prevCoord.lat, lng: prevCoord.lng, name: prevCoord.title },
+            destination: { lat: cand.lat, lng: cand.lng, name: cand.title },
+            departureTimeHHMM: formatHHMM(cursorMins),
+          });
+          legMins = Math.min(90, est.estimatedDurationMins);
+          transitMeta = {
+            mode: est.mode,
+            distanceKm: est.distanceKm,
+            estimatedDurationMins: est.estimatedDurationMins,
+            advisory: est.advisory,
+            googleMapsUrl: est.googleMapsUrl,
+          };
+          cursorMins += legMins;
+        }
 
-      if (prevCoord) {
-        const est = estimateLegTransit({
-          origin: { lat: prevCoord.lat, lng: prevCoord.lng, name: prevCoord.title },
-          destination: { lat: cand.lat, lng: cand.lng, name: cand.title },
-          departureTimeHHMM: formatHHMM(cursorMins),
+        if (cand.kind === 'meal' && cursorMins < 12 * 60 + 30 && latestEndMins > 14 * 60) {
+          cursorMins = 12 * 60 + 45;
+        }
+
+        const startMins = entry.overrideStartTime
+          ? Math.max(cursorMins, parseHHMM(entry.overrideStartTime, cursorMins))
+          : cursorMins;
+        const duration = entry.overrideDuration ?? cand.durationMins;
+
+        // Shift past any fixed booking window collision
+        let adjustedStart = startMins;
+        for (const [bStart, bEnd] of blockedWindows) {
+          if (adjustedStart < bEnd && adjustedStart + duration > bStart) {
+            adjustedStart = bEnd + 30;
+          }
+        }
+
+        // Respect return departure cutoff (keep at least 1 stop if day had room and sightseeingStops is empty)
+        if (
+          sightseeingStops.length > 0 &&
+          adjustedStart + Math.min(duration, 60) > latestEndMins
+        ) {
+          break;
+        }
+
+        const dietaryFlags = [...cand.dietaryFlags];
+        if (cand.kind === 'meal') {
+          if (wantsJain && !dietaryFlags.includes('jain_friendly')) {
+            dietaryFlags.push('jain_friendly');
+          }
+          if (wantsVeg && !dietaryFlags.includes('veg_friendly') && !dietaryFlags.includes('pure_veg')) {
+            dietaryFlags.push('veg_friendly');
+          }
+        }
+
+        const seniorRestNote =
+          hasSeniors && !cand.accessibilityNotes
+            ? 'Paced with seated rest buffer for senior travellers.'
+            : cand.accessibilityNotes;
+
+        sightseeingStops.push({
+          kind: cand.kind,
+          title: cand.title,
+          notes: entry.overrideNotes ?? cand.notes,
+          lat: cand.lat,
+          lng: cand.lng,
+          placeRefId: cand.placeRefId,
+          startTime: formatHHMM(adjustedStart),
+          durationMins: duration,
+          dietaryFlags,
+          accessibilityNotes: seniorRestNote,
+          ...(hasSeniors
+            ? {
+                elderSummaryI18n: {
+                  en: `${formatHHMM(adjustedStart)} — ${cand.title}. ${seniorRestNote}`.trim(),
+                },
+              }
+            : {}),
+          transitMeta,
         });
-        legMins = Math.min(90, est.estimatedDurationMins);
-        transitMeta = {
-          mode: est.mode,
-          distanceKm: est.distanceKm,
-          estimatedDurationMins: est.estimatedDurationMins,
-          advisory: est.advisory,
-          googleMapsUrl: est.googleMapsUrl,
-        };
-        cursorMins += legMins;
+
+        prevCoord = { lat: cand.lat, lng: cand.lng, title: cand.title };
+        cursorMins = adjustedStart + duration + (hasSeniors ? 25 : 15);
       }
-
-      if (cand.kind === 'meal' && cursorMins < 12 * 60 + 30) {
-        cursorMins = 12 * 60 + 45;
-      }
-
-      const startMins = entry.overrideStartTime
-        ? parseHHMM(entry.overrideStartTime, cursorMins)
-        : cursorMins;
-      const duration = entry.overrideDuration ?? cand.durationMins;
-
-      // Shift past any fixed booking window collision
-      let adjustedStart = startMins;
-      for (const [bStart, bEnd] of blockedWindows) {
-        if (adjustedStart < bEnd && adjustedStart + duration > bStart) {
-          adjustedStart = bEnd + 30;
-        }
-      }
-
-      const dietaryFlags = [...cand.dietaryFlags];
-      if (cand.kind === 'meal') {
-        if (wantsJain && !dietaryFlags.includes('jain_friendly')) {
-          dietaryFlags.push('jain_friendly');
-        }
-        if (wantsVeg && !dietaryFlags.includes('veg_friendly') && !dietaryFlags.includes('pure_veg')) {
-          dietaryFlags.push('veg_friendly');
-        }
-      }
-
-      const seniorRestNote =
-        hasSeniors && !cand.accessibilityNotes
-          ? 'Paced with seated rest buffer for senior travellers.'
-          : cand.accessibilityNotes;
-
-      stops.push({
-        kind: cand.kind,
-        title: cand.title,
-        notes: entry.overrideNotes ?? cand.notes,
-        lat: cand.lat,
-        lng: cand.lng,
-        placeRefId: cand.placeRefId,
-        startTime: formatHHMM(adjustedStart),
-        durationMins: duration,
-        dietaryFlags,
-        accessibilityNotes: seniorRestNote,
-        ...(hasSeniors
-          ? {
-              elderSummaryI18n: {
-                en: `${formatHHMM(adjustedStart)} — ${cand.title}. ${seniorRestNote}`.trim(),
-              },
-            }
-          : {}),
-        transitMeta,
-      });
-
-      prevCoord = { lat: cand.lat, lng: cand.lng, title: cand.title };
-      cursorMins = adjustedStart + duration + (hasSeniors ? 25 : 15);
     }
 
-    stops.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    sightseeingStops.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    const combinedMiddle = [...bookingStops, ...sightseeingStops].sort((a, b) =>
+      a.startTime.localeCompare(b.startTime)
+    );
+    const stops: PlannedStop[] = [
+      ...(dayTransit?.preStops ?? []),
+      ...combinedMiddle,
+      ...(dayTransit?.postStops ?? []),
+    ];
 
     const pacingLevel: PacingLevel =
-      stops.length <= 3 ? 'relaxed' : stops.length >= 5 ? 'packed' : 'moderate';
+      sightseeingStops.length <= 3
+        ? 'relaxed'
+        : sightseeingStops.length >= 5
+          ? 'packed'
+          : 'moderate';
 
     return {
       dayNumber: rawDay.dayNumber,
       date,
-      title: rawDay.title,
+      title: dayTransit?.customDayTitle ?? rawDay.title,
       pacingLevel,
       stops,
     };
@@ -1055,10 +1458,11 @@ export async function buildGroundedItinerary(params: {
   allowAi?: boolean;
   onDay?: (day: DayStreamEvent) => void | Promise<void>;
 }): Promise<StageBResult> {
-  // 1. Apply answers and re-ground user-edited intent
+  // 1. Apply answers and re-ground user-edited intent (including door-to-door transit options)
   const answeredIntent = applyClarifyingAnswers(params.intent, params.answers);
   const groundedIntent = await groundIntent(answeredIntent, params.places, {
     trustAlreadyResolved: true,
+    llm: params.llm,
   });
 
   const totalDays = resolveTotalDays(groundedIntent);
@@ -1066,6 +1470,26 @@ export async function buildGroundedItinerary(params: {
     groundedIntent.destinations,
     totalDays
   );
+
+  // Resolve inter-city transfers when itinerary transitions between distinct cities across days
+  const intercityLegsByDay = new Map<number, TransitLegSpec>();
+  for (let i = 1; i < dayDestinations.length; i += 1) {
+    const prevDest = dayDestinations[i - 1]!;
+    const currDest = dayDestinations[i]!;
+    const prevKey = prevDest.destinationSlug ?? prevDest.name.toLowerCase();
+    const currKey = currDest.destinationSlug ?? currDest.name.toLowerCase();
+    if (prevKey !== currKey && groundedIntent.origin?.name) {
+      const hopLeg = await resolveIntercityTransferLeg({
+        fromDest: prevDest,
+        toDest: currDest,
+        preferredMode: groundedIntent.transportMode ?? 'any',
+        places: params.places,
+      });
+      if (hopLeg) {
+        intercityLegsByDay.set(i + 1, hopLeg);
+      }
+    }
+  }
 
   // 2. Build candidate pool per unique destination
   const poolsByDestKey = new Map<string, CandidatePlace[]>();
@@ -1270,10 +1694,20 @@ export async function buildGroundedItinerary(params: {
     }));
   }
 
-  // 5. Enforce booking anchors, travel times, dietary/senior buffers, and stream day events
+  // 5. Build door-to-door transit plans (outbound from origin, inter-city hops, return to ending hub)
+  const transitPlansByDay = buildDoorToDoorDayPlans({
+    totalDays,
+    dayDestinations,
+    intent: groundedIntent,
+    intercityLegsByDay,
+    registerTransitRef: (refId) => candidateRefIds.add(refId),
+  });
+
+  // 6. Enforce booking anchors, door-to-door transit legs, travel times, dietary/senior buffers, and stream day events
   const finalDays = attachBookingsAndScheduleTimes({
     rawDays,
     intent: groundedIntent,
+    transitPlansByDay,
   });
 
   if (params.onDay) {

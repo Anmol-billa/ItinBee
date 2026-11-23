@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Car, ExternalLink, Footprints } from 'lucide-react';
+import { Bus, Car, ExternalLink, Footprints, Plane, Train } from 'lucide-react';
 import type { ItineraryItem } from '@/lib/types';
 import {
   buildStraightLineFallback,
+  buildTransitStopLeg,
   type RouteLegResult,
 } from '@/features/map/map-utils';
 import { fetchRouteLeg, getCachedRouteLeg } from './route-service';
@@ -23,8 +24,16 @@ export function TravelConnector({
   onLegResolved,
 }: TravelConnectorProps) {
   const pairKey = `${fromStop.id}->${toStop.id}`;
+  const transitMode = toStop.transitMeta?.mode;
 
   const [leg, setLeg] = useState<RouteLegResult>(() => {
+    const special = buildTransitStopLeg(
+      { lat: fromStop.lat, lng: fromStop.lng },
+      { lat: toStop.lat, lng: toStop.lng },
+      toStop.transitMeta
+    );
+    if (special) return special;
+
     const cached = getCachedRouteLeg(
       { lat: fromStop.lat, lng: fromStop.lng },
       { lat: toStop.lat, lng: toStop.lng }
@@ -43,6 +52,15 @@ export function TravelConnector({
     const origin = { lat: fromStop.lat, lng: fromStop.lng };
     const dest = { lat: toStop.lat, lng: toStop.lng };
 
+    const special = buildTransitStopLeg(origin, dest, toStop.transitMeta);
+    if (special) {
+      setLeg(special);
+      onLegResolved(pairKey, special);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     fetchRouteLeg(origin, dest).then((resolved) => {
       if (cancelled) return;
       setLeg(resolved);
@@ -53,10 +71,38 @@ export function TravelConnector({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromStop.id, fromStop.lat, fromStop.lng, toStop.id, toStop.lat, toStop.lng]);
+  }, [
+    fromStop.id,
+    fromStop.lat,
+    fromStop.lng,
+    toStop.id,
+    toStop.lat,
+    toStop.lng,
+    transitMode,
+  ]);
 
-  const isWalking = leg.profile === 'foot-walking';
-  const directionsHref = `https://www.google.com/maps/dir/?api=1&origin=${fromStop.lat.toFixed(6)},${fromStop.lng.toFixed(6)}&destination=${toStop.lat.toFixed(6)},${toStop.lng.toFixed(6)}&travelmode=${isWalking ? 'walking' : 'driving'}`;
+  const isWalking = transitMode === 'walk' || (!transitMode && leg.profile === 'foot-walking');
+  const travelModeParam =
+    transitMode === 'rail' || transitMode === 'bus'
+      ? 'transit'
+      : isWalking
+        ? 'walking'
+        : 'driving';
+  const directionsHref =
+    transitMode === 'flight'
+      ? `https://www.google.com/maps/search/?api=1&query=${toStop.lat.toFixed(6)},${toStop.lng.toFixed(6)}`
+      : `https://www.google.com/maps/dir/?api=1&origin=${fromStop.lat.toFixed(6)},${fromStop.lng.toFixed(6)}&destination=${toStop.lat.toFixed(6)},${toStop.lng.toFixed(6)}&travelmode=${travelModeParam}`;
+
+  const ModeIcon =
+    transitMode === 'flight'
+      ? Plane
+      : transitMode === 'rail'
+        ? Train
+        : transitMode === 'bus'
+          ? Bus
+          : isWalking
+            ? Footprints
+            : Car;
 
   return (
     <div
@@ -84,11 +130,7 @@ export function TravelConnector({
       </svg>
 
       <span className="inline-flex items-center gap-1.5 rounded-full border border-navy/15 bg-paper/75 px-2.5 py-0.5 font-mono text-[12px] font-medium tabular-nums text-navy">
-        {isWalking ? (
-          <Footprints className="h-3.5 w-3.5 text-navy" strokeWidth={1.8} aria-hidden="true" />
-        ) : (
-          <Car className="h-3.5 w-3.5 text-navy" strokeWidth={1.8} aria-hidden="true" />
-        )}
+        <ModeIcon className="h-3.5 w-3.5 text-navy" strokeWidth={1.8} aria-hidden="true" />
         <span>{leg.label}</span>
       </span>
 

@@ -17,6 +17,63 @@ const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD');
 export const GROUPS = ['solo', 'couple', 'family', 'friends', 'seniors', 'mixed'] as const;
 export const PACES = ['relaxed', 'moderate', 'packed'] as const;
 export const BUDGET_TIERS = ['budget', 'mid', 'premium'] as const;
+export const TRANSPORT_MODES = ['any', 'train', 'flight', 'drive', 'bus', 'combo'] as const;
+
+export const TransportModeSchema = z.enum(TRANSPORT_MODES);
+export type TransportMode = z.infer<typeof TransportModeSchema>;
+
+export const JourneyPlaceSchema = z.object({
+  name: z.string().min(1).max(140),
+  city: z.string().max(100).optional(),
+  hubCode: z.string().max(16).optional(),
+  country: z.string().max(80).optional(),
+  destinationSlug: z.string().optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+  resolved: z.boolean(),
+});
+export type JourneyPlace = z.infer<typeof JourneyPlaceSchema>;
+
+export const TransitLegSpecSchema = z.object({
+  mode: z.enum(['rail', 'flight', 'bus', 'highway_cab', 'hill_cab', 'ferry']),
+  title: z.string().max(220),
+  carrierName: z.string().max(120).optional(),
+  vehicleCode: z.string().max(40).optional(),
+  fromName: z.string().max(140),
+  fromCode: z.string().max(16).optional(),
+  fromLat: z.number().min(-90).max(90),
+  fromLng: z.number().min(-180).max(180),
+  toName: z.string().max(140),
+  toCode: z.string().max(16).optional(),
+  toLat: z.number().min(-90).max(90),
+  toLng: z.number().min(-180).max(180),
+  departureTime: z.string().max(16),
+  arrivalTime: z.string().max(16),
+  durationMins: z.number().int().positive(),
+  distanceKm: z.number().nonnegative(),
+  dayOffset: z.number().int().min(0).max(6).default(0),
+  overnightHaltCity: z.string().max(100).optional(),
+  coachOrTerminal: z.string().max(80).optional(),
+  approxFareInr: z.number().int().nonnegative().optional(),
+  advisory: z.string().max(320).optional(),
+  source: z.enum(['live_api', 'verified_timetable', 'ors_road', 'ai_grounded']),
+});
+export type TransitLegSpec = z.infer<typeof TransitLegSpecSchema>;
+
+export const TransitRouteOptionSchema = z.object({
+  id: z.string().min(1).max(80),
+  direction: z.enum(['outbound', 'return']),
+  modeCategory: z.enum(['train', 'flight', 'drive', 'bus', 'combo']),
+  summaryLabel: z.string().max(200),
+  totalDurationMins: z.number().int().positive(),
+  transitDaysRequired: z.number().min(0).max(6),
+  totalDistanceKm: z.number().nonnegative(),
+  approxFareInr: z.number().int().nonnegative().optional(),
+  recommended: z.boolean().default(false),
+  feasibilityWarning: z.string().max(360).optional(),
+  legs: z.array(TransitLegSpecSchema).min(1).max(4),
+});
+export type TransitRouteOption = z.infer<typeof TransitRouteOptionSchema>;
 
 export const BookingAnchorSchema = z.object({
   itemKind: ItemKindSchema,
@@ -61,6 +118,18 @@ export const ClarifyingQuestionSchema = z.object({
 
 export const TripIntentSchema = z.object({
   title: z.string().min(1).max(140),
+  origin: JourneyPlaceSchema.nullable().optional(),
+  returnPoint: JourneyPlaceSchema.nullable().optional(),
+  roundTrip: z.boolean().optional(),
+  transportMode: TransportModeSchema.optional(),
+  selectedOutboundOptionId: z.string().max(80).nullable().optional(),
+  selectedReturnOptionId: z.string().max(80).nullable().optional(),
+  routeOptions: z
+    .object({
+      outbound: z.array(TransitRouteOptionSchema).max(6),
+      return: z.array(TransitRouteOptionSchema).max(6),
+    })
+    .optional(),
   destinations: z.array(IntentDestinationSchema).min(1).max(12),
   dates: z.object({
     start: IsoDate.nullable(),
@@ -164,12 +233,35 @@ const ModelIntentBaseFields = {
     .describe('At most 3 high-impact questions.'),
 };
 
+const ModelGeminiOriginFields = {
+  origin: z
+    .string()
+    .nullable()
+    .describe('Departure city, station or airport if stated (e.g. "Delhi", "New Delhi Railway Station"), else null.'),
+  returnPoint: z
+    .string()
+    .nullable()
+    .describe('Return/ending city, station or airport if stated (e.g. "New Delhi Railway Station"), else null.'),
+  roundTrip: z
+    .boolean()
+    .nullable()
+    .describe('True if returning to origin (default true when origin is stated unless one-way), false if one-way.'),
+  transportMode: z
+    .enum(TRANSPORT_MODES)
+    .nullable()
+    .describe('Preferred inter-city transport mode: train, flight, drive, bus, combo, or any.'),
+};
+
 /** Lean Stage-A schema used when no images/scanned PDFs are attached (fast grammar compilation). */
-export const ModelIntentTextOnlySchema = z.object(ModelIntentBaseFields);
+export const ModelIntentTextOnlySchema = z.object({
+  ...ModelIntentBaseFields,
+  ...ModelGeminiOriginFields,
+});
 
 /** Vision Stage-A schema used when ticket screenshots or scanned PDFs are attached (all properties required). */
 export const ModelIntentVisionOnlySchema = z.object({
   ...ModelIntentBaseFields,
+  ...ModelGeminiOriginFields,
   extractedBookings: z
     .array(ModelExtractedBookingSchema)
     .max(12)
@@ -177,10 +269,14 @@ export const ModelIntentVisionOnlySchema = z.object({
 });
 
 /**
- * Unified Zod parser for Stage A outputs (accepts both text-only and vision responses).
+ * Unified Zod parser for Stage A outputs (accepts both text-only, vision, and FakeProvider test responses).
  */
 export const ModelIntentSchema = z.object({
   ...ModelIntentBaseFields,
+  origin: z.string().nullable().optional(),
+  returnPoint: z.string().nullable().optional(),
+  roundTrip: z.boolean().nullable().optional(),
+  transportMode: z.enum(TRANSPORT_MODES).nullable().optional(),
   extractedBookings: z.array(ModelExtractedBookingSchema).max(20).nullable().optional(),
 });
 export type ModelIntent = z.infer<typeof ModelIntentSchema>;
@@ -426,8 +522,32 @@ export function modelIntentToTripIntent(
       ? m.budget.amount
       : null;
 
+  const rawOrigin = m.origin ? cleanText(m.origin, 140) : '';
+  const rawReturn = m.returnPoint ? cleanText(m.returnPoint, 140) : '';
+  const hasOrigin = rawOrigin.length > 0;
+  const resolvedRoundTrip =
+    m.roundTrip !== null && m.roundTrip !== undefined
+      ? m.roundTrip
+      : hasOrigin || rawReturn.length > 0
+        ? true
+        : undefined;
+
+  const originPlace: JourneyPlace | null | undefined = hasOrigin
+    ? { name: rawOrigin, resolved: false }
+    : undefined;
+  const returnPlace: JourneyPlace | null | undefined =
+    rawReturn.length > 0
+      ? { name: rawReturn, resolved: false }
+      : resolvedRoundTrip && hasOrigin
+        ? { name: rawOrigin, resolved: false }
+        : undefined;
+
   return {
     title: cleanText(m.title, 140) || 'My trip',
+    ...(originPlace ? { origin: originPlace } : {}),
+    ...(returnPlace ? { returnPoint: returnPlace } : {}),
+    ...(resolvedRoundTrip !== undefined ? { roundTrip: resolvedRoundTrip } : {}),
+    ...(m.transportMode ? { transportMode: m.transportMode } : {}),
     destinations: dests,
     dates: {
       start: normStart,

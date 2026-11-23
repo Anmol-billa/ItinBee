@@ -1,19 +1,24 @@
 'use client';
 
-import React, { useId, useMemo, useReducer, useState } from 'react';
+import React, { useEffect, useId, useMemo, useReducer, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  Bus,
+  Car,
   Check,
   CheckCircle2,
   Lock,
+  MapPin,
   Minus,
   Pencil,
+  Plane,
   Plus,
   Sparkles,
+  Train,
   Trash2,
   X,
 } from 'lucide-react';
@@ -26,7 +31,9 @@ import {
   initIntentForm,
   intentReducer,
   validateIntent,
+  type ReturnMode,
 } from '@/features/create/intent-reducer';
+import { fetchTransitOptions } from '@/lib/import-client';
 import {
   formatBookingSummary,
   type BudgetTier,
@@ -34,8 +41,34 @@ import {
   type GroupType,
   type JobMode,
   type Pace,
+  type TransitRouteOption,
+  type TransportMode,
   type TripIntent,
 } from '@/lib/import-types';
+
+const TRANSPORT_MODES: Array<{ id: TransportMode; label: string }> = [
+  { id: 'any', label: 'Best match' },
+  { id: 'train', label: 'Train' },
+  { id: 'flight', label: 'Flight' },
+  { id: 'drive', label: 'Drive' },
+  { id: 'combo', label: 'Train + Flight' },
+];
+
+function formatDurationLabel(mins: number): string {
+  const m = Math.max(1, Math.round(mins));
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
+}
+
+function getRouteOptionIcon(mode: TransportMode | string): React.ElementType {
+  if (mode === 'flight') return Plane;
+  if (mode === 'train' || mode === 'rail') return Train;
+  if (mode === 'drive' || mode === 'highway_cab' || mode === 'hill_cab') return Car;
+  if (mode === 'bus') return Bus;
+  return Sparkles;
+}
 
 const GROUP_OPTIONS: Array<{ id: GroupType; label: string }> = [
   { id: 'solo', label: 'Solo' },
@@ -98,9 +131,93 @@ export function ReviewStep({
   const [editingAssumptionIdx, setEditingAssumptionIdx] = useState<number | null>(null);
   const [editingAssumptionText, setEditingAssumptionText] = useState('');
   const [triedConfirm, setTriedConfirm] = useState(false);
+  const [editingOrigin, setEditingOrigin] = useState(false);
+  const [customReturnOpen, setCustomReturnOpen] = useState(() =>
+    Boolean(
+      intent.origin?.name &&
+        intent.returnPoint?.name &&
+        !intent.roundTrip &&
+        intent.returnPoint.name.trim().toLowerCase() !==
+          intent.origin.name.trim().toLowerCase()
+    )
+  );
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
 
   const uid = useId();
   const issues = useMemo(() => validateIntent(form.intent), [form.intent]);
+
+  const firstDest = form.intent.destinations[0] ?? null;
+  const lastDest =
+    form.intent.destinations[form.intent.destinations.length - 1] ?? null;
+  const originName = form.intent.origin?.name?.trim() ?? '';
+  const returnName = form.intent.returnPoint?.name?.trim() ?? '';
+  const roundTripFlag = Boolean(form.intent.roundTrip);
+  const transportMode = form.intent.transportMode ?? 'any';
+
+  const currentReturnMode: ReturnMode = roundTripFlag
+    ? 'round_trip'
+    : customReturnOpen || Boolean(returnName)
+      ? 'custom'
+      : 'one_way';
+
+  const transitQuerySignature = `${originName}|${returnName}|${roundTripFlag ? '1' : '0'}|${transportMode}|${firstDest?.name ?? ''}|${lastDest?.name ?? ''}`;
+  const lastFetchedSignatureRef = useRef<string>(
+    (intent.routeOptions?.outbound?.length ?? 0) > 0 ? transitQuerySignature : ''
+  );
+
+  useEffect(() => {
+    if (!originName || !firstDest?.name) {
+      setLoadingRoutes(false);
+      return;
+    }
+    if (lastFetchedSignatureRef.current === transitQuerySignature) {
+      return;
+    }
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      setLoadingRoutes(true);
+      fetchTransitOptions(
+        {
+          origin: form.intent.origin ?? null,
+          returnPoint: form.intent.returnPoint ?? null,
+          roundTrip: roundTripFlag,
+          transportMode,
+          firstDestination: {
+            name: firstDest.name,
+            destinationSlug: firstDest.destinationSlug,
+            lat: firstDest.lat,
+            lng: firstDest.lng,
+          },
+          lastDestination: lastDest
+            ? {
+                name: lastDest.name,
+                destinationSlug: lastDest.destinationSlug,
+                lat: lastDest.lat,
+                lng: lastDest.lng,
+              }
+            : null,
+          departureDate: form.intent.dates.start,
+          returnDate: form.intent.dates.end,
+        },
+        ctrl.signal
+      )
+        .then((res) => {
+          if (ctrl.signal.aborted || !res) return;
+          lastFetchedSignatureRef.current = transitQuerySignature;
+          dispatch({ type: 'routeOptionsResolved', payload: res });
+        })
+        .finally(() => {
+          if (!ctrl.signal.aborted) setLoadingRoutes(false);
+        });
+    }, 220);
+
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transitQuerySignature]);
 
   const interestPool = useMemo(() => {
     const seen = new Set<string>();
@@ -119,6 +236,63 @@ export function ReviewStep({
     form.dateMode === 'dates' && form.intent.dates.start && form.intent.dates.end
       ? daysBetween(form.intent.dates.start, form.intent.dates.end)
       : null;
+
+  const effectiveTotalDays =
+    computedRangeDays ??
+    form.intent.dates.lengthDays ??
+    Math.max(3, form.intent.destinations.length * 2);
+
+  const outboundOptions = form.intent.routeOptions?.outbound ?? [];
+  const returnOptions = form.intent.routeOptions?.return ?? [];
+
+  const selectedOutbound: TransitRouteOption | null = useMemo(() => {
+    if (outboundOptions.length === 0) return null;
+    return (
+      outboundOptions.find((o) => o.id === form.intent.selectedOutboundOptionId) ??
+      outboundOptions.find((o) => o.recommended) ??
+      outboundOptions[0] ??
+      null
+    );
+  }, [outboundOptions, form.intent.selectedOutboundOptionId]);
+
+  const selectedReturn: TransitRouteOption | null = useMemo(() => {
+    if (currentReturnMode === 'one_way' || returnOptions.length === 0) return null;
+    return (
+      returnOptions.find((o) => o.id === form.intent.selectedReturnOptionId) ??
+      returnOptions.find((o) => o.recommended) ??
+      returnOptions[0] ??
+      null
+    );
+  }, [returnOptions, form.intent.selectedReturnOptionId, currentReturnMode]);
+
+  const totalTransitDays =
+    (selectedOutbound?.transitDaysRequired ?? 0) +
+    (selectedReturn?.transitDaysRequired ?? 0);
+  const totalTransitMins =
+    (selectedOutbound?.totalDurationMins ?? 0) +
+    (selectedReturn?.totalDurationMins ?? 0);
+  const showTransitAdvisor =
+    Boolean(originName && selectedOutbound) &&
+    totalTransitDays >= effectiveTotalDays * 0.45;
+  const sightseeingDaysLeft = Math.max(
+    0.5,
+    Number((effectiveTotalDays - totalTransitDays).toFixed(1))
+  );
+  const flightOutboundOption =
+    outboundOptions.find((o) => o.modeCategory === 'flight') ?? null;
+  const flightReturnOption =
+    returnOptions.find((o) => o.modeCategory === 'flight') ?? null;
+  const comboOutboundOption =
+    outboundOptions.find((o) => o.modeCategory === 'combo') ?? null;
+  const comboReturnOption =
+    returnOptions.find((o) => o.modeCategory === 'combo') ?? null;
+  const recommendedTotalDays = Math.min(
+    30,
+    Math.max(
+      effectiveTotalDays + 2,
+      Math.ceil(totalTransitDays + Math.max(3, form.intent.destinations.length * 2.5))
+    )
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,6 +339,464 @@ export function ReviewStep({
             placeholder="My trip"
             className="field max-w-[520px] text-[18px] font-bold"
           />
+        </div>
+
+        {/* 1b. Starting point, travel mode & return */}
+        <div className="perforation mt-6 pt-6">
+          <h2 className="display text-[32px] text-navy">
+            Starting point, travel mode &amp; return
+          </h2>
+          <p className="mt-1 text-[15px] text-paper-ink">
+            Start Day 1 from your departure city, station, or airport and account for real train, flight, or road travel time both ways.
+          </p>
+
+          <div className="mt-4 space-y-5">
+            {/* Origin selector */}
+            <div>
+              <span className="mb-1.5 block text-[15px] font-bold text-navy">
+                Starting from
+              </span>
+              {form.intent.origin && !editingOrigin ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-[1.5px] border-navy/40 bg-[#fffdf8] px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <MapPin size={17} strokeWidth={2.2} aria-hidden="true" className="text-[#0E5A47]" />
+                    <span className="text-[17px] font-bold text-navy">
+                      {form.intent.origin.name}
+                    </span>
+                    {form.intent.origin.hubCode ? (
+                      <span className="rounded border border-navy/25 bg-paper px-2 py-0.5 font-mono text-[12px] font-bold tabular-nums text-navy">
+                        {form.intent.origin.hubCode}
+                      </span>
+                    ) : null}
+                    {form.intent.origin.resolved ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[#0F766E]/50 bg-[#F0FDFA] px-2.5 py-0.5 text-[12px] font-bold text-[#0F766E]">
+                        <CheckCircle2 size={13} strokeWidth={2.5} aria-hidden="true" />
+                        Mapped
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingOrigin(true)}
+                      className="btn-line min-h-[38px] px-3 py-1.5 text-[13.5px] text-navy"
+                    >
+                      Change
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingOrigin(false);
+                        setCustomReturnOpen(false);
+                        dispatch({ type: 'originSet', suggestion: null });
+                      }}
+                      className="btn-line min-h-[38px] px-3 py-1.5 text-[13.5px] text-vermilion-ink"
+                    >
+                      Start at destination
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="max-w-[540px]">
+                  <DestinationCombobox
+                    label={editingOrigin ? 'Choose starting city, station, or airport' : 'Add a starting city or station (optional)'}
+                    initialValue={editingOrigin ? form.intent.origin?.name ?? '' : ''}
+                    placeholder="e.g. Delhi, New Delhi Railway Station, Mumbai, Bengaluru…"
+                    submitButtonLabel="Set start"
+                    autoFocus={editingOrigin}
+                    onSelect={(choice) => {
+                      dispatch({ type: 'originSet', suggestion: choice });
+                      setEditingOrigin(false);
+                    }}
+                    onCancel={editingOrigin ? () => setEditingOrigin(false) : undefined}
+                  />
+                </div>
+              )}
+            </div>
+
+            {form.intent.origin ? (
+              <>
+                {/* Return journey mode + Travel mode */}
+                <div className="grid gap-5 md:grid-cols-2">
+                  <fieldset>
+                    <legend className="mb-2 text-[15px] font-bold text-navy">
+                      Return journey
+                    </legend>
+                    <div className="flex flex-wrap gap-2">
+                      <label>
+                        <input
+                          type="radio"
+                          name={`${uid}-returnmode`}
+                          className="peer sr-only"
+                          checked={currentReturnMode === 'round_trip'}
+                          onChange={() => {
+                            setCustomReturnOpen(false);
+                            dispatch({ type: 'returnMode', mode: 'round_trip' });
+                          }}
+                        />
+                        <span className="chip-toggle">
+                          Back to {form.intent.origin.city || form.intent.origin.name}
+                        </span>
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name={`${uid}-returnmode`}
+                          className="peer sr-only"
+                          checked={currentReturnMode === 'one_way'}
+                          onChange={() => {
+                            setCustomReturnOpen(false);
+                            dispatch({ type: 'returnMode', mode: 'one_way' });
+                          }}
+                        />
+                        <span className="chip-toggle">One-way</span>
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name={`${uid}-returnmode`}
+                          className="peer sr-only"
+                          checked={currentReturnMode === 'custom'}
+                          onChange={() => {
+                            setCustomReturnOpen(true);
+                            dispatch({ type: 'returnMode', mode: 'custom' });
+                          }}
+                        />
+                        <span className="chip-toggle">End elsewhere</span>
+                      </label>
+                    </div>
+
+                    {currentReturnMode === 'custom' ? (
+                      <div className="mt-3">
+                        {form.intent.returnPoint ? (
+                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-navy/35 bg-[#fffdf8] px-3 py-2">
+                            <span className="text-[14.5px] font-bold text-navy">
+                              Ends at: {form.intent.returnPoint.name}
+                              {form.intent.returnPoint.hubCode ? ` (${form.intent.returnPoint.hubCode})` : ''}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => dispatch({ type: 'returnPointSet', suggestion: null })}
+                              className="text-[13px] font-bold text-vermilion-ink underline"
+                            >
+                              Change
+                            </button>
+                          </div>
+                        ) : (
+                          <DestinationCombobox
+                            label="Choose ending city or station"
+                            placeholder="e.g. Chandigarh, Amritsar, Delhi…"
+                            submitButtonLabel="Set end"
+                            onSelect={(choice) =>
+                              dispatch({ type: 'returnPointSet', suggestion: choice })
+                            }
+                          />
+                        )}
+                      </div>
+                    ) : null}
+                  </fieldset>
+
+                  <fieldset>
+                    <legend className="mb-2 text-[15px] font-bold text-navy">
+                      Preferred travel mode
+                    </legend>
+                    <div className="flex flex-wrap gap-2">
+                      {(transportMode === 'bus'
+                        ? [...TRANSPORT_MODES, { id: 'bus' as TransportMode, label: 'Bus' }]
+                        : TRANSPORT_MODES
+                      ).map((m) => (
+                        <label key={m.id}>
+                          <input
+                            type="radio"
+                            name={`${uid}-transportmode`}
+                            className="peer sr-only"
+                            checked={transportMode === m.id}
+                            onChange={() => dispatch({ type: 'transportMode', mode: m.id })}
+                          />
+                          <span className="chip-toggle">{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                </div>
+
+                {/* Loading state while resolving live/verified schedules */}
+                {loadingRoutes ? (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="space-y-2 rounded-xl border border-navy/25 bg-[#fffdf8] p-4"
+                  >
+                    <div className="h-4 w-56 animate-pulse rounded bg-paper" />
+                    <div className="h-3.5 w-80 max-w-full animate-pulse rounded bg-paper/80" />
+                  </div>
+                ) : null}
+
+                {/* Outbound route options */}
+                {outboundOptions.length > 0 ? (
+                  <fieldset>
+                    <legend className="mb-2 text-[15px] font-bold text-navy">
+                      Outbound route ({form.intent.origin.city || form.intent.origin.name} →{' '}
+                      {firstDest?.name ?? 'Destination'})
+                    </legend>
+                    <div className="divide-y divide-navy/15 rounded-xl border-[1.5px] border-navy/40 bg-[#fffdf8]">
+                      {outboundOptions.map((opt) => {
+                        const active = selectedOutbound?.id === opt.id;
+                        const OptIcon = getRouteOptionIcon(opt.modeCategory);
+                        return (
+                          <label
+                            key={opt.id}
+                            className={`flex cursor-pointer items-start justify-between gap-3 p-3.5 transition-colors ${
+                              active ? 'bg-[#F0FDFA]' : 'hover:bg-paper/45'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`${uid}-outbound-opt`}
+                              className="peer sr-only"
+                              checked={active}
+                              onChange={() =>
+                                dispatch({ type: 'selectOutboundOption', id: opt.id })
+                              }
+                            />
+                            <div className="flex min-w-0 flex-1 items-start gap-3 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-navy">
+                              <span
+                                aria-hidden="true"
+                                className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-[1.5px] ${
+                                  active
+                                    ? 'border-[#0F766E] bg-[#0F766E] text-white'
+                                    : 'border-navy/40 bg-white text-transparent'
+                                }`}
+                              >
+                                <Check size={14} strokeWidth={2.6} />
+                              </span>
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <OptIcon
+                                    size={16}
+                                    strokeWidth={2}
+                                    aria-hidden="true"
+                                    className="text-navy"
+                                  />
+                                  <span className="text-[15.5px] font-bold text-navy">
+                                    {opt.summaryLabel}
+                                  </span>
+                                  {opt.recommended ? (
+                                    <span className="rounded-full bg-saffron/45 px-2 py-0.5 text-[11.5px] font-bold text-navy">
+                                      Recommended
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="text-[13.5px] leading-snug text-paper-ink">
+                                  {opt.legs.map((l) => l.title).join(' → ')}
+                                </p>
+                                {opt.legs.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                    {opt.legs.map((leg, lIdx) => (
+                                      <span
+                                        key={`${opt.id}-leg-${lIdx}`}
+                                        className="rounded border border-navy/20 bg-paper/75 px-2 py-0.5 font-mono text-[11.5px] font-medium tabular-nums text-navy"
+                                      >
+                                        {leg.fromCode || leg.fromName} → {leg.toCode || leg.toName}{' '}
+                                        {leg.vehicleCode ? `(${leg.vehicleCode}) ` : ''}·{' '}
+                                        {leg.departureTime}→{leg.arrivalTime}
+                                        {leg.dayOffset ? ` (+${leg.dayOffset}d)` : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right font-mono tabular-nums">
+                              <div className="text-[14px] font-bold text-navy">
+                                {formatDurationLabel(opt.totalDurationMins)}
+                              </div>
+                              <div className="text-[12px] text-paper-ink">
+                                {Math.round(opt.totalDistanceKm)} km
+                                {opt.approxFareInr
+                                  ? ` · ~₹${opt.approxFareInr.toLocaleString('en-IN')}`
+                                  : ''}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                ) : null}
+
+                {/* Return route options */}
+                {currentReturnMode !== 'one_way' && returnOptions.length > 0 ? (
+                  <fieldset>
+                    <legend className="mb-2 text-[15px] font-bold text-navy">
+                      Return route ({lastDest?.name ?? 'Destination'} →{' '}
+                      {form.intent.returnPoint?.name ?? form.intent.origin.name})
+                    </legend>
+                    <div className="divide-y divide-navy/15 rounded-xl border-[1.5px] border-navy/40 bg-[#fffdf8]">
+                      {returnOptions.map((opt) => {
+                        const active = selectedReturn?.id === opt.id;
+                        const OptIcon = getRouteOptionIcon(opt.modeCategory);
+                        return (
+                          <label
+                            key={opt.id}
+                            className={`flex cursor-pointer items-start justify-between gap-3 p-3.5 transition-colors ${
+                              active ? 'bg-[#F0FDFA]' : 'hover:bg-paper/45'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`${uid}-return-opt`}
+                              className="peer sr-only"
+                              checked={active}
+                              onChange={() =>
+                                dispatch({ type: 'selectReturnOption', id: opt.id })
+                              }
+                            />
+                            <div className="flex min-w-0 flex-1 items-start gap-3 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-navy">
+                              <span
+                                aria-hidden="true"
+                                className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-[1.5px] ${
+                                  active
+                                    ? 'border-[#0F766E] bg-[#0F766E] text-white'
+                                    : 'border-navy/40 bg-white text-transparent'
+                                }`}
+                              >
+                                <Check size={14} strokeWidth={2.6} />
+                              </span>
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <OptIcon
+                                    size={16}
+                                    strokeWidth={2}
+                                    aria-hidden="true"
+                                    className="text-navy"
+                                  />
+                                  <span className="text-[15.5px] font-bold text-navy">
+                                    {opt.summaryLabel}
+                                  </span>
+                                </div>
+                                <p className="text-[13.5px] leading-snug text-paper-ink">
+                                  {opt.legs.map((l) => l.title).join(' → ')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right font-mono tabular-nums">
+                              <div className="text-[14px] font-bold text-navy">
+                                {formatDurationLabel(opt.totalDurationMins)}
+                              </div>
+                              <div className="text-[12px] text-paper-ink">
+                                {Math.round(opt.totalDistanceKm)} km
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                ) : null}
+
+                {/* 1-Click Transit vs. Sightseeing Time-Budget Advisor */}
+                {showTransitAdvisor ? (
+                  <div
+                    role="region"
+                    aria-label="Travel time vs sightseeing advisor"
+                    className="rounded-xl border-[1.5px] border-navy/50 bg-[#fff7e4] p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle
+                        size={20}
+                        strokeWidth={2.2}
+                        aria-hidden="true"
+                        className="mt-0.5 shrink-0 text-vermilion-ink"
+                      />
+                      <div className="space-y-2.5">
+                        <p className="text-[15px] font-bold text-navy">
+                          Travel takes ~
+                          <span className="font-mono tabular-nums">
+                            {formatDurationLabel(totalTransitMins)}
+                          </span>{' '}
+                          ({totalTransitDays} of your {effectiveTotalDays} days), leaving ~
+                          <span className="font-mono tabular-nums">
+                            {sightseeingDaysLeft}
+                          </span>{' '}
+                          {sightseeingDaysLeft === 1 ? 'day' : 'days'} at{' '}
+                          {firstDest?.name ?? 'your destination'}.
+                        </p>
+                        <p className="text-[14px] text-paper-ink">
+                          We will schedule the full journey within your {effectiveTotalDays}-day window unless you switch to a faster option or add days below:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {flightOutboundOption &&
+                          selectedOutbound?.id !== flightOutboundOption.id ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                dispatch({ type: 'transportMode', mode: 'flight' });
+                                dispatch({
+                                  type: 'selectOutboundOption',
+                                  id: flightOutboundOption.id,
+                                });
+                                if (flightReturnOption && currentReturnMode !== 'one_way') {
+                                  dispatch({
+                                    type: 'selectReturnOption',
+                                    id: flightReturnOption.id,
+                                  });
+                                }
+                              }}
+                              className="btn-line min-h-[38px] bg-[#fffdf8] px-3.5 py-1.5 text-[13.5px] font-bold text-navy"
+                            >
+                              <Plane size={15} strokeWidth={2} aria-hidden="true" />
+                              Switch to Flight ({formatDurationLabel(flightOutboundOption.totalDurationMins)})
+                            </button>
+                          ) : null}
+
+                          {comboOutboundOption &&
+                          selectedOutbound?.id !== comboOutboundOption.id ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                dispatch({ type: 'transportMode', mode: 'combo' });
+                                dispatch({
+                                  type: 'selectOutboundOption',
+                                  id: comboOutboundOption.id,
+                                });
+                                if (comboReturnOption && currentReturnMode !== 'one_way') {
+                                  dispatch({
+                                    type: 'selectReturnOption',
+                                    id: comboReturnOption.id,
+                                  });
+                                }
+                              }}
+                              className="btn-line min-h-[38px] bg-[#fffdf8] px-3.5 py-1.5 text-[13.5px] font-bold text-navy"
+                            >
+                              <Train size={15} strokeWidth={2} aria-hidden="true" />
+                              Use Train + Flight combo
+                            </button>
+                          ) : null}
+
+                          {effectiveTotalDays < recommendedTotalDays ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (form.dateMode !== 'days') {
+                                  dispatch({ type: 'dateMode', mode: 'days' });
+                                }
+                                dispatch({ type: 'length', value: recommendedTotalDays });
+                              }}
+                              className="btn-line min-h-[38px] bg-[#fffdf8] px-3.5 py-1.5 text-[13.5px] font-bold text-navy"
+                            >
+                              <Plus size={15} strokeWidth={2.2} aria-hidden="true" />
+                              Extend trip to {recommendedTotalDays} days
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
         </div>
 
         {/* 2. Destinations */}

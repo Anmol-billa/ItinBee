@@ -30,15 +30,22 @@ export interface TripDay {
 export interface TransitMeta {
   mode?: 'rail' | 'flight' | 'bus' | 'metro_cab' | 'highway_cab' | 'hill_cab' | 'ferry' | 'walk';
   vehicleCode?: string;
+  carrierName?: string;
+  originCode?: string;
   originName?: string;
+  destinationCode?: string;
   destinationName?: string;
   departureTime?: string;
   arrivalTime?: string;
+  arrivalDayOffset?: number;
   coachOrTerminal?: string;
   seatOrBerth?: string;
   boardingLandmark?: string;
   distanceKm?: number;
   estimatedDurationMins?: number;
+  isIntercityLeg?: boolean;
+  legDirection?: 'outbound' | 'intercity' | 'return';
+  approxFareInr?: number;
   advisory?: string;
   googleMapsUrl?: string;
 }

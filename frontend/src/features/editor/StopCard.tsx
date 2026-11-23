@@ -5,13 +5,17 @@ import {
   ArrowDown,
   ArrowUp,
   Bed,
+  Bus,
+  Car,
   Check,
   Clock,
   ExternalLink,
   FileText,
+  Footprints,
   GripVertical,
   MapPin,
   Pencil,
+  Plane,
   Train,
   Trash2,
   Utensils,
@@ -106,8 +110,34 @@ export function StopCard({
   }, [stop.title, stop.notes, isEditing]);
 
   const pinColor = getDayColor(dayNumber);
-  const kindMeta = KIND_LABELS[stop.kind] ?? KIND_LABELS.activity;
+  const kindMeta = (() => {
+    if (stop.kind === 'transit') {
+      const m = stop.transitMeta?.mode;
+      if (m === 'flight') return { label: 'Flight', Icon: Plane };
+      if (m === 'rail') return { label: 'Train', Icon: Train };
+      if (m === 'bus') return { label: 'Bus', Icon: Bus };
+      if (m === 'highway_cab' || m === 'hill_cab' || m === 'metro_cab') {
+        return { label: 'Road', Icon: Car };
+      }
+      if (m === 'walk') return { label: 'Walk', Icon: Footprints };
+    }
+    return KIND_LABELS[stop.kind] ?? KIND_LABELS.activity;
+  })();
   const KindIcon = kindMeta.Icon;
+
+  const transitDispatchBadge = (() => {
+    if (stop.kind !== 'transit' || !stop.transitMeta) return null;
+    const fromTag = stop.transitMeta.originCode || stop.transitMeta.originName;
+    const toTag = stop.transitMeta.destinationCode || stop.transitMeta.destinationName;
+    const routeTag =
+      fromTag && toTag && fromTag !== toTag ? `${fromTag} → ${toTag}` : null;
+    const carrierParts = [
+      stop.transitMeta.vehicleCode,
+      stop.transitMeta.carrierName,
+    ].filter(Boolean);
+    const pieces = [routeTag, ...carrierParts].filter(Boolean);
+    return pieces.length > 0 ? pieces.join(' · ') : null;
+  })();
 
   const statusTone =
     booking?.status === 'confirmed'
@@ -261,6 +291,12 @@ export function StopCard({
                   )}
                 </div>
 
+                {transitDispatchBadge && (
+                  <p className="inline-flex flex-wrap items-center gap-1.5 rounded border border-navy/20 bg-paper/75 px-2 py-0.5 font-mono text-[11.5px] font-semibold tabular-nums text-navy">
+                    {transitDispatchBadge}
+                  </p>
+                )}
+
                 {stop.notes && (
                   <p className="text-[13.5px] leading-relaxed text-paper-ink">
                     {stop.notes}
@@ -365,7 +401,7 @@ export function StopCard({
           </label>
 
           <label className="inline-flex items-center gap-1 text-[12px] text-paper-ink">
-            <span>Stay:</span>
+            <span>{stop.kind === 'transit' ? 'Travel:' : 'Stay:'}</span>
             <select
               value={stop.durationMins ?? 60}
               onChange={(e) =>

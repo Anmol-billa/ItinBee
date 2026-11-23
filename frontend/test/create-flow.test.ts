@@ -366,4 +366,118 @@ describe('intent-reducer.ts', () => {
     ).toBe('NDLS → Haridwar Jn · 12017 · Coach C4 · 21');
     expect(formatBookingSummary(null)).toBe('');
   });
+
+  it('manages door-to-door origin, round-trip/custom return modes, and preferred transport route selection', () => {
+    let form = initIntentForm(sampleIntent());
+    expect(form.intent.origin).toBeNull();
+    expect(form.intent.transportMode).toBe('any');
+
+    // Setting an origin defaults roundTrip=true and mirrors returnPoint
+    form = intentReducer(form, {
+      type: 'originSet',
+      suggestion: {
+        id: 'dest:delhi',
+        source: 'destination',
+        slug: 'delhi',
+        name: 'New Delhi Railway Station',
+        secondary: 'Delhi, India',
+        kind: 'station',
+        lat: 28.6429,
+        lng: 77.2191,
+        countryCode: 'IN',
+        packStatus: null,
+      },
+    });
+    expect(form.intent.origin?.name).toBe('New Delhi Railway Station');
+    expect(form.intent.roundTrip).toBe(true);
+    expect(form.intent.returnPoint?.name).toBe('New Delhi Railway Station');
+
+    // Hydrate resolved route options
+    form = intentReducer(form, {
+      type: 'routeOptionsResolved',
+      payload: {
+        origin: {
+          name: 'New Delhi Railway Station',
+          city: 'Delhi',
+          hubCode: 'NDLS',
+          lat: 28.6429,
+          lng: 77.2191,
+          resolved: true,
+        },
+        returnPoint: {
+          name: 'New Delhi Railway Station',
+          city: 'Delhi',
+          hubCode: 'NDLS',
+          lat: 28.6429,
+          lng: 77.2191,
+          resolved: true,
+        },
+        roundTrip: true,
+        routeOptions: {
+          outbound: [
+            {
+              id: 'out-train',
+              direction: 'outbound',
+              modeCategory: 'train',
+              summaryLabel: 'Shatabdi + Hill Cab',
+              totalDurationMins: 680,
+              transitDaysRequired: 1,
+              totalDistanceKm: 540,
+              recommended: true,
+              legs: [],
+            },
+            {
+              id: 'out-flight',
+              direction: 'outbound',
+              modeCategory: 'flight',
+              summaryLabel: 'Direct Flight',
+              totalDurationMins: 95,
+              transitDaysRequired: 0.3,
+              totalDistanceKm: 410,
+              recommended: false,
+              legs: [],
+            },
+          ],
+          return: [
+            {
+              id: 'ret-train',
+              direction: 'return',
+              modeCategory: 'train',
+              summaryLabel: 'Hill Cab + Shatabdi',
+              totalDurationMins: 680,
+              transitDaysRequired: 1,
+              totalDistanceKm: 540,
+              recommended: true,
+              legs: [],
+            },
+            {
+              id: 'ret-flight',
+              direction: 'return',
+              modeCategory: 'flight',
+              summaryLabel: 'Return Flight',
+              totalDurationMins: 95,
+              transitDaysRequired: 0.3,
+              totalDistanceKm: 410,
+              recommended: false,
+              legs: [],
+            },
+          ],
+        },
+        selectedOutboundOptionId: 'out-train',
+        selectedReturnOptionId: 'ret-train',
+      },
+    });
+    expect(form.intent.selectedOutboundOptionId).toBe('out-train');
+
+    // Switching transportMode to flight auto-picks matching flight options
+    form = intentReducer(form, { type: 'transportMode', mode: 'flight' });
+    expect(form.intent.selectedOutboundOptionId).toBe('out-flight');
+    expect(form.intent.selectedReturnOptionId).toBe('ret-flight');
+
+    // Switching to one-way clears returnPoint and selectedReturnOptionId
+    form = intentReducer(form, { type: 'returnMode', mode: 'one_way' });
+    expect(form.intent.roundTrip).toBe(false);
+    expect(form.intent.returnPoint).toBeNull();
+    expect(form.intent.selectedReturnOptionId).toBeNull();
+  });
 });

@@ -16,6 +16,7 @@ import type { ItineraryItem, TripDay } from '@/lib/types';
 import { buildDayColorLookup, getDayColor } from './day-palette';
 import {
   buildStraightLineFallback,
+  buildTransitStopLeg,
   computeBoundingBoxString,
   isValidCoordinate,
   type CandidateMapPlace,
@@ -135,8 +136,14 @@ export function TripMap({
         .filter((i) => i.dayId === day.id && !i.deletedAt)
         .sort((a, b) =>
           a.sortKey === b.sortKey
-            ? a.id.localeCompare(b.id)
-            : a.sortKey.localeCompare(b.sortKey)
+            ? a.id < b.id
+              ? -1
+              : a.id > b.id
+                ? 1
+                : 0
+            : a.sortKey < b.sortKey
+              ? -1
+              : 1
         );
 
       const geoInDay: PlottedStop[] = [];
@@ -156,12 +163,15 @@ export function TripMap({
         }
       });
 
+      const itemById = new Map(ordered.map((it) => [it.id, it]));
       const dayColor = dayLookup.get(day.id)?.color ?? getDayColor(day.dayNumber);
       for (let i = 1; i < geoInDay.length; i++) {
         const prev = geoInDay[i - 1]!;
         const curr = geoInDay[i]!;
+        const currItem = itemById.get(curr.id);
+        const specialTransitLeg = buildTransitStopLeg(prev, curr, currItem?.transitMeta);
         const pairKey = `${prev.id}->${curr.id}`;
-        const loaded = routeLegsByPairKey[pairKey];
+        const loaded = specialTransitLeg ?? routeLegsByPairKey[pairKey];
         if (loaded && loaded.coordinates.length >= 2) {
           segmentsOut.push({
             id: `seg-${day.id}-${prev.id}-${curr.id}`,
@@ -171,7 +181,7 @@ export function TripMap({
             toStopId: curr.id,
             color: dayColor,
             coordinates: loaded.coordinates,
-            solid: loaded.source === 'openrouteservice',
+            solid: !specialTransitLeg && loaded.source === 'openrouteservice',
             distanceM: loaded.distanceM,
             durationS: loaded.durationS,
             label: loaded.label,

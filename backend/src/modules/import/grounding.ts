@@ -1,3 +1,4 @@
+import type { AppEnv } from '../../config/env.js';
 import { CURATED_OPEN_POIS } from '../geo/curated-india-pois.js';
 import { getTemplatePoiCatalog } from '../explore/template-catalog.js';
 import type { PlacesServices } from '../places/places-module.js';
@@ -5,12 +6,14 @@ import { STARTER_OPEN_POIS } from '../places/seed/starter-pois.js';
 import type { DestinationRecord } from '../places/types.js';
 import { haversineMeters } from '../places/util/geo.js';
 import { namesSimilar, normalizeName, toTitleCasePlaceName } from '../places/util/text.js';
+import { resolveDoorToDoorJourney } from '../transit/corridor-service.js';
 import {
   dedupeMustInclude,
   type IntentDestination,
   type IntentMustInclude,
   type TripIntent,
 } from './intent.js';
+import type { LlmProvider } from './llm/types.js';
 
 export interface GazetteerTown {
   key: string;
@@ -198,6 +201,8 @@ export interface GroundIntentOptions {
   trustAlreadyResolved?: boolean;
   /** Allow calling Photon autocomplete when local destination DB & gazetteer both miss. */
   allowLiveAutocomplete?: boolean;
+  llm?: LlmProvider;
+  config?: Partial<AppEnv>;
 }
 
 export async function groundIntent(
@@ -512,8 +517,45 @@ export async function groundIntent(
     return true;
   });
 
+  // 3. Ground door-to-door origin, return hub & multi-modal transit route options
+  if (intent.origin?.name?.trim()) {
+    const journey = await resolveDoorToDoorJourney({
+      origin: intent.origin,
+      returnPoint: intent.returnPoint,
+      roundTrip: intent.roundTrip,
+      transportMode: intent.transportMode ?? 'any',
+      firstDestination: dedupedDests[0] ?? null,
+      lastDestination: dedupedDests[dedupedDests.length - 1] ?? null,
+      startDateIso: intent.dates.start,
+      endDateIso: intent.dates.end,
+      selectedOutboundOptionId: intent.selectedOutboundOptionId,
+      selectedReturnOptionId: intent.selectedReturnOptionId,
+      places,
+      llm: options.llm,
+      config: options.config,
+      allowLiveAutocomplete: allowLive,
+    });
+
+    return {
+      ...intent,
+      origin: journey.origin,
+      returnPoint: journey.returnPoint,
+      roundTrip: journey.roundTrip,
+      selectedOutboundOptionId: journey.selectedOutboundOptionId,
+      selectedReturnOptionId: journey.selectedReturnOptionId,
+      routeOptions: {
+        outbound: journey.outboundOptions,
+        return: journey.returnOptions,
+      },
+      destinations: dedupedDests,
+      mustInclude: uniqueMust,
+    };
+  }
+
   return {
     ...intent,
+    origin: null,
+    returnPoint: intent.returnPoint ?? null,
     destinations: dedupedDests,
     mustInclude: uniqueMust,
   };

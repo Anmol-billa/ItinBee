@@ -7,8 +7,10 @@ import {
 } from '../src/features/map/day-palette';
 import {
   buildDayGoogleMapsUrl,
+  buildGreatCircleArc,
   buildRouteCacheKey,
   buildStraightLineFallback,
+  buildTransitStopLeg,
   computeBoundingBoxString,
   haversineKm,
   selectRouteProfile,
@@ -136,6 +138,62 @@ describe('Trip Editor v2 & Map v2 Helpers', () => {
       expect(
         computeDayPacingWarning({ stops: sevenStops, elderModeEnabled: false }).hasWarning
       ).toBe(true);
+
+      // Scheduled intercity rail/flight legs do NOT trigger false local sightseeing cab fatigue warnings
+      const intercityRailDay = [
+        makeStop({
+          id: 'ndls-dep',
+          title: 'Depart New Delhi (NDLS)',
+          kind: 'transit',
+          durationMins: 30,
+          transitMeta: { mode: 'rail', isIntercityLeg: true },
+        }),
+        makeStop({
+          id: 'rajdhani-leg',
+          title: '12425 Jammu Rajdhani',
+          kind: 'transit',
+          durationMins: 500,
+          transitMeta: { mode: 'rail', isIntercityLeg: true, estimatedDurationMins: 500 },
+        }),
+      ];
+      const railWarn = computeDayPacingWarning({
+        stops: intercityRailDay,
+        elderModeEnabled: true,
+      });
+      expect(railWarn.totalTransitMins).toBe(530);
+      expect(railWarn.hasWarning).toBe(false);
+    });
+  });
+
+  describe('Curved flight arcs & mode-specific transit legs', () => {
+    it('builds curved great-circle arcs for flights and rail-labelled legs without road routing', () => {
+      const del = { lat: 28.5562, lng: 77.1 };
+      const ixl = { lat: 34.1359, lng: 77.5465 };
+
+      const arc = buildGreatCircleArc(del, ixl, 20);
+      expect(arc).toHaveLength(21);
+      expect(arc[0]).toEqual([77.1, 28.5562]);
+      expect(arc[arc.length - 1]).toEqual([77.5465, 34.1359]);
+      // Midpoint is displaced off the straight chord to form a smooth visual curve
+      const midStraightLng = (del.lng + ixl.lng) / 2;
+      expect(Math.abs(arc[10]![0] - midStraightLng)).toBeGreaterThan(0.1);
+
+      const flightLeg = buildTransitStopLeg(del, ixl, {
+        mode: 'flight',
+        estimatedDurationMins: 90,
+        distanceKm: 618,
+      });
+      expect(flightLeg).not.toBeNull();
+      expect(flightLeg!.label).toBe('1 hr 30 min · 618 km air');
+      expect(flightLeg!.coordinates.length).toBeGreaterThan(10);
+
+      const railLeg = buildTransitStopLeg(
+        { lat: 28.6429, lng: 77.2191 },
+        { lat: 25.327, lng: 82.9863 },
+        { mode: 'rail', estimatedDurationMins: 480, distanceKm: 759 }
+      );
+      expect(railLeg).not.toBeNull();
+      expect(railLeg!.label).toBe('8 hr · 759 km rail');
     });
   });
 

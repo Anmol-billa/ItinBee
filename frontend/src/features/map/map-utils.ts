@@ -1,3 +1,5 @@
+import type { TransitMeta } from '@/lib/types';
+
 export type RouteProfile = 'driving-car' | 'foot-walking';
 
 export interface LatLngPoint {
@@ -125,6 +127,91 @@ export function formatRouteLabel(params: {
   const dur = formatDurationCompact(params.durationS);
   const dist = formatDistanceKm(params.distanceM);
   return `${dur} · ${dist}`;
+}
+
+/**
+ * Builds a curved great-circle / quadratic meridian arc (`[lng, lat][]`) for air legs
+ * so flights visually read as air corridors rather than road lines.
+ */
+export function buildGreatCircleArc(
+  a: LatLngPoint,
+  b: LatLngPoint,
+  steps = 28
+): Array<[number, number]> {
+  const count = Math.max(4, Math.min(64, Math.round(steps)));
+  const distKm = haversineKm(a, b);
+  if (distKm < 5) {
+    return [
+      [a.lng, a.lat],
+      [b.lng, b.lat],
+    ];
+  }
+
+  const dLat = b.lat - a.lat;
+  const dLng = b.lng - a.lng;
+  const spanDeg = Math.hypot(dLat, dLng);
+  // Perpendicular normal for a gentle cartographic arc lift (capped at 2.4 degrees)
+  const liftScale = Math.min(2.4, spanDeg * 0.14);
+  const nx = spanDeg > 1e-6 ? -dLat / spanDeg : 0;
+  const ny = spanDeg > 1e-6 ? dLng / spanDeg : 0;
+
+  const coords: Array<[number, number]> = [];
+  for (let i = 0; i <= count; i++) {
+    const t = i / count;
+    const parabola = 4 * t * (1 - t);
+    const lng = a.lng + dLng * t + nx * liftScale * parabola;
+    const lat = Math.max(-85, Math.min(85, a.lat + dLat * t + ny * liftScale * parabola));
+    coords.push([Number(lng.toFixed(5)), Number(lat.toFixed(5))]);
+  }
+  return coords;
+}
+
+/**
+ * Builds a mode-accurate route leg for scheduled flight or rail stops using their grounded
+ * `transitMeta` so we never call `driving-car` road routing for air/rail corridors.
+ */
+export function buildTransitStopLeg(
+  a: LatLngPoint,
+  b: LatLngPoint,
+  transitMeta?: TransitMeta
+): RouteLegResult | null {
+  const mode = transitMeta?.mode;
+  if (mode !== 'flight' && mode !== 'rail') return null;
+
+  const airOrRailKm =
+    typeof transitMeta?.distanceKm === 'number' && transitMeta.distanceKm > 0
+      ? transitMeta.distanceKm
+      : mode === 'flight'
+        ? haversineKm(a, b)
+        : haversineKm(a, b) * 1.18;
+  const distanceM = Math.max(1000, Math.round(airOrRailKm * 1000));
+  const estMins =
+    typeof transitMeta?.estimatedDurationMins === 'number' &&
+    transitMeta.estimatedDurationMins > 0
+      ? transitMeta.estimatedDurationMins
+      : mode === 'flight'
+        ? Math.max(55, Math.round((airOrRailKm / 650) * 60 + 35))
+        : Math.max(45, Math.round((airOrRailKm / 62) * 60));
+  const durationS = Math.max(60, Math.round(estMins * 60));
+  const durLabel = formatDurationCompact(durationS);
+  const distLabel = formatDistanceKm(distanceM);
+  const suffix = mode === 'flight' ? 'air' : 'rail';
+
+  return {
+    key: `${mode}:${a.lat.toFixed(4)},${a.lng.toFixed(4)}->${b.lat.toFixed(4)},${b.lng.toFixed(4)}`,
+    profile: 'driving-car',
+    distanceM,
+    durationS,
+    coordinates:
+      mode === 'flight'
+        ? buildGreatCircleArc(a, b, 28)
+        : [
+            [a.lng, a.lat],
+            [b.lng, b.lat],
+          ],
+    source: 'estimate',
+    label: `${durLabel} · ${distLabel} ${suffix}`,
+  };
 }
 
 /**
